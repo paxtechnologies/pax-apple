@@ -1,0 +1,61 @@
+{
+ "generated_at": "2026-10-15T18:09:30+00:00",
+ "lists": {
+  "pax-allow": {
+   "bytes": 177,
+   "entries": 2,
+   "file": "pax-allowlist.txt",
+   "format": "domains",
+   "kind": "allow",
+   "max_drop": 1.0,
+   "min_entries": 1,
+   "sha256": "d2f522fddaea1a27b8220c36dde09b0b1f3bc38808d4ac595ec821d85efdc386"
+  },
+  "pax-block": {
+   "bytes": 7987186,
+   "entries": 1336272,
+   "file": "pax-block.txt.gz",
+   "format": "domains",
+   "kind": "block",
+   "max_drop": 0.1,
+   "min_entries": 1000000,
+   "restricted": true,
+   "sha256": "e004fae9b4457ebba5332a5b887cee5314eec789a6120cea0be4b23785ce44d5"
+  },
+  "pax-bypass": {
+   "bytes": 105610,
+   "entries": 15573,
+   "file": "pax-bypass.txt.gz",
+   "format": "domains",
+   "kind": "block",
+   "max_drop": 0.3,
+   "min_entries": 5000,
+   "restricted": false,
+   "sha256": "cb6b234870f4fa6237f7e871801f38d37c5a3cea78afaf5baceccdcdd55edd8e"
+  },
+  "pax-nrd": {
+   "bytes": 7664,
+   "entries": 1321,
+   "file": "pax-nrd.txt.gz",
+   "format": "domains",
+   "kind": "block",
+   "max_drop": 0.6,
+   "min_entries": 100,
+   "optional": true,
+   "restricted": true,
+   "sha256": "4f4eb3e603aaa78a8bfbe80e106f2c31828f19016f72066a809c7372209c914a"
+  },
+  "safesearch": {
+   "bytes": 30600,
+   "entries": 385,
+   "file": "safesearch_rules.csv",
+   "format": "csv",
+   "kind": "safesearch",
+   "max_drop": 0.1,
+   "min_entries": 300,
+   "sha256": "9f6a68254f9b9b5db77d2713d3511546ff643bae1d126ddaad1b9bf1e25d44a9"
+  }
+ },
+ "schema": "pax.lists.v1",
+ "version": "2026.1015.1"
+}

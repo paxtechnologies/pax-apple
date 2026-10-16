@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pax Image Blur</title>
+<style>
+  body { font: 14px/1.45 -apple-system, "Inter", "DM Sans", system-ui, sans-serif; color: #192124;
+         background: #F8F6F1; margin: 0; padding: 16px; min-width: 320px; max-width: 560px; }
+  h1 { font: 600 20px "Playfair Display", "New York", Georgia, serif; margin: 0 0 6px; }
+  p { margin: 6px 0 12px; color: #78736D; }
+  ul { list-style: none; padding: 0; margin: 8px 0; }
+  li { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px;
+       background: #fff; border: 1px solid #E5E1DC; border-radius: 8px; margin-bottom: 6px; }
+  input { flex: 1; padding: 7px 9px; border: 1px solid #E5E1DC; border-radius: 8px; font: inherit; }
+  button { font: inherit; border-radius: 8px; border: 1px solid #E5E1DC; background: #fff;
+           padding: 6px 10px; cursor: pointer; }
+  button.primary { background: #E85830; border-color: #E85830; color: #fff; }
+  form, .row { display: flex; gap: 8px; margin: 8px 0; }
+  #msg { min-height: 1.2em; color: #78736D; }
+</style>
+</head>
+<body>
+  <h1>Pax Image Blur</h1>
+  <p>Pictures and videos stay blurred until Pax's on-device check says they're fine. Restricted ones
+     stay hidden. Nothing leaves this computer.</p>
+  <div class="row" id="current" hidden>
+    <button class="primary" id="allowCurrent">Stop pre-blurring on <span id="currentHost"></span></button>
+  </div>
+  <h2 style="font-size:15px;margin:14px 0 4px">Sites that aren't pre-blurred</h2>
+  <p>On these sites pictures show straight away. Anything the check finds restricted is still hidden.</p>
+  <ul id="list"></ul>
+  <form id="add">
+    <input id="domain" placeholder="example.com" autocomplete="off" spellcheck="false">
+    <button type="submit">Add</button>
+  </form>
+  <div id="msg"></div>
+  <script src="core.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

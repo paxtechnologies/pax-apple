@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Pax Peace app icon: cream serif "p" and terracotta dot on an ink rounded square.
+     Drawn by hand on a 1024 canvas (macOS icon grid: 824 px body, 100 px margin).
+     The glyph is designed in a 360-unit square and scaled into the body. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#222C30"/>
+      <stop offset="1" stop-color="#192124"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#sheen)"/>
+  <g transform="translate(100 100) scale(2.28889)">
+    <g fill="#F8F6F1">
+      <!-- bowl: thick on the right, hairline top and bottom -->
+      <path fill-rule="evenodd" d="M182,96 A44,64 0 1 1 182,224 A44,64 0 1 1 182,96 Z
+                                   M177,107 A25,53 0 1 0 177,213 A25,53 0 1 0 177,107 Z"/>
+      <!-- stem -->
+      <rect x="122" y="104" width="31" height="152"/>
+      <!-- top-left flag serif -->
+      <path d="M100,113 C118,109 137,103 153,94 L153,124 L122,124 L122,120 C114,117 107,116 100,117 Z"/>
+      <!-- bracketed foot serif -->
+      <path d="M95,270 L181,270 L181,263 C166,262 156,258 153,248 L122,248 C119,258 109,262 95,263 Z"/>
+    </g>
+    <circle cx="258" cy="206" r="19" fill="#E85830"/>
+  </g>
+</svg>

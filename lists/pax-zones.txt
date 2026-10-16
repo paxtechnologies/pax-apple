@@ -1,0 +1,4 @@
+# Pax whole-zone blocks (v2). Suffix match: blocks the zone apex and every name under it.
+co.cc
+cz.cc
+translate.goog

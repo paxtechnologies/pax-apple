@@ -1,0 +1,130 @@
+# Dependencies (v0.8.6)
+
+Pax tries to ship as little third-party code as possible: the Mac side is Swift
+(Apple frameworks only) plus pax-guard in Python (standard library only). Since v0.8.6
+pax-guard runs on its own copy of the CPython bundled in Pax.app, so no part of Pax needs
+Apple's Command Line Tools on a user's Mac. Everything below is either an Apple component,
+a server/developer dependency, or data.
+
+## Shipped inside Pax.app
+
+| Part | What it uses | Licence | Notes |
+|---|---|---|---|
+| Pax app (`mac-app/`) | Foundation, SwiftUI, CryptoKit (update signature check) | Apple SDK | No Swift packages. Sparkle deliberately not used ([UPDATES.md](UPDATES.md)). |
+| pax-guard (`guard/`) | Python 3.9+ standard library only | GPL-3.0-only (ours) | v0.8.6: runs as root on `/Library/PaxGuard/runtime/bin/python3.12 -I -B`, a checked copy of the bundled CPython below without site-packages ([pax-guard's runtime](#pax-guards-runtime-v086)); `/usr/bin/python3` (Command Line Tools) is only the launcher's fallback. Ed25519 is our own pure-Python implementation (`guard/ed25519.py`, RFC 8032 vectors in tests). DNS forwarder, DoH client, list matcher, IPC, updater and escrow are all in-tree. |
+| Filter lists (`guard/filters/`) | HaGeZi restricted-content and DoH/VPN/TOR/Proxy lists (GPL-3.0), OISD restricted-content list (GPL-3.0), UT1 restricted-content category (CC BY-SA 4.0, Université Toulouse Capitole), Pax's own lists (incl. media converters, v0.8.1) | as listed | Built by `lists/build.py`, bundled as `pax-block.txt.gz` (split into <85 KB parts for the contents-API push) and republished, signed, under the `lists` release. Credits in `THIRD_PARTY_NOTICES.md`. |
+| iPhone helper (`device/`, since v0.8.6) | Its own Python runtime and pymobiledevice3: see [iPhone helper runtime](#iphone-helper-runtime-bundled-since-v086) | GPL-3.0-compatible (each listed) | `Contents/Resources/device/python`, universal2. Runs `device/pax_device.py` and, for iPhone profiles, `profile/make_profile.py`. |
+| Pax Image Blur (`extension/`) | TensorFlow.js 4.22.0 (Apache-2.0), MobileNet v2 image-classifier weights (MIT; upstream names in licenses/upstream-notices.txt.gz) | as listed | Unchanged since v0.5. |
+
+## Used at run time, not shipped
+
+| Service / tool | Used for | Who uses it |
+|---|---|---|
+| CleanBrowsing Family DoH (`doh.cleanbrowsing.org/doh/family-filter/`) | Mac: pax-guard's first upstream. iPhone/iPad: the profile's DNS (direct DoH; there is no forwarder on iOS). | Mac + iPhone |
+| AdGuard Family DoH (`family.adguard-dns.com`) | Mac only: fallback upstream when CleanBrowsing fails. Never plain DNS: if both fail, SERVFAIL. | Mac |
+| GitHub Releases + jsDelivr (`cdn.jsdelivr.net/gh/paxtechnologies/pax-apple@releases`, `@pax-lists`) | Signed app updates and filter-list updates. v0.8.6: jsDelivr carries the app zip as signed parts under its 20 MB per-file limit ([UPDATES.md](UPDATES.md)) | Mac |
+| CleanBrowsing Adult DoH (`doh.cleanbrowsing.org/doh/adult-filter/`) | v0.8.6, Mac only: YouTube's own names while the user has YouTube Restricted Mode off (same server and addresses as Family; it doesn't force Restricted Mode). Falls back to AdGuard Family (which restricts again), else SERVFAIL | Mac |
+| Apple Configurator `cfgutil` (Automation Tools) | Supervising and setting up iPhones/iPads | Mac app, iPhone flow |
+| libimobiledevice `idevicebackup2` (LGPL-2.1-or-later) | Nothing by default since v0.8.6. Only when a developer sets `PAX_IDEVICEBACKUP2`, as a separate program. | developers |
+| Email: a relay server (`server/` `POST /v1/notify`) or the user's own SMTP | Accountability-partner emails ([PARTNER.md](PARTNER.md)) | Mac on local escrow |
+
+## iPhone helper runtime (bundled since v0.8.6)
+
+"Keep my data" used to need `install-helper.sh` (a Python venv with pymobiledevice3, plus
+Homebrew's libimobiledevice for `idevicebackup2`). Since v0.8.6 Pax.app carries everything,
+built by `mac-app/scripts/build-device-helper.sh`:
+
+* **Python**: CPython 3.12.15 from
+  [python-build-standalone](https://github.com/astral-sh/python-build-standalone) release
+  `20261009`, `install_only_stripped`, aarch64 and x86_64 archives merged with `lipo` into one
+  universal2 tree. Pinned by sha256 in `device/helper-runtime.json`. Tcl/Tk, IDLE, the test suite,
+  headers and pip are removed. Licence: PSF-2.0 (Python-2.0, CNRI-Python). Statically linked
+  libraries and their licences: OpenSSL 3 (Apache-2.0), libffi (MIT), expat (MIT), mpdecimal
+  (BSD-2-Clause), liblzma (0BSD), bzip2 (bzip2-1.0.6), zlib (Zlib), SQLite (public domain),
+  libedit (BSD-3-Clause; python-build-standalone uses it instead of GPL readline), ncurses (X11),
+  libuuid (BSD-3-Clause). GDBM is not built. Texts: `licenses/helper-runtime/`, shipped in
+  `device/python/LICENSES/`.
+* **Packages**: installed with `pip --no-deps --require-hashes --only-binary=:all:` from
+  `device/requirements-bundle.txt` (sha256 for every wheel, generated by `device/lock_bundle.py`
+  from `requirements-bundle.in`). Only the import closure of what the helper uses is bundled,
+  not pymobiledevice3's full dependency list (IPython, FastAPI, Pillow, QUIC tunnels and more,
+  about 200 MB that Pax never calls). `pax_device.py selftest` imports all of it, and the Build DMG
+  workflow runs it from the signed app on arm64 and x86_64.
+
+Every package below is **GPL-3.0-compatible**: GPL-3.0-or-later can be used under GPL-3.0;
+Apache-2.0 is compatible with GPLv3; MPL-2.0 allows combination with the GPL (section 3.3, and none
+of these files is marked "Incompatible With Secondary Licenses"); PSF-2.0, MIT, MIT-0, 0BSD and the
+BSD licences are permissive.
+
+| Package | Licence | Why it's there |
+|---|---|---|
+| [pymobiledevice3](https://pypi.org/project/pymobiledevice3/11.32.0/) 11.32.0 | GPL-3.0-or-later | lockdown, pairing, MCInstall, diagnostics restart, MobileBackup2 backup and seed restore |
+| [backports-zstd](https://pypi.org/project/backports-zstd/1.8.0/) 1.8.0 | PSF-2.0 (bundled libzstd: BSD-3-Clause) | imported by pymobiledevice3 |
+| [bpylist2](https://pypi.org/project/bpylist2/4.1.1/) 4.1.1 | MIT | binary plist / NSKeyedArchiver |
+| [certifi](https://pypi.org/project/certifi/2026.7.22/) 2026.7.22 | MPL-2.0 | CA bundle for requests (imported, not used by Pax) |
+| [cffi](https://pypi.org/project/cffi/2.1.1/) 2.1.1 | MIT-0 | C bindings used by dependencies |
+| [chardet](https://pypi.org/project/chardet/7.6.0/) 7.6.0 | 0BSD | imported by requests |
+| [charset-normalizer](https://pypi.org/project/charset-normalizer/3.5.2/) 3.5.2 | MIT | imported by requests |
+| [click](https://pypi.org/project/click/8.5.0/) 8.5.0 | BSD-3-Clause | imported by pymobiledevice3 |
+| [construct](https://pypi.org/project/construct/2.10.70/) 2.10.70 | MIT | binary structures (pymobiledevice3, pyiosbackup) |
+| [cryptography](https://pypi.org/project/cryptography/48.0.1/) 48.0.1 | Apache-2.0 OR BSD-3-Clause (bundled OpenSSL 3: Apache-2.0) | pairing TLS, the supervision keybag; 48.0.1 is the newest with a universal2 wheel |
+| [hyperframe](https://pypi.org/project/hyperframe/6.1.0/) 6.1.0 | MIT | imported by pymobiledevice3 |
+| [idna](https://pypi.org/project/idna/3.20/) 3.20 | BSD-3-Clause | imported by requests |
+| [ifaddr](https://pypi.org/project/ifaddr/0.2.0/) 0.2.0 | MIT | imported by pymobiledevice3 |
+| [ioregistry](https://pypi.org/project/ioregistry/0.0.6/) 0.0.6 | GPL-3.0-or-later | macOS only: pymobiledevice3 asks IOKit for USB devices (ctypes) |
+| [packaging](https://pypi.org/project/packaging/26.3/) 26.3 | Apache-2.0 OR BSD-2-Clause | iOS version comparisons in pymobiledevice3 |
+| [prompt-toolkit](https://pypi.org/project/prompt-toolkit/3.0.53/) 3.0.53 | BSD-3-Clause | imported by questionary |
+| [psutil](https://pypi.org/project/psutil/7.2.2/) 7.2.2 | BSD-3-Clause | imported by pymobiledevice3 |
+| [pycparser](https://pypi.org/project/pycparser/3.11/) 3.11 | BSD-3-Clause | cffi dependency |
+| [pygments](https://pypi.org/project/pygments/2.21.0/) 2.21.0 | BSD-2-Clause | imported by pymobiledevice3's service connection |
+| [pygnuutils](https://pypi.org/project/pygnuutils/0.1.1/) 0.1.1 | GPL-3.0-or-later | imported by pymobiledevice3 |
+| [pyiosbackup](https://pypi.org/project/pyiosbackup/0.2.4/) 0.2.4 | GPL-3.0-or-later | imported by pymobiledevice3's mobilebackup2 |
+| [questionary](https://pypi.org/project/questionary/2.1.1/) 2.1.1 | MIT | imported by pymobiledevice3 |
+| [requests](https://pypi.org/project/requests/2.34.2/) 2.34.2 | Apache-2.0 | imported by pymobiledevice3 |
+| [tqdm](https://pypi.org/project/tqdm/4.70.1/) 4.70.1 | MPL-2.0 AND MIT | progress helpers in pymobiledevice3 |
+| [typing-extensions](https://pypi.org/project/typing-extensions/4.16.0/) 4.16.0 | PSF-2.0 | typing back-ports |
+| [urllib3](https://pypi.org/project/urllib3/2.8.0/) 2.8.0 | MIT | requests dependency |
+| [wcwidth](https://pypi.org/project/wcwidth/0.9.2/) 0.9.2 | MIT | prompt-toolkit dependency |
+
+Each wheel's licence file ships in its `.dist-info` folder; bpylist2's wheel has none, so
+`licenses/helper-runtime/LICENSE.bpylist2.txt` carries its MIT text. Sources: the PyPI links above
+(each has the sdist), and the python-build-standalone release above.
+
+## pax-guard's runtime (v0.8.6)
+
+pax-guard is a root LaunchDaemon, so it must not run code from `/Applications/Pax.app`, which the
+user can change or delete. `guard/guard_runtime.py` copies the interpreter and standard library (not
+`site-packages`, which only the iPhone helper uses) from Pax.app into `/Library/PaxGuard/runtime`
+(root:wheel, nothing group- or other-writable):
+
+* **Checked when copied** (set-up, updates, repairs): Pax.app must pass `codesign --verify --strict`
+  against Apple's Developer ID requirement for Team ID **Z94GSK7JA8**; every file must match
+  `Resources/guard/runtime-manifest.json` (SHA-256, size; written by `build-dmg.sh` after the Mach-O
+  files are signed and sealed by the app's own signature); every Mach-O in the copy must pass the same
+  Team ID requirement; then `pax_guard.py selftest` must pass on the copy. Anything else is refused.
+* **Checked every 10 minutes**: every file re-hashed, no extra files (a stray `sitecustomize.py` would
+  run as root), modes. A difference goes to the tamper log (`changed:runtime`) and the copy is rebuilt
+  from Pax.app if Pax.app still verifies; otherwise it is marked failing.
+* **Which Python runs**: the LaunchDaemon starts `bin/pax-guard-launch.sh` (`/bin/sh`): the runtime,
+  unless it failed to start 3 times running, else `/usr/bin/python3` when the Command Line Tools are
+  installed, else the runtime anyway. Its manifest, the launcher, the plist and `guard_runtime.py` are in
+  the tamper log's `guard_files` hash.
+* **TLS**: python-build-standalone's OpenSSL doesn't know macOS's trust store, so pax-guard sets
+  `SSL_CERT_FILE=/etc/ssl/cert.pem` (the system bundle `/usr/bin/python3` used), and the DoH client loads it
+  explicitly as before.
+* **Updates** stage the new app's runtime the same way and swap it in and roll it back with the app and
+  guard. A 0.8.4/0.8.5 Mac (plist naming `/usr/bin/python3`) is moved over by the new pax-guard itself
+  after the normal update: it builds and checks the copy, writes the launcher plist (read by launchd at
+  the next boot) and `os.execv`s into the copy in place; if the copy fails its check it stays on
+  `/usr/bin/python3`.
+* **Size**: the copy is the stdlib part of the universal runtime (the Build DMG log prints it). Licence
+  as above (PSF-2.0 and the statically linked libraries); `LICENSES/` is copied with it.
+
+## Server and tooling (not on the user's Mac)
+
+* `server/`: FastAPI, uvicorn, pydantic, email-validator, cryptography, idna (see `server/requirements.txt`).
+* `pax-dns/`: FastAPI, uvicorn, httpx, dnslib, idna.
+* Tests: pytest, httpx, pyyaml; Node 22 + jsdom for the extension; shellcheck; Swift 5.9+ (`swift test`
+  runs PaxCore's tests on macOS and on Linux; the SwiftUI target is macOS-only and is left out of the
+  package on Linux).
+* Release signing: `scripts/sign-release.py` (standard library, reuses `guard/ed25519.py`).

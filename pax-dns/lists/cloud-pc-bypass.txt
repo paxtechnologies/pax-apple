@@ -1,0 +1,289 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax curated list (v0.5): "bypass" category, ALWAYS ON.
+#
+# Services that hand you a whole computer or browser running somewhere else, so
+# Pax's DNS filter, /etc/hosts block and browser policies never see what you
+# open: consumer cloud PCs, browser isolation / browser-in-a-browser services,
+# cross-browser testing clouds, in-browser virtual machines with networking, and
+# the best-known web proxies.
+#
+# One domain per line, no inline comments. pax-dns blocks each entry and all its
+# subdomains. pax-guard writes each entry and www.<entry> to /etc/hosts (exact
+# names only), plus any subdomains listed here by name.
+#
+# HaGeZi's "DoH/VPN/TOR/Proxy Bypass" list (GPL-3.0, ~15,500 domains, already
+# covers most web proxies) is downloaded at run time on top of this by both
+# pax-guard and pax-dns/scripts/load_lists.py; it is not copied here.
+# Every name below resolved on 2026-10-14 (checked from the build machine).
+# Enterprise virtual desktops (Windows 365, Azure Virtual Desktop, Amazon
+# WorkSpaces) are in remote-desktop.txt instead, because people use them for work.
+
+# ---- Cloud PCs (a full Windows/Linux desktop in the browser or an app)
+sensepc.com
+shadow.tech
+shadow.com
+paperspace.com
+console.paperspace.com
+mightyapp.com
+neverinstall.com
+vagon.io
+airgpu.com
+maximumsettings.com
+apporto.com
+v2cloud.com
+
+# ---- Browser isolation / browser-in-a-browser / cloud browsers
+browserling.com
+hyperbeam.com
+hyperbeam.dev
+rollapp.com
+puffin.com
+cloudmosa.com
+turbo.net
+browserbase.com
+browserless.io
+steel.dev
+squarex.com
+cloudbrowser.ai
+browsercloud.io
+
+# ---- Cross-browser testing clouds (a real remote browser on any site)
+browserstack.com
+lambdatest.com
+saucelabs.com
+testingbot.com
+
+# ---- Virtual machines in a web page with network access
+webvm.io
+
+# ---- Web proxies (the best known; HaGeZi's list has many more)
+croxyproxy.com
+croxyproxy.rocks
+croxyproxy.net
+croxy.network
+blockaway.net
+proxysite.com
+hidester.com
+kproxy.com
+proxyium.com
+4everproxy.com
+genmirror.com
+zalmos.com
+proxfree.com
+filterbypass.me
+unblock-websites.com
+hidemyass.com
+proxyorb.com
+plainproxies.com
+# ---- VPS, cloud and GPU hosts (a server to browse from); an exception frees one after the wait (the maintainer's list, 2026-10-15)
+a2hosting.com
+alibabacloud.com
+aliyun.com
+buyvm.net
+civo.com
+cloud.linode.com
+cloudzy.com
+console.scaleway.com
+contabo.com
+coreweave.com
+crusoe.ai
+danubedata.ro
+datacrunch.io
+digitalocean.com
+exoscale.com
+fly.io
+frantech.ca
+genesiscloud.com
+greencloudvps.com
+hetzner.cloud
+hetzner.com
+hosthatch.com
+hostinger.com
+hostwinds.com
+huaweicloud.com
+interserver.net
+ionos.com
+jarvislabs.ai
+kamatera.com
+kimsufi.com
+lambda.ai
+lambdalabs.com
+linode.com
+liquidweb.com
+lowendbox.com
+lowendtalk.com
+nebius.com
+netcup.de
+operavps.com
+ovh.com
+ovhcloud.com
+racknerd.com
+rackspace.com
+railway.app
+railway.com
+render.com
+runpod.io
+scaleway.com
+serverhunter.com
+serverspace.io
+soyoustart.com
+tencentcloud.com
+tensordock.com
+time4vps.com
+together.ai
+upcloud.com
+vast.ai
+virmach.com
+vultr.com
+your-server.de
+# ---- VPN and proxy services (and the Tor onion search engine) (the maintainer's list, 2026-10-15)
+adguard-vpn.com
+ahmia.fi
+airvpn.org
+atlasvpn.com
+cyberghostvpn.com
+expressvpn.com
+hide.me
+hola.org
+hotspotshield.com
+ipvanish.com
+ivpn.net
+mullvad.net
+nordvpn.com
+one.one.one.one
+perfect-privacy.com
+privadovpn.com
+privateinternetaccess.com
+privatevpn.com
+protonvpn.com
+psiphon.ca
+purevpn.com
+speedify.com
+strongvpn.com
+surfshark.com
+torguard.net
+tunnelbear.com
+ultravpn.com
+urban-vpn.com
+vpn.ac
+vpnbook.com
+vpnsecure.me
+vpnunlimited.com
+vpnunlimitedapp.com
+vyprvpn.com
+windscribe.com
+zenmate.com
+zoogvpn.com
+# ---- Anti-detect browsers (the maintainer's list, 2026-10-15)
+adspower.com
+adspower.net
+dicloak.com
+dolphin-anty.com
+gologin.com
+incogniton.com
+ixbrowser.com
+kameleo.io
+morelogin.com
+multilogin.com
+octobrowser.net
+undetectable.io
+vmlogin.us
+# ---- Cloud gaming (a remote PC with a browser) (the maintainer's list, 2026-10-15)
+antstream.com
+blacknut.com
+boosteroid.com
+geforcenow.com
+jiogames.com
+luna.amazon.com
+netboom.com
+now.gg
+nvidia-geforce-now.com
+playkey.net
+plutosphere.com
+polystream.com
+rainway.com
+ubitus.net
+utomik.com
+vortex.gg
+# ---- More cloud PCs, cloud browsers and browser isolation (the maintainer's list, 2026-10-15)
+anuntatech.com
+app.apponfly.com
+apponfly.com
+apps4rent.com
+browser.lol
+cameyo.com
+cloudalize.com
+clouddesktoponline.com
+crossbrowsertesting.com
+dizzion.com
+fra.me
+frame.nutanix.com
+getnerdio.com
+headspin.io
+instantworkstation.com
+itopia.com
+kasm.com
+kasmweb.com
+maximumsettings.cloud
+neko.m1k1o.net
+rapidscale.net
+send.win
+shadowpc.com
+shells.com
+spoon.net
+testgrid.io
+testmuai.com
+tracefree.com
+workspot.com
+# ---- Download sites of browsers pax-guard quarantines (Opera, Vivaldi, Arc, LibreWolf, Waterfox, Tor Browser) (the maintainer's list, 2026-10-15)
+arc.net
+librewolf.net
+opera.com
+thebrowser.company
+torproject.org
+vivaldi.com
+waterfox.net
+# ---- Tunnels that publish a local server to the internet (the maintainer's list, 2026-10-15)
+argotunnel.com
+bore.pub
+loca.lt
+localhost.run
+localtunnel.me
+ngrok-free.app
+ngrok.com
+ngrok.io
+pagekite.net
+pinggy.io
+playit.gg
+serveo.net
+telebit.cloud
+trycloudflare.com
+zrok.io
+# ---- Online code sandboxes and virtual machines with network access (the maintainer's list, 2026-10-15)
+bellard.org
+che.eclipse.org
+codeanywhere.com
+coder.com
+codesandbox.io
+copy.sh
+csb.app
+daytona.io
+distrosea.com
+gitpod.io
+glitch.com
+glitch.me
+hackthebox.com
+jdoodle.com
+killercoda.com
+labs.play-with-docker.com
+linuxzoo.net
+ona.com
+onlinegdb.com
+onworks.net
+paiza.io
+repl.co
+replit.com
+stackblitz.com
+tryhackme.com
+webcontainer.io
+webminal.org

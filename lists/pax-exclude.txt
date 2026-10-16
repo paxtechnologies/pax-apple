@@ -1,0 +1,10 @@
+# Never in the Pax blocklist, whatever a source list says (v0.8.0, 2026-10-15).
+# Clear false positives found in the UT1 restricted-content category by the v2 test (Tranco top 10k sites
+# CleanBrowsing Family allows), plus sa.com, a whole subdomain registry.
+# Exact names: the entry is dropped, its listed subdomains are kept.
+cosmopolitan.com
+pocketoption.com
+51.la
+dmm.com
+dynu.net
+sa.com

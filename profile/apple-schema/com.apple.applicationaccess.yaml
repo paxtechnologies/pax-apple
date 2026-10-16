@@ -1,0 +1,220 @@
+# Trimmed by Pax (v0.5) to the keys Pax uses, so every file stays under ~90 KB.
+# Full file: https://github.com/apple/device-management/blob/release/mdm/profiles/com.apple.applicationaccess.yaml
+title: Restrictions
+description: The payload that configures restrictions on a device.
+payload:
+  payloadtype: com.apple.applicationaccess
+  supportedOS:
+    iOS:
+      introduced: '4.0'
+      multiple: true
+      supervised: false
+      allowmanualinstall: true
+      sharedipad:
+        mode: allowed
+        devicechannel: true
+        userchannel: true
+      userenrollment:
+        mode: allowed
+    macOS:
+      introduced: '10.7'
+      multiple: true
+      devicechannel: true
+      userchannel: true
+      supervised: false
+      requiresdep: false
+      userapprovedmdm: false
+      allowmanualinstall: true
+      userenrollment:
+        mode: allowed
+    tvOS:
+      introduced: '9.0'
+      multiple: true
+      supervised: false
+      allowmanualinstall: true
+    visionOS:
+      introduced: '1.1'
+      multiple: true
+      supervised: false
+      allowmanualinstall: true
+      userenrollment:
+        mode: allowed
+    watchOS:
+      introduced: '10.0'
+      multiple: true
+      supervised: false
+      allowmanualinstall: true
+payloadkeys:
+- key: allowCloudPrivateRelay
+  supportedOS:
+    iOS:
+      introduced: '15.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    macOS:
+      introduced: '12.0'
+      userenrollment:
+        mode: forbidden
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: '2.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  content: If `false`, the system disables iCloud Private Relay. Support for this
+    restriction on unsupervised devices and with Managed Apple Accounts is deprecated.
+- key: allowEraseContentAndSettings
+  title: Allow erase all content and settings
+  supportedOS:
+    iOS:
+      introduced: '8.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    macOS:
+      introduced: '12.0'
+      userenrollment:
+        mode: forbidden
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: '2.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  content: If `false`, the system disables the Erase All Content and Settings option
+    in the Reset UI.
+- key: allowUIConfigurationProfileInstallation
+  title: Allow UI configuration profile installation
+  supportedOS:
+    iOS:
+      introduced: '6.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    macOS:
+      introduced: '13.0'
+      userenrollment:
+        mode: forbidden
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: '2.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  content: If `false`, the system prohibits the user from installing configuration
+    profiles and certificates interactively.
+- key: allowVPNCreation
+  title: Allow adding VPN configurations (supervised devices only)
+  supportedOS:
+    iOS:
+      introduced: '11.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: n/a
+    visionOS:
+      introduced: '2.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    watchOS:
+      introduced: n/a
+  type: <boolean>
+  presence: optional
+  default: true
+  content: If `false`, the system allows only managed apps to create VPN configurations.
+    Prior to iOS 18, the system also allows unmanaged apps to create VPN configurations.
+- key: blacklistedAppBundleIDs
+  title: Blacklisted apps
+  supportedOS:
+    iOS:
+      introduced: '9.3'
+      deprecated: '15.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: '11.0'
+      deprecated: '15.0'
+      supervised: true
+    visionOS:
+      introduced: n/a
+    watchOS:
+      introduced: n/a
+  type: <array>
+  presence: optional
+  content: 'Deprecated: use the declarative management `com.apple.configuration.app.settings`
+    configuration.'
+  subkeys:
+  - key: appBlacklistedBundleID
+    title: Blacklisted app
+    type: <string>
+- key: blockedAppBundleIDs
+  title: Blocked apps
+  supportedOS:
+    iOS:
+      introduced: '15.0'
+      deprecated: '27.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    macOS:
+      introduced: n/a
+    tvOS:
+      introduced: '15.0'
+      deprecated: '27.0'
+      supervised: true
+    visionOS:
+      introduced: '27.0'
+      deprecated: '27.0'
+      supervised: true
+      userenrollment:
+        mode: forbidden
+    watchOS:
+      introduced: n/a
+  type: <array>
+  presence: optional
+  content: |-
+    If present, the system prevents showing or launching apps with bundle IDs in the array. Include the value `com.apple.webapp` to restrict all webclips. This applies to App Store apps, marketplace apps, and locally installed apps (using Configurator, Xcode, and so forth).
+
+    Deprecated: use the declarative management `com.apple.configuration.app.settings` configuration.
+
+    > Note:
+    > Denying system apps may disable other functionality. For example, denying the App Store app may prevent users from accepting the terms and conditions for the user-based Volume Purchase Program (VPP).
+  subkeys:
+  - key: appBlockedBundleID
+    title: Blocked app
+    type: <string>
+notes:
+- title: ''
+  content: |-
+    > Important:
+    > The system allows multiple Restrictions payloads. However, don't attempt to manage the same restriction in different payloads. Doing so results in unexpected behavior.
+examples:
+- title: Profile example
+  files:
+  - file: examples/mdm/profiles/com.apple.applicationaccess/example1.plist

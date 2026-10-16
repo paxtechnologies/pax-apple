@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: GPL-3.0-only
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: write   # the ci-logs-python / ci-logs-mac branches
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+# The repo is pushed with the contents API, which drops exec bits: every job
+# makes the *.sh files executable before running anything.
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: find . -name "*.sh" -exec chmod +x {} +
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: >-
+          pip install -r profile/requirements-dev.txt -r server/requirements-dev.txt
+          -r pax-dns/requirements-dev.txt -r device/requirements-dev.txt -r guard/requirements-dev.txt
+      - name: pytest (profile, server, pax-dns, device, guard, common)
+        run: |
+          set -o pipefail
+          {
+            set -e
+            for d in profile server pax-dns device guard common; do (cd "$d" && pytest -q); done
+            python3 common/gen_error_codes.py --check
+          } 2>&1 | tee "$RUNNER_TEMP/test.log"
+      - name: Publish the log to the ci-logs-python branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/ci-logs-python"; rm -rf "$D" && mkdir -p "$D"
+          cp "$RUNNER_TEMP/test.log" "$D/test.log" 2>/dev/null || echo "no log" > "$D/test.log"
+          printf 'status: %s\nrun: %s/%s/actions/runs/%s\ncommit: %s\n' "$JOB_STATUS" "$GITHUB_SERVER_URL" \
+            "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$D/status.txt"
+          cd "$D" && git init -q && git checkout -q --orphan ci-logs-python
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "ci $GITHUB_RUN_NUMBER: $JOB_STATUS ($GITHUB_SHA)"
+          # v0.8.9: a log push is not the build. Two runs (a tag and main) finishing together can
+          # race for this ref and GitHub answers "[remote rejected] (failed)" (seen on the v0.8.8
+          # tag, run 38933620416, after the release was already published). Retry, then warn.
+          ok=0
+          for i in 1 2 3 4 5; do
+            if git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-logs-python; then ok=1; break; fi
+            sleep $((i * 4 + RANDOM % 5))
+          done
+          [ "$ok" = 1 ] || echo "::warning::the log could not be pushed to ci-logs-python; the build result is unaffected"
+  guard-python39:
+    # v0.8.6: a 0.8.4/0.8.5 Mac starts the new pax-guard on the Command Line Tools'
+    # Python 3.9 (/usr/bin/python3) before it moves to its own runtime, so pax-guard
+    # must keep working there.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: find . -name "*.sh" -exec chmod +x {} +
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.9" }
+      - run: pip install -r guard/requirements-dev.txt
+      - run: cd guard && python --version && pytest -q
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: find . -name "*.sh" -exec chmod +x {} +
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: cd extension && npm install --no-audit --no-fund && npm test
+  mac-app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: find . -name "*.sh" -exec chmod +x {} +
+      - name: swift build + test
+        run: |
+          set -o pipefail
+          (cd mac-app && swift build && swift test) 2>&1 | tee "$RUNNER_TEMP/test.log"
+      - name: Publish the log to the ci-logs-mac branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/ci-logs-mac"; rm -rf "$D" && mkdir -p "$D"
+          cp "$RUNNER_TEMP/test.log" "$D/test.log" 2>/dev/null || echo "no log" > "$D/test.log"
+          printf 'status: %s\nrun: %s/%s/actions/runs/%s\ncommit: %s\n' "$JOB_STATUS" "$GITHUB_SERVER_URL" \
+            "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$GITHUB_SHA" > "$D/status.txt"
+          cd "$D" && git init -q && git checkout -q --orphan ci-logs-mac
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "ci $GITHUB_RUN_NUMBER: $JOB_STATUS ($GITHUB_SHA)"
+          # v0.8.9: a log push is not the build. Two runs (a tag and main) finishing together can
+          # race for this ref and GitHub answers "[remote rejected] (failed)" (seen on the v0.8.8
+          # tag, run 38933620416, after the release was already published). Retry, then warn.
+          ok=0
+          for i in 1 2 3 4 5; do
+            if git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-logs-mac; then ok=1; break; fi
+            sleep $((i * 4 + RANDOM % 5))
+          done
+          [ "$ok" = 1 ] || echo "::warning::the log could not be pushed to ci-logs-mac; the build result is unaffected"
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: find . -name "*.sh" -exec chmod +x {} +
+      - run: shellcheck mac-app/scripts/*.sh guard/scripts/*.sh extension/scripts/*.sh

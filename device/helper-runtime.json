@@ -1,0 +1,17 @@
+{
+  "_comment": "Python runtime bundled in Pax.app for the iPhone helper (v0.8.6). python-build-standalone (astral-sh), install_only_stripped. sha256 values are from the release's SHA256SUMS and were checked against the downloads. mac-app/scripts/build-device-helper.sh refuses anything that doesn't match.",
+  "python_version": "3.12.15",
+  "python_exe": "python3.12",
+  "release": "20261009",
+  "archives": {
+    "arm64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-aarch64-apple-darwin-install_only_stripped.tar.gz",
+      "sha256": "233f8e15255b3e1d1fd47ea5dd5230dfed803f371138e896e54d98c60ae19f6f"
+    },
+    "x86_64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-x86_64-apple-darwin-install_only_stripped.tar.gz",
+      "sha256": "fb3187d95334813b88940db0f1ca57b84cedfd552739c3a5771c3ea0e49988c9"
+    }
+  },
+  "wheel_platform": {"arm64": "macosx_13_0_arm64", "x86_64": "macosx_13_0_x86_64"}
+}

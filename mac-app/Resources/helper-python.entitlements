@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Entitlements for the bundled Python interpreter (Contents/Resources/device/python/
+     bin/python3.12), signed with the hardened runtime (v0.8.6).
+
+     allow-unsigned-executable-memory: CPython's ctypes and cffi (both loaded by the
+     helper's dependencies) build libffi closures in writable+executable memory, which
+     the hardened runtime otherwise forbids.
+
+     Deliberately NOT here: disable-library-validation. Every .so and .dylib the
+     interpreter loads is inside Pax.app and signed with the same Developer ID, so
+     library validation passes and stays on. No JIT, no DYLD_* variables. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+</dict>
+</plist>

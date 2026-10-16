@@ -1,0 +1,287 @@
+// SPDX-License-Identifier: GPL-3.0-only
+import SwiftUI
+import PaxCore
+
+/// "Blocked sites": the user's own blocklist, synced to every device through pax-dns.
+/// Adding is instant. Removing waits (default 72 h) and shows a live countdown with Cancel.
+/// v0.7.0: calmer layout; exceptions and the remote-desktop switch sit under "More options".
+struct BlockedSitesView: View {
+    @EnvironmentObject var blocklist: BlocklistModel
+    @State private var exceptionSite = ""
+    @State private var confirmRemoval: BlockedSite?
+    @State private var confirmRemoteDesktopOff = false
+    @State private var showMore = false
+    @State private var showImport = false
+    @EnvironmentObject var model: SetupModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                BackLink { model.screen = .home }
+                StepHeader(eyebrow: "", title: "Blocked sites",
+                           subtitle: blocklist.scopeText + " Removing one takes \(blocklist.delayText), "
+                               + "and you can change your mind until then.")
+                addCard
+                if let notice = blocklist.notice {
+                    NoticeBanner(text: notice)
+                }
+                if let error = blocklist.errorMessage {
+                    NoticeBanner(text: error, isError: true)
+                }
+                if let failure = blocklist.failure {
+                    ErrorCard(error: failure, retry: { blocklist.retry() },
+                              details: { Support.details(failure, log: [], extraRedactions: model.privateNames) })
+                }
+                if !blocklist.pendingRemovals.isEmpty || !blocklist.pendingExceptions.isEmpty {
+                    pendingSection
+                }
+                listSection
+                DisclosureGroup("More options", isExpanded: $showMore) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        exceptionsSection
+                        if blocklist.remoteDesktop != nil {
+                            categoriesSection
+                        }
+                    }
+                    .padding(.top, 10)
+                }
+                .font(Theme.body(13))
+            }
+            .padding(.horizontal, 36)
+            .padding(.top, 12)
+            .padding(.bottom, 40)
+            .frame(maxWidth: 680, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Theme.background)
+        .onAppear { blocklist.refresh() }
+        .alert(item: $confirmRemoval) { site in
+            Alert(title: Text("Remove \(site.display_domain)?"),
+                  message: Text("It stays blocked for \(blocklist.delayText). Your trusted person, "
+                                + "if you have one, will be told. You can cancel any time before then."),
+                  primaryButton: .destructive(Text("Start \(blocklist.delayText) wait")) {
+                      blocklist.requestRemoval(site)
+                  },
+                  secondaryButton: .cancel(Text("Keep it blocked")))
+        }
+    }
+
+    /// v0.5: always-on bypass category + the remote-desktop switch (off waits).
+    private var categoriesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle("Always blocked")
+            Card {
+                Text("Cloud PCs, remote browsers and web proxies")
+                    .font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.primaryText)
+                Text("Services that run a computer or browser somewhere else, where Pax can't filter. "
+                     + "Always on.")
+                    .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+            }
+            if let rd = blocklist.remoteDesktop {
+                Card {
+                    Toggle(isOn: Binding(
+                        get: { rd.enabled },
+                        set: { on in
+                            if on { blocklist.setRemoteDesktop(blocked: true) } else { confirmRemoteDesktopOff = true }
+                        })) {
+                        Text("Block remote desktop and work virtual desktops")
+                            .font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.primaryText)
+                    }
+                    .disabled(blocklist.busy || rd.pending != nil)
+                    Text("Chrome Remote Desktop, AnyDesk, TeamViewer, Parsec, RustDesk, Splashtop, Windows 365, "
+                         + "Amazon WorkSpaces and similar. Turning this off takes \(blocklist.delayText); "
+                         + "turning it back on is instant.")
+                        .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                    if let r = rd.pending {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            PendingRow(title: "Stop blocking remote desktop",
+                                       remaining: blocklist.remainingCategory(r, at: context.date)) {
+                                blocklist.cancelCategoryRequest(r)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .alert(isPresented: $confirmRemoteDesktopOff) {
+            Alert(title: Text("Stop blocking remote desktop?"),
+                  message: Text("Remote desktop stays blocked for \(blocklist.delayText). Your trusted "
+                                + "person, if you have one, will be told. You can cancel any time before then."),
+                  primaryButton: .destructive(Text("Start \(blocklist.delayText) wait")) {
+                      blocklist.setRemoteDesktop(blocked: false)
+                  },
+                  secondaryButton: .cancel(Text("Keep it blocked")))
+        }
+    }
+
+    private var addCard: some View {
+        Card {
+            Text("Add a site").font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.primaryText)
+            HStack(spacing: 12) {
+                TextField("example.com", text: $blocklist.newSite)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.body(14))
+                    .onSubmit { blocklist.add() }
+                Button("Block now") { blocklist.add() }
+                    .buttonStyle(PrimaryButtonStyle(accent: true))
+                    .disabled(blocklist.normalisedNewSite == nil || blocklist.busy)
+            }
+            Text("Covers every subdomain too: blocking example.com also blocks www.example.com and "
+                 + "m.example.com. Takes effect straight away.")
+                .font(Theme.body(12))
+                .foregroundStyle(Theme.mutedText)
+            HStack(spacing: 12) {
+                Button("Import list…") { showImport = true }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(blocklist.busy)
+                if blocklist.importTotal > 0 {
+                    ProgressView(value: Double(blocklist.importDone), total: Double(max(1, blocklist.importTotal)))
+                        .tint(Theme.accent)
+                        .frame(maxWidth: 200)
+                    Text("\(blocklist.importDone) of \(blocklist.importTotal)")
+                        .font(Theme.body(12).monospacedDigit()).foregroundStyle(Theme.mutedText)
+                }
+            }
+            .sheet(isPresented: $showImport) {
+                ImportListSheet(alreadyBlocked: blocklist.blockedDomains, cap: blocklist.importCap,
+                                forIPhoneProfile: false) { sites, skipped in
+                    blocklist.importSites(sites, skipped: skipped)
+                }
+            }
+        }
+    }
+
+    private var pendingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle("Waiting")
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                VStack(spacing: 8) {
+                    ForEach(blocklist.pendingRemovals) { r in
+                        PendingRow(title: "Remove \(r.display_domain ?? r.domain ?? "")",
+                                   remaining: blocklist.remaining(r, at: context.date)) { blocklist.cancel(r) }
+                    }
+                    ForEach(blocklist.pendingExceptions) { r in
+                        PendingRow(title: "Allow \(r.display_domain ?? r.domain ?? "")",
+                                   remaining: blocklist.remaining(r, at: context.date)) { blocklist.cancel(r) }
+                    }
+                }
+            }
+        }
+    }
+
+    private var listSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle("Blocked (\(blocklist.blocked.count))")
+            if blocklist.blocked.isEmpty {
+                Text("No sites yet. Restricted content is already blocked; add anything else that pulls you in.")
+                    .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(blocklist.blocked) { site in
+                        HStack {
+                            Text(site.display_domain).font(Theme.body(14)).foregroundStyle(Theme.primaryText)
+                            Spacer()
+                            if site.pending_removal != nil {
+                                Text("Removal pending").font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                            } else {
+                                Button("Remove") { confirmRemoval = site }
+                                    .buttonStyle(SecondaryButtonStyle())
+                                    .disabled(blocklist.busy)
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        Divider().overlay(Theme.border)
+                    }
+                }
+                .background(RoundedRectangle(cornerRadius: Theme.cornerRadius).fill(Theme.card))
+                .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).stroke(Theme.border))
+            }
+        }
+    }
+
+    private var exceptionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle("Exceptions")
+            Text("If Pax blocks a site you need, you can ask for an exception. Like a removal, "
+                 + "it takes \(blocklist.delayText). Removing an exception is instant. Some categories, "
+                 + "such as restricted content, media converters and remote AI browsers, can't be excepted.")
+                .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                TextField("site the filter blocks", text: $exceptionSite)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.body(14))
+                Button("Ask for exception") {
+                    blocklist.requestException(exceptionSite)
+                    exceptionSite = ""
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(DomainInput.normalise(exceptionSite) == nil || blocklist.busy)
+            }
+            ForEach(blocklist.allowed) { site in
+                HStack {
+                    Text(site.display_domain).font(Theme.body(14)).foregroundStyle(Theme.primaryText)
+                    Spacer()
+                    Button("Remove exception") { blocklist.removeException(site) }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+        }
+    }
+}
+
+private struct SectionTitle: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(Theme.body(11, weight: .semibold))
+            .tracking(1.2)
+            .foregroundStyle(Theme.mutedText)
+    }
+}
+
+private struct PendingRow: View {
+    let title: String
+    let remaining: Int
+    let cancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "hourglass").foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(Theme.body(14, weight: .medium)).foregroundStyle(Theme.primaryText)
+                Text(remaining > 0 ? "Takes effect in \(Countdown.string(seconds: remaining))" : "Taking effect…")
+                    .font(Theme.body(12).monospacedDigit())
+                    .foregroundStyle(Theme.mutedText)
+            }
+            Spacer()
+            Button("Cancel", action: cancel)
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(remaining == 0)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: Theme.cornerRadius).fill(Theme.accent.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).stroke(Theme.accent.opacity(0.3)))
+    }
+}
+
+private struct NoticeBanner: View {
+    let text: String
+    var isError = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: isError ? "exclamationmark.circle" : "checkmark.circle")
+                .foregroundStyle(isError ? Theme.accent : Theme.primaryText)
+            Text(text).font(Theme.body(13)).foregroundStyle(Theme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Theme.cornerRadius).fill(Theme.section))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).stroke(Theme.border))
+    }
+}

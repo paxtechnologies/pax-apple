@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* Pax Image Blur. Loaded at document_start, before the page paints. Everything
+   that isn't known to be safe is blurred; the content script sets html.pax-blur-armed
+   synchronously and data-pax-state on each <img>/<video>. */
+html.pax-blur-armed img:not([data-pax-state="safe"]):not([data-pax-state="revealed"]):not([data-pax-state="skip"]):not([data-pax-state="locked"]),
+html.pax-blur-armed video:not([data-pax-state="safe"]):not([data-pax-state="revealed"]):not([data-pax-state="locked"]) {
+  filter: blur(28px) saturate(0.5) !important;
+  transition: filter 0.15s ease-out;
+}
+html.pax-blur-armed img[data-pax-state="veiled"],
+html.pax-blur-armed img[data-pax-state="unknown"],
+html.pax-blur-armed video[data-pax-state="veiled"],
+html.pax-blur-armed video[data-pax-state="unknown"] {
+  cursor: pointer !important;
+}
+/* Restricted: hidden everywhere, including allow-listed sites, with no reveal. */
+html [data-pax-state="locked"] {
+  filter: blur(48px) grayscale(1) brightness(0.6) !important;
+  cursor: not-allowed !important;
+}

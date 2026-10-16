@@ -1,0 +1,134 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax curated list (v0.5): "remote desktop" category. ON BY DEFAULT.
+#
+# Remote desktop and remote-access services, plus enterprise virtual desktops.
+# Controlling another computer means browsing on a machine Pax doesn't filter,
+# so these are blocked by default. Some people need them for work, so this is a
+# separate category that can be switched off; switching it off waits like any
+# other removal (the blocklist delay, 72 h by default), can be cancelled, and
+# tells the accountability partner. Switching it back on is immediate.
+#
+# One domain per line, no inline comments. pax-dns blocks each entry and all its
+# subdomains. pax-guard writes each entry and www.<entry> to /etc/hosts (exact
+# names only), so known fixed host names are listed one by one as well.
+# Self-hosted servers (RustDesk, Moonlight/Sunshine, VNC, RDP by IP address)
+# can't be blocked by name; pax-guard's pf rules block the standard ports
+# instead while this category is on.
+# Every name below was checked on 2026-10-14 (apex names of services whose
+# relays live on subdomains may not resolve themselves).
+
+# ---- Chrome Remote Desktop
+remotedesktop.google.com
+remotedesktop-pa.googleapis.com
+
+# ---- AnyDesk
+anydesk.com
+net.anydesk.com
+boot.net.anydesk.com
+my.anydesk.com
+
+# ---- TeamViewer (routers and masters are numbered subdomains)
+teamviewer.com
+login.teamviewer.com
+web.teamviewer.com
+ping3.teamviewer.com
+master1.teamviewer.com
+master2.teamviewer.com
+master3.teamviewer.com
+master4.teamviewer.com
+master5.teamviewer.com
+master6.teamviewer.com
+master7.teamviewer.com
+master8.teamviewer.com
+master9.teamviewer.com
+master10.teamviewer.com
+master11.teamviewer.com
+master12.teamviewer.com
+master13.teamviewer.com
+master14.teamviewer.com
+master15.teamviewer.com
+master16.teamviewer.com
+
+# ---- Parsec
+parsec.app
+parsecgaming.com
+kessel-api.parsec.app
+kessel-ws.parsec.app
+public.parsec.app
+stun.parsec.app
+
+# ---- RustDesk (public rendezvous/relay servers; self-hosted ones are not listable)
+rustdesk.com
+rs-ny.rustdesk.com
+
+# ---- Splashtop
+splashtop.com
+my.splashtop.com
+splashtop.eu
+
+# ---- Microsoft: Windows 365, Azure Virtual Desktop, Quick Assist
+windows365.microsoft.com
+rdweb.wvd.microsoft.com
+client.wvd.microsoft.com
+remoteassistance.support.services.microsoft.com
+
+# ---- Amazon WorkSpaces and WorkSpaces Secure Browser (portals are subdomains)
+amazonworkspaces.com
+clients.amazonworkspaces.com
+workspaces-web.com
+
+# ---- Other remote-access tools
+realvnc.com
+logmein.com
+gotomypc.com
+assist.zoho.com
+supremocontrol.com
+dwservice.net
+nomachine.com
+jumpdesktop.com
+screenconnect.com
+remoteutilities.com
+hoptodesk.com
+getscreen.me
+iperiusremote.com
+ammyy.com
+ultraviewer.net
+remote.it
+# ---- More remote-access tools and enterprise virtual desktops (the maintainer's list, 2026-10-15)
+accops.com
+action1.com
+aeroadmin.com
+anyviewer.com
+atera.com
+beyondtrust.com
+bomgar.com
+bomgarcloud.com
+citrix.com
+connectwise.com
+dameware.com
+fixme.it
+goto.com
+graphon.com
+guacamole.apache.org
+itarian.com
+kaseya.com
+level.io
+lizardbyte.dev
+meshcentral.com
+mikogo.com
+moonlight-stream.org
+mremoteng.com
+n-able.com
+netsupportsoftware.com
+omnissa.com
+oray.com
+parallels.com
+pcvisit.de
+pulseway.com
+remmina.org
+remotepc.com
+showmypc.com
+syncromsp.com
+tightvnc.com
+todesk.com
+uvnc.com

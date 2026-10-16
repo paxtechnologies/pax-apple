@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.sqlite3
+*.mobileconfig
+escrow*.json
+mac-app/.build/
+mac-app/.swiftpm/
+.DS_Store
+mac-app/dist/
+extension/dist/
+extension/node_modules/
+extension/package-lock.json
+extension/signed/

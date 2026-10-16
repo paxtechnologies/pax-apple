@@ -1,0 +1,424 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Builds a universal (arm64 + x86_64) Pax.app and Pax-<version>.dmg. With the
+# MACOS_CERT_P12 secret set, the app, update zip and DMG are signed with the
+# Developer ID Application certificate and notarised + stapled (APPLE_ID,
+# APPLE_TEAM_ID, APPLE_APP_PASSWORD); without it the build is ad-hoc signed. It runs on a GitHub macOS runner, uploads the DMG as a workflow
+# artifact, and force-pushes the build log + status to the orphan `ci-logs`
+# branch (even when the build fails). Tests run in ci.yml.
+#
+# v0.8.0 releases: on a tag v* (which must equal v$PAX_VERSION) it also signs
+# pax-update.json with the PAX_UPDATE_SIGNING_KEY secret (scripts/sign-release.py),
+# creates the GitHub Release with the DMG, the update zip and the manifest, and
+# republishes the signed filter lists under the release tag `lists` (never
+# "latest", so releases/latest/download/pax-update.json keeps pointing at the
+# app). The jsDelivr mirrors read the orphan branches `releases` and `pax-lists`.
+# docs/UPDATES.md.
+#
+# v0.8.6: the app bundles the iPhone helper's own Python (build-device-helper.sh). The
+# "Check the bundle" step fails the build unless every Mach-O in it is universal and
+# signed (Developer ID, hardened runtime, timestamp), the signed helper's `selftest`
+# and `list` run from Pax.app on arm64 and (through Rosetta) x86_64, and the app in
+# the DMG and in the update zip both assess as "Notarized Developer ID".
+#
+# v0.8.6 (second part): pax-guard's own runtime (a checked copy of that Python, no
+# site-packages) is installed and self-tested from the built app on arm64 and x86_64,
+# and the update zip is split into signed parts under jsDelivr's 20 MB limit (release
+# step; every build checks the split).
+#
+# The repo is pushed with the contents API, which drops exec bits, so every
+# *.sh is made executable before anything runs.
+name: Build DMG
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # the ci-logs branch
+
+concurrency:
+  group: build-dmg-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PAX_VERSION: "0.8.14"
+
+jobs:
+  dmg:
+    name: Pax.app + DMG (universal)
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # CFBundleVersion = commit count
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+          /usr/bin/python3 --version
+          # Rosetta, so the x86_64 half of the bundled helper is actually run, not just present.
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            sudo softwareupdate --install-rosetta --agree-to-license || echo "Rosetta unavailable"
+          fi
+          arch -x86_64 /usr/bin/true && echo "Rosetta: yes" || echo "Rosetta: no"
+      - name: Developer ID certificate and notary credentials
+        id: signing
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$MACOS_CERT_P12" ]]; then
+            echo "No MACOS_CERT_P12 secret: ad-hoc signed build."
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KC="$RUNNER_TEMP/pax-signing.keychain-db"
+          KCPW="$(uuidgen)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          P12="$RUNNER_TEMP/pax-cert.p12"
+          printf '%s' "$MACOS_CERT_P12" | tr -d '\r\n ' | base64 --decode > "$P12"
+          security import "$P12" -k "$KC" -P "$MACOS_CERT_PASSWORD" -f pkcs12 \
+            -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productbuild
+          rm -f "$P12"
+          # Apple's Developer ID intermediate, in case the runner image lacks it.
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer \
+            && security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$KC" >/dev/null 2>&1 || true
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPW" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          ID="$(security find-identity -v -p codesigning "$KC" | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -n 1)"
+          if [[ -z "$ID" ]]; then
+            security find-identity -v "$KC" || true
+            echo "MACOS_CERT_P12 holds no valid Developer ID Application identity"; exit 1
+          fi
+          echo "Signing as: $ID"
+          echo "identity=$ID" >> "$GITHUB_OUTPUT"
+          echo "keychain=$KC" >> "$GITHUB_OUTPUT"
+          for v in APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+            [[ -n "${!v}" ]] || { echo "$v secret is not set: can't notarise"; exit 1; }
+          done
+          xcrun notarytool store-credentials pax --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --keychain "$KC" --validate
+          echo "notary=pax" >> "$GITHUB_OUTPUT"
+      - name: Build DMG
+        working-directory: mac-app
+        env:
+          UNIVERSAL: "1"
+          SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          NOTARY_PROFILE: ${{ steps.signing.outputs.notary }}
+          NOTARY_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+        run: |
+          set -o pipefail
+          find .. -name "*.sh" -exec chmod +x {} +
+          ./scripts/build-dmg.sh 2>&1 | tee "$RUNNER_TEMP/build.log"
+      - name: Check the bundle
+        working-directory: mac-app
+        run: |
+          set -o pipefail
+          codesign --verify --deep --strict --verbose=2 dist/Pax.app
+          codesign -dv --verbose=2 dist/Pax.app 2>&1 | grep -E "^(Authority|TeamIdentifier|Runtime|Timestamp)" || true
+          ARCHS="$(lipo -archs dist/Pax.app/Contents/MacOS/Pax)"
+          echo "architectures: $ARCHS"
+          [[ "$ARCHS" == *arm64* && "$ARCHS" == *x86_64* ]] || { echo "not universal"; exit 1; }
+          plutil -p dist/Pax.app/Contents/Info.plist
+          ls -l dist/Pax.app/Contents/Resources/AppIcon.icns
+          ls -l dist/Pax.app/Contents/Resources/lists dist/Pax.app/Contents/Resources/extensions
+          hdiutil imageinfo "dist/Pax-${PAX_VERSION}.dmg" | head -n 20
+      - name: Check the bundled iPhone helper
+        working-directory: mac-app
+        env:
+          SIGNED: ${{ steps.signing.outputs.identity != '-' && steps.signing.outputs.identity != '' }}
+        run: |
+          set -euo pipefail
+          # Everything this step prints also goes into build.log on the ci-logs branch.
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
+          echo; echo "==> Check the bundled iPhone helper"
+          APP=dist/Pax.app
+          ROOT="$APP/Contents/Resources/device/python"
+          PY="$ROOT/bin/python3.12"
+          HELPER="$APP/Contents/Resources/device/pax_device.py"
+          PIN="$(/usr/bin/python3 -I scripts/helper_runtime.py pin pymobiledevice3)"
+          [[ -x "$PY" ]] || { echo "no bundled helper at $PY"; exit 1; }
+          [[ ! -e "$APP/Contents/Resources/install-helper.sh" ]] || { echo "install-helper.sh is still shipped"; exit 1; }
+          echo "== every Mach-O: universal, signed, hardened runtime, timestamp"
+          n=0
+          while IFS= read -r -d '' f; do
+            n=$((n + 1))
+            archs="$(lipo -archs "$f")"
+            [[ "$archs" == *arm64* && "$archs" == *x86_64* ]] || { echo "not universal: $f ($archs)"; exit 1; }
+            codesign --verify --strict "$f" || { echo "bad signature: $f"; exit 1; }
+            info="$(codesign -dvv "$f" 2>&1)"
+            if [[ "$SIGNED" == "true" ]]; then
+              grep -q "^Authority=Developer ID Application" <<<"$info" || { echo "not Developer ID: $f"; echo "$info"; exit 1; }
+              grep -q "^Timestamp=" <<<"$info" || { echo "no secure timestamp: $f"; exit 1; }
+              grep -Eq "flags=0x[0-9a-f]*\(runtime\)|runtime" <<<"$(grep '^CodeDirectory' <<<"$info")" \
+                || { echo "no hardened runtime: $f"; echo "$info"; exit 1; }
+            fi
+          done < <(/usr/bin/python3 -I scripts/helper_runtime.py list-macho "$ROOT")
+          echo "checked $n Mach-O files"
+          codesign -d --entitlements - "$PY" 2>/dev/null | grep -q allow-unsigned-executable-memory \
+            || { echo "interpreter is missing its entitlements"; exit 1; }
+          run_helper() {   # run_helper <arch> <args...>
+            local a="$1"; shift
+            local out; out="$(arch "-$a" "$PY" -I -B "$HELPER" "$@" | tail -n 1)"
+            echo "$a $1: $out"
+            grep -q '"ok": true' <<<"$out" || { echo "bundled helper '$1' failed on $a"; exit 1; }
+          }
+          run_helper arm64 selftest --expect-pymobiledevice3 "$PIN" --expect-arch arm64
+          run_helper arm64 list
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            run_helper x86_64 selftest --expect-pymobiledevice3 "$PIN" --expect-arch x86_64
+            run_helper x86_64 list
+          else
+            echo "::warning::Rosetta unavailable: the x86_64 helper was checked for presence and signature only"
+          fi
+          "$PY" -I -B "$APP/Contents/Resources/profile/make_profile.py" --help >/dev/null
+          codesign --verify --deep --strict "$APP"   # running the helper changed nothing
+          echo "== Gatekeeper: app, the app inside the DMG, the app inside the update zip"
+          spctl -a -vv "$APP" 2>&1 | tee "$RUNNER_TEMP/spctl-app.txt"
+          MNT="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "dist/Pax-${PAX_VERSION}.dmg" >/dev/null
+          spctl -a -vv "$MNT/Pax.app" 2>&1 | tee "$RUNNER_TEMP/spctl-dmg.txt"
+          run_dmg="$("$MNT/Pax.app/Contents/Resources/device/python/bin/python3.12" -I -B \
+            "$MNT/Pax.app/Contents/Resources/device/pax_device.py" selftest | tail -n 1)"
+          echo "from the DMG (read-only): $run_dmg"
+          hdiutil detach "$MNT" >/dev/null
+          grep -q '"ok": true' <<<"$run_dmg" || { echo "helper failed from the read-only DMG"; exit 1; }
+          ZIPDIR="$(mktemp -d)"
+          ditto -x -k "dist/Pax-${PAX_VERSION}.zip" "$ZIPDIR"
+          spctl -a -vv "$ZIPDIR/Pax.app" 2>&1 | tee "$RUNNER_TEMP/spctl-zip.txt"
+          codesign --verify --deep --strict "$ZIPDIR/Pax.app"
+          if [[ "$SIGNED" == "true" ]]; then
+            for f in app dmg zip; do
+              grep -q "source=Notarized Developer ID" "$RUNNER_TEMP/spctl-$f.txt" \
+                || { echo "$f: not assessed as Notarized Developer ID"; exit 1; }
+            done
+          fi
+          echo "== sizes"
+          du -sh "$ROOT" "$APP" "dist/Pax-${PAX_VERSION}.dmg" "dist/Pax-${PAX_VERSION}.zip"
+          { echo "helper_runtime: $(du -sk "$ROOT" | cut -f1) KB"
+            echo "app: $(du -sk "$APP" | cut -f1) KB"
+            echo "dmg: $(stat -f %z "dist/Pax-${PAX_VERSION}.dmg") bytes"
+            echo "zip: $(stat -f %z "dist/Pax-${PAX_VERSION}.zip") bytes"
+            cat "$RUNNER_TEMP"/spctl-*.txt; }
+      - name: Check the update parts (v0.8.6)
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
+          echo; echo "==> Update zip as mirror parts (dry run; releases sign them on a tag)"
+          ZIP="mac-app/dist/Pax-${PAX_VERSION}.zip"
+          D="$(mktemp -d)"
+          /usr/bin/python3 scripts/sign-release.py split --zip "$ZIP" --out "$D" > "$D.json"
+          n=0; for f in "$D"/*; do n=$((n + 1)); s="$(stat -f %z "$f")"; echo "  $(basename "$f"): $s bytes"
+            [[ "$s" -lt 20000000 ]] || { echo "part over 20 MB"; exit 1; }; done
+          cat "$D"/* | cmp - "$ZIP" && echo "  $n parts join back into the zip ($(stat -f %z "$ZIP") bytes)"
+      - name: Check pax-guard's own runtime (v0.8.6)
+        working-directory: mac-app
+        env:
+          SIGNED: ${{ steps.signing.outputs.identity != '-' && steps.signing.outputs.identity != '' }}
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/build.log") 2>&1
+          echo; echo "==> Check pax-guard's own runtime"
+          APP="$PWD/dist/Pax.app"
+          RES="$APP/Contents/Resources"
+          MAN="$RES/guard/runtime-manifest.json"
+          [[ -f "$MAN" ]] || { echo "no runtime-manifest.json in the app"; exit 1; }
+          [[ -f "$RES/guard/guard_runtime.py" && -f "$RES/guard/pax-guard-launch.sh" ]] \
+            || { echo "guard_runtime.py or the launcher is missing"; exit 1; }
+          plutil -lint "$RES/guard/org.paxpeace.pax-guard.plist"
+          grep -q "pax-guard-launch.sh" "$RES/guard/org.paxpeace.pax-guard.plist" || { echo "plist doesn't use the launcher"; exit 1; }
+          # What pax-guard-install.sh does, into a scratch /Library/PaxGuard (not as root).
+          BASE="$(mktemp -d)/PaxGuard"
+          mkdir -p "$BASE/bin" "$BASE/state"
+          cp -R "$RES/guard/." "$BASE/bin/"
+          mkdir -p "$BASE/bin/lists" && cp "$RES/lists/"*.txt "$BASE/bin/lists/"
+          if [[ "$SIGNED" == "true" ]]; then
+            grep -q '"team_id": "Z94GSK7JA8"' "$MAN" || { echo "manifest isn't for Team ID Z94GSK7JA8"; exit 1; }
+            out="$("$RES/device/python/bin/python3.12" -I -B "$BASE/bin/guard_runtime.py" install --app "$APP" --base "$BASE")"
+            echo "install: $out"
+            grep -q '"ok": true' <<<"$out" || { echo "runtime install failed"; exit 1; }
+            RT="$BASE/runtime/bin/python3.12"
+            [[ ! -e "$BASE/runtime/lib/python3.12/site-packages/pymobiledevice3" ]] || { echo "site-packages was copied"; exit 1; }
+            for a in arm64 x86_64; do
+              if [[ "$a" == x86_64 ]] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+                echo "::warning::Rosetta unavailable: pax-guard's runtime not run on x86_64"; continue
+              fi
+              r="$(arch "-$a" "$RT" -I -B "$BASE/bin/pax_guard.py" selftest | tail -n 1)"
+              echo "$a selftest on the runtime copy: $r"
+              grep -q '"ok": true' <<<"$r" || { echo "pax-guard selftest failed on $a"; exit 1; }
+              # TLS through macOS's CA bundle (what the launcher sets): a DoH query with Python's own TLS.
+              SSL_CERT_FILE=/etc/ssl/cert.pem arch "-$a" "$RT" -I -B - "$BASE/bin" <<'PY'
+          import sys
+          sys.path.insert(0, sys.argv[1])
+          import dns_forwarder as d
+          for u in d.default_upstreams(timeout=8):
+              try:
+                  r = u.query(d.build_query("example.com", 1, 1))
+              except d.DNSError as exc:
+                  print(f"::warning::{u.name} unreachable from the runner: {exc}")
+                  continue
+              assert not u.use_curl, f"{u.name}: Python TLS failed, needed curl"
+              print(f"DoH via {u.name} with Python TLS: {len(r)} bytes")
+              break
+          PY
+            done
+            # The tamper check: a changed file is found, and the copy is rebuilt from the app.
+            "$RT" -I -B - "$BASE" "$APP" <<'PY'
+          import sys
+          from pathlib import Path
+          base, app = Path(sys.argv[1]), Path(sys.argv[2])
+          sys.path.insert(0, str(base / "bin"))
+          import guard_runtime as g, subprocess
+          class S:
+              def run(self, args, timeout=60, stdin=None):
+                  r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+                  return r.returncode, r.stdout + r.stderr
+          rt = g.Runtime(S(), base=base, app_path=app, chown=False)
+          assert rt.verify_installed(signatures=True) == [], rt.verify_installed(signatures=True)
+          victim = base / "runtime" / "lib" / "python3.12" / "json" / "__init__.py"
+          victim.write_text(victim.read_text() + "\n# changed\n")
+          probs = rt.verify_installed()
+          assert any("json/__init__.py" in p for p in probs), probs
+          r = rt.heal(base / "bin" / "pax_guard.py")
+          assert r["repaired"] and rt.verify_installed() == [], r
+          print("tamper check + self-heal: ok")
+          PY
+            echo "pax-guard runtime: $(du -sk "$BASE/runtime" | cut -f1) KB ($(grep -o '"path"' "$MAN" | wc -l | tr -d ' ') files)"
+          else
+            echo "ad-hoc build: no Developer ID runtime for pax-guard (it uses /usr/bin/python3 on such builds)"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pax-${{ env.PAX_VERSION }}-universal-dmg
+          path: mac-app/dist/Pax-${{ env.PAX_VERSION }}.dmg
+          if-no-files-found: error
+          retention-days: 30
+      - name: Sign and publish the release (tags v* only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAX_UPDATE_SIGNING_KEY: ${{ secrets.PAX_UPDATE_SIGNING_KEY }}
+          SIGNED_NOTE: ${{ steps.signing.outputs.notary == 'pax' && 'Signed with Developer ID and notarised by Apple.' || 'Ad-hoc signed, not notarised.' }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          [[ "$TAG" == "v$PAX_VERSION" ]] || { echo "tag $TAG doesn't match PAX_VERSION $PAX_VERSION"; exit 1; }
+          [[ -n "$PAX_UPDATE_SIGNING_KEY" ]] || { echo "PAX_UPDATE_SIGNING_KEY secret is not set: refusing to publish an unsigned release"; exit 1; }
+          REL="$RUNNER_TEMP/release"
+          rm -rf "$REL" && mkdir -p "$REL"
+          cp "mac-app/dist/Pax-$PAX_VERSION.dmg" "mac-app/dist/Pax-$PAX_VERSION.zip" "$REL/"
+          cp "mac-app/dist/Pax-$PAX_VERSION.dmg" "$REL/Pax.dmg"  # stable name for releases/latest/download/Pax.dmg
+          # v0.8.6: the zip is over jsDelivr's 20 MB per-file limit, so the mirror carries it
+          # as signed, hash-pinned parts (parts/<version>/ on the `releases` branch, and the
+          # same parts on this release). No whole-zip mirror: jsDelivr would refuse it.
+          PARTS="$RUNNER_TEMP/parts"
+          rm -rf "$PARTS"
+          /usr/bin/python3 scripts/sign-release.py sign --zip "$REL/Pax-$PAX_VERSION.zip" \
+            --version "$PAX_VERSION" --minimum-version "${PAX_MINIMUM_VERSION:-0.8.0}" \
+            --parts-dir "$PARTS" \
+            --part-base "https://cdn.jsdelivr.net/gh/$GITHUB_REPOSITORY@releases/parts/$PAX_VERSION/" \
+            --part-base "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/" \
+            --out "$REL/pax-update.json"
+          /usr/bin/python3 scripts/sign-release.py verify "$REL/pax-update.json" --zip "$REL/Pax-$PAX_VERSION.zip" \
+            --parts-dir "$PARTS"
+          for f in "$PARTS"/*; do
+            [[ "$(stat -f %z "$f")" -lt 20000000 ]] || { echo "$f is over jsDelivr's 20 MB limit"; exit 1; }
+          done
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$REL"/* "$PARTS"/* --clobber
+          else
+            gh release create "$TAG" "$REL"/* "$PARTS"/* --title "Pax $PAX_VERSION" --latest \
+              --notes "Pax $PAX_VERSION. Signed update. $SIGNED_NOTE"
+          fi
+
+          # Filter lists: reassemble the bundled parts, sign the manifest, publish under `lists`.
+          LISTS="$RUNNER_TEMP/lists"
+          rm -rf "$LISTS" && mkdir -p "$LISTS"
+          /usr/bin/python3 - "$LISTS" <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "guard")
+          from filter_lists import read_bytes_maybe_parts
+          out = Path(sys.argv[1])
+          man = json.loads(Path("guard/filters/filters.json").read_text())
+          for item in man["lists"].values():
+              (out / item["file"]).write_bytes(read_bytes_maybe_parts(Path("guard/filters") / item["file"]))
+          PY
+          (cd lists && /usr/bin/python3 build.py manifest --out "$LISTS" --sign-key-env PAX_UPDATE_SIGNING_KEY)
+          if ! gh release view lists >/dev/null 2>&1; then
+            gh release create lists --target "$GITHUB_SHA" --prerelease --latest=false --title "Pax filter lists" \
+              --notes "Signed filter lists for pax-guard (lists-manifest.json). Not an app release."
+          fi
+          gh release upload lists "$LISTS"/* --clobber
+
+          # jsDelivr mirrors: orphan branches `releases` (app) and `pax-lists` (lists).
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for pair in "releases:$REL" "pax-lists:$LISTS"; do
+            BR="${pair%%:*}"; DIR="${pair#*:}"
+            M="$RUNNER_TEMP/mirror-$BR"
+            rm -rf "$M" && mkdir -p "$M" && cp "$DIR"/* "$M/"
+            rm -f "$M"/*.dmg
+            if [[ "$BR" == releases ]]; then
+              # v0.8.6: only files jsDelivr will serve: the manifest and the parts.
+              rm -f "$M"/*.zip
+              mkdir -p "$M/parts/$PAX_VERSION" && cp "$PARTS"/* "$M/parts/$PAX_VERSION/"
+            fi
+            (cd "$M" && git init -q && git checkout -q --orphan "$BR" && git add -A \
+              && git commit -q -m "$BR for $TAG")
+            # v0.8.9: retry a transient "[remote rejected] (failed)"; still fails if it never goes.
+            pushed=0
+            for i in 1 2 3 4 5; do
+              if (cd "$M" && git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BR"); then pushed=1; break; fi
+              sleep $((i * 4))
+            done
+            [[ "$pushed" == 1 ]] || { echo "couldn't update the $BR mirror branch"; exit 1; }
+          done
+      - name: Publish build log to the ci-logs branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          LOGDIR="$RUNNER_TEMP/ci-logs"
+          rm -rf "$LOGDIR" && mkdir -p "$LOGDIR"
+          if [ -f "$RUNNER_TEMP/build.log" ]; then
+            cp "$RUNNER_TEMP/build.log" "$LOGDIR/build.log"
+          else
+            echo "No build log: the job stopped before the Build DMG step." > "$LOGDIR/build.log"
+          fi
+          {
+            echo "status: $JOB_STATUS"
+            echo "workflow: $GITHUB_WORKFLOW #$GITHUB_RUN_NUMBER"
+            echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "commit: $GITHUB_SHA"
+            echo "ref: $GITHUB_REF"
+            echo "finished: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$LOGDIR/status.txt"
+          cd "$LOGDIR"
+          git init -q
+          git checkout -q --orphan ci-logs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build.log status.txt
+          git commit -q -m "Build DMG #$GITHUB_RUN_NUMBER: $JOB_STATUS ($GITHUB_SHA)"
+          # v0.8.9: a log push is not the build. Two runs (a tag and main) finishing together can
+          # race for this ref and GitHub answers "[remote rejected] (failed)" (seen on the v0.8.8
+          # tag, run 38933620416, after the release was already published). Retry, then warn.
+          ok=0
+          for i in 1 2 3 4 5; do
+            if git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-logs; then ok=1; break; fi
+            sleep $((i * 4 + RANDOM % 5))
+          done
+          [ "$ok" = 1 ] || echo "::warning::the log could not be pushed to ci-logs; the build result is unaffected"
+      - name: Remove the signing keychain
+        if: always() && steps.signing.outputs.keychain != ''
+        run: security delete-keychain "${{ steps.signing.outputs.keychain }}" || true

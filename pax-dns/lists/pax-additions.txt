@@ -1,0 +1,17 @@
+# Pax's own additions to the category list (one domain per line; each covers its
+# subdomains). Merged by scripts/load_lists.py. Keep this short and reviewed.
+#
+# v0.6 (project decision, 2026-10-15): X stays readable but its images and video don't load.
+pbs.twimg.com
+video.twimg.com
+ton.twimg.com
+#
+# v0.7.0 (project decision, 2026-10-15): Bluesky the same way. bsky.app itself stays reachable.
+cdn.bsky.app
+video.bsky.app
+video.cdn.bsky.app
+gifs.bsky.app
+#
+# Reddit's media CDNs are not listed: CleanBrowsing Family already blocks Reddit,
+# and a Reddit "text only" mode is a later decision:
+#   i.redd.it  v.redd.it  preview.redd.it

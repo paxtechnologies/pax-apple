@@ -1,0 +1,6 @@
+# Pax device helper (Keep my data mode), for developers running device/pax_device.py
+# with their own Python 3.9+ (PAX_PYTHON). Users never need this: since v0.8.6 Pax.app
+# bundles its own Python with these packages (device/requirements-bundle.txt, hash-pinned).
+# pymobiledevice3 is GPL-3.0-or-later (compatible with Pax's GPL-3.0-only). Pinned to the
+# release the bundle uses: the seed restore relies on its Mobilebackup2Service internals.
+pymobiledevice3==11.32.0

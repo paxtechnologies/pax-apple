@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax remote AI browsers (v0.8.1, 2026-10-15). Always on; can't be excepted.
+# Project rule (2026-10-15): an AI service that lets the user control a remote computer or
+# browser is blocked. ChatGPT's "Work" cloud browser is a remote computer the
+# user can take over, which goes round every filter on this device. The stream
+# for that takeover couldn't be told apart from the rest of ChatGPT, so the
+# whole service is blocked. openai.com itself (docs, API, platform) is NOT
+# blocked: only its chat.* hosts are listed.
+# Hand-curated by Pax (GPL-3.0-only). Suffix match in DNS (pax-dns, the Mac
+# forwarder): each entry blocks itself and every subdomain. The Mac's
+# /etc/hosts layer matches exact names, so a few busy subdomains are listed
+# too. See docs/FILTER_LISTS.md.
+#
+# --- ChatGPT (OpenAI)
+chatgpt.com
+chat.openai.com
+ios.chat.openai.com
+android.chat.openai.com
+desktop.chat.openai.com
+oaiusercontent.com
+oaistatic.com
+# exact names for /etc/hosts (already covered by the entries above in DNS)
+ab.chatgpt.com
+cdn.oaistatic.com
+files.oaiusercontent.com
+#
+# --- Manus (a cloud-computer agent, same rule)
+manus.im
+api.manus.im

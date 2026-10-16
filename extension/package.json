@@ -1,0 +1,22 @@
+{
+  "name": "pax-image-blur",
+  "version": "0.6.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "description": "Pax Image Blur: blurs unwanted images and video frames with an on-device classifier.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "python3 build.py",
+    "vendor": "sh scripts/update-vendor.sh"
+  },
+  "devDependencies": {
+    "jsdom": "25.0.1"
+  },
+  "vendorDependencies": {
+    "@tensorflow/tfjs-core": "4.22.0",
+    "@tensorflow/tfjs-layers": "4.22.0",
+    "@tensorflow/tfjs-backend-cpu": "4.22.0",
+    "@tensorflow/tfjs-backend-webgl": "4.22.0",
+    "esbuild": "0.24.2"
+  }
+}

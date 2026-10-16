@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax media-converter name rule (v0.8.1). A registrable-domain label (any label
+# but the last) is blocked when it holds one of these at a label edge: the start
+# or end of the label, or next to "-" or a digit. "=word" matches a whole label only.
+# Kept conservative: spot-checked against the Tranco top 1M and Pax's UK set.
+ssstwitter
+sstwitter
+twittervideo
+twitterdownload
+tweetdownload
+savetwitter
+fxtwitter
+vxtwitter
+videodownloader
+tiktokdownload
+instadownload
+reelsdownload
+fbdownload
+redditvideo
+redditsave
+tomp4
+ssstik
+snaptik
+savefrom
+y2mate
+y2meta
+=nitter
