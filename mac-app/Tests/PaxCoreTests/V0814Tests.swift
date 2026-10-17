@@ -6,8 +6,9 @@ import XCTest
 final class V0814Tests: XCTestCase {
     func testSettingsSectionsInOrderWithAdvancedLast() {
         // v0.8.18: Blocking (this Mac's switches) and Turning Pax off joined from Home.
+        // v0.8.23: About folded into Updates; Pax Max folded just above Advanced.
         XCTAssertEqual(AppSettingsLayout.sections,
-                       ["Blocking", "Pax Max", "Turning Pax off", "Accountability partner email", "Updates", "About",
+                       ["Blocking", "Turning Pax off", "Accountability partner email", "Updates", "Pax Max",
                         "Advanced"])
         XCTAssertEqual(AppSettingsLayout.sections.last, AppSettingsLayout.advanced)
         XCTAssertEqual(Array(AppSettingsLayout.advancedItems.suffix(3)),

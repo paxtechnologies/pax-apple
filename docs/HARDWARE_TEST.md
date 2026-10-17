@@ -222,7 +222,7 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
 
 1. Set up with Pax Max **off**. Firefox › Add-ons lists Pax Image Blur 0.6.0 (installed by policy); pictures
    load normally. `/etc/hosts` has `127.80.77.0 pax-max-off.guard.paxpeace.com` inside the Pax block.
-2. Settings › Pax Max: the explanation and the "isn't perfect" note show. Turn it on: a confirmation explains it
+2. Settings › Pax Max (v0.8.23: folded; click the arrow): the explanation and the "isn't perfect" note show. Turn it on: a confirmation explains it
    first; after OK the line is gone from `/etc/hosts` at once and a new Firefox tab blurs pictures until checked.
 3. Turn it off: the confirmation says it takes effect after 1 hour. With a trusted person set, they get the
    email first and the countdown shows 60 minutes; the tamper list shows `setting:pax_max_off_requested`.
@@ -243,8 +243,9 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
    Set up by, Filter, one row "Images and video on X and Bluesky: Always blocked", YouTube Restricted Mode,
    "Your blocked apps: N apps" (click to see the names, wrapped), the set-up note, *Set up again* and
    *Remove from this list*. Nothing is cut off at the window's narrowest width.
-4. Click *Settings*: Pax Max, Accountability partner email, Updates, About, and a closed *Advanced* (where this
-   Mac keeps its key, the server address, the testers' note). No device is highlighted in the sidebar.
+4. Click *Settings*: Blocking, Turning Pax off, Accountability partner email, Updates (About folded inside),
+   a closed *Pax Max* and a closed *Advanced* (where this Mac keeps its key, the server address, the testers'
+   note). No device is highlighted in the sidebar.
 5. Pax › Settings… (⌘,) opens that same screen in the main window (and reopens the window if it was closed).
    No separate Settings window appears.
 6. On a Mac set up before 0.8.4, Home › This Mac says Chrome is using the extension list from set-up and
@@ -269,3 +270,28 @@ Use a test device and a test support key only (never redeem on a device you rely
    shows the removal password after the partner email.
 6. The tamper log (`{"cmd":"tamper.list"}`) shows `support_release_setting`, `support_code_refused` and
    `support_release_used` entries; no entry contains a code.
+
+### v0.8.23: calmer Settings
+
+1. Settings shows, top to bottom: Blocking (three switches, no lines under them), Turning Pax off, Accountability
+   partner email, Updates, then *Pax Max* and *Advanced* as rows with an arrow, both closed. Nothing is cut off at
+   the narrowest window width, light and dark.
+2. Each *Details* opens on click and shows the explanations that used to be under each switch (Blocking: ads,
+   sync state, YouTube, X/Bluesky line; Turning Pax off: wait, support release and its rule).
+3. Every switch still works as before: ads, sync, YouTube, support release (off instant; on waits, partner told),
+   Start my wait now (trial day), Update now, the family layer (Advanced).
+4. Pax Max row says *Off* on a new set-up (it's off by default; the set-up switch starts off) and "Blurs pictures
+   and video in Firefox. Other browsers aren't covered yet." Opening it shows the switch; on/off behave as in
+   v0.8.12 above, and while the hour runs the row says *Turning off*.
+5. Accountability partner email: with no one set it says "Not set" and *Add…*; with someone set, their email,
+   "Told before any turn-off wait starts." and *Change…*. *Change…* opens a sheet with the rule, both emails and
+   (under *How Pax sends the email*) the Pax server / own email choice. Changing or removing them still shows
+   "Changing to … on …" (after the turn-off wait), on the card and in the sheet. With the relay down after a
+   removal request, the card says "1 email waiting to send. Pax keeps trying."
+6. Updates: "Version 0.8.23 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
+   licence and site link.
+7. Security notices: after a pax-guard update (a short backup episode in `{"cmd":"tamper.list"}` as
+   `dns:fallback_on` / `dns:fallback_off`), Settings › Advanced and Home show no notice for it. Stop the filter
+   for 10+ minutes (block the upstream): one line "Pax used its backup family filter for N minutes on …". No
+   notice shows a code like `dns:fallback` or `changed:admins`; adding an admin shows "The list of
+   administrators on this Mac changed (…)".

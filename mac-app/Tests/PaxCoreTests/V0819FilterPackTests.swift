@@ -32,7 +32,8 @@ final class V0819FilterPackTests: XCTestCase {
             .hasPrefix("A filter list update didn't pass Pax's checks"))
         XCTAssertTrue(HomeLayout.tamperNotice(kind: "filters:pack_rolled_back", at: 1800000000)
             .contains("went back to the previous lists"))
+        // v0.8.23: plain words, no raw log code.
         XCTAssertTrue(HomeLayout.tamperNotice(kind: "changed:sip", at: 1800000000)
-            .hasPrefix("Pax noticed a change to this Mac's security settings (sip, "))
+            .hasPrefix("System Integrity Protection on this Mac changed ("))
     }
 }

@@ -10,23 +10,33 @@ struct AppSettingsView: View {
     @EnvironmentObject var model: SetupModel
     @EnvironmentObject var mac: MacProtectModel
     @State private var showAdvanced = false
+    @State private var showPaxMax = false              // v0.8.23: folded like Advanced, closed by default
 
     var body: some View {
         PageColumn(maxWidth: 680) {
             // v0.8.21: no Home row in the sidebar any more, so Settings has its own way back.
             BackLink(title: AppNav.backToHome) { model.screen = .home }
-            StepHeader(eyebrow: "", title: "Settings", subtitle: "Everything you can change, in plain words. "
-                       + "An iPhone's or iPad's own details are on its page.")
+            StepHeader(eyebrow: "", title: "Settings", subtitle: AppSettingsLayout.subtitle)
             if let failure = mac.failure {
                 ErrorCard(error: failure, retry: { mac.refresh() }, details: { mac.supportDetails(failure) })
             }
-            // v0.8.18: this Mac's switches and details moved here from Home, grouped simply.
+            // v0.8.23 (Ruben: "only keep what is necessary"): each card is a title and its state;
+            // explanations and rare actions are under "Details". Order: AppSettingsLayout.sections.
             if mac.deviceID != nil { Card { BlockingSettings() } }
-            Card { PaxMaxSettings() }                          // v0.8.12
             Card { TurningOffSettings() }                      // v0.8.16 turn-off wait; v0.8.18 trial, support release
             Card { PartnerEmailSettings() }
-            Card { UpdateSettings() }
-            Card { GeneralSettings() }                         // About
+            Card { UpdateSettings() }                          // v0.8.23: About folded inside
+            Card {                                             // v0.8.12; v0.8.23 folded, off by default
+                DisclosureGroup(isExpanded: $showPaxMax) {
+                    PaxMaxSettings().padding(.top, 12)
+                } label: {
+                    FoldedLabel(title: AppSettingsLayout.paxMax,
+                                state: PaxMax.stateLabel(on: mac.paxMaxView?.on ?? mac.paxMax,
+                                                         pending: mac.paxMaxView?.pending != nil),
+                                line: PaxMax.summary)
+                }
+            }
+            .onAppear { mac.refreshPaxMax() }
             Card {
                 DisclosureGroup(isExpanded: $showAdvanced) {
                     VStack(alignment: .leading, spacing: 18) {
@@ -56,21 +66,71 @@ struct AppSettingsView: View {
     }
 }
 
-private struct GeneralSettings: View {
+/// v0.8.23: the label of a folded card: title, its state on the right, one muted line.
+private struct FoldedLabel: View {
+    let title: String
+    let state: String
+    let line: String
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(AppSettingsLayout.about).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
-            PaxWordmark(size: 32)
-            Text(Brand.tagline).font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
-            Text("Version \(Brand.version)").font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+                Spacer(minLength: 8)
+                Text(state).font(Theme.body(13, weight: .medium)).foregroundStyle(Theme.mutedText)
+            }
+            Text(line).font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// v0.8.23: a card's own "Details" disclosure (closed): its explanations and rare actions.
+private struct DetailsDisclosure<Content: View>: View {
+    let title: String
+    let content: Content
+    @State private var open = false
+
+    init(title: String = AppSettingsLayout.details, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $open) {
+            VStack(alignment: .leading, spacing: 8) { content }
+                .padding(.top, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Text(title).font(Theme.body(13, weight: .medium)).foregroundStyle(Theme.mutedText)
+        }
+    }
+}
+
+/// A small muted explanation line inside Details.
+private struct DetailText: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// v0.8.23: About is folded inside the Updates card (was its own card).
+private struct AboutDetails: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PaxWordmark(size: 28)
+            Text(Brand.tagline).font(Theme.heading(17)).foregroundStyle(Theme.primaryText)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Brand.principles, id: \.self) { p in
                     NoteRow(icon: "leaf", text: p)
                 }
             }
-            Text("Free and open source under the GPL-3.0. Your settings stay with you and the server you choose.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
-                .fixedSize(horizontal: false, vertical: true)
+            DetailText("Free and open source under the GPL-3.0. Your settings stay with you and the server you choose.")
             Link(Brand.site, destination: Brand.siteURL).font(Theme.body(13))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,19 +139,16 @@ private struct GeneralSettings: View {
 
 
 /// v0.8.18 Settings › Blocking: this Mac's live switches (they were on Home's "This Mac"
-/// card), each with one plain line.
+/// card). v0.8.23: just the switches; what each one does is under Details.
 private struct BlockingSettings: View {
     @EnvironmentObject var mac: MacProtectModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(AppSettingsLayout.blocking).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
             switch mac.adblockSwitch {
-            case .guardLive:
-                ToggleRow(title: "Ads and trackers", detail: AppSettingsLayout.Line.adsLive,
-                          isOn: Binding(get: { mac.adblock }, set: { mac.setAdblock($0) }))
-            case .server:
-                ToggleRow(title: "Ads and trackers", detail: AppSettingsLayout.Line.adsServer,
+            case .guardLive, .server:
+                ToggleRow(title: "Ads and trackers", detail: nil,
                           isOn: Binding(get: { mac.adblock }, set: { mac.setAdblock($0) }))
             case .setUpOnly:
                 NoteRow(icon: "hand.raised",
@@ -99,25 +156,33 @@ private struct BlockingSettings: View {
                             + "The switch works here once Pax has finished updating.")
             }
             if mac.canSync && mac.sync != nil {
-                Divider().overlay(Theme.border)
-                ToggleRow(title: "Sync blocked sites across devices",
-                          detail: AppSettingsLayout.Line.sync + " " + ListSyncLinker.detail(mac.sync),
+                ToggleRow(title: "Sync blocked sites across devices", detail: nil,
                           isOn: Binding(get: { mac.sync?.enabled ?? true }, set: { mac.setSyncEnabled($0) }))
             }
             if mac.youtubeAvailable {
-                Divider().overlay(Theme.border)
-                ToggleRow(title: "YouTube Restricted Mode", detail: AppSettingsLayout.Line.youtube,
+                ToggleRow(title: "YouTube Restricted Mode", detail: nil,
                           isOn: Binding(get: { mac.youtubeRestricted }, set: { mac.setYouTubeRestricted($0) }))
             }
-            Divider().overlay(Theme.border)
-            NoteRow(icon: "info.circle", text: AlwaysBlockedMedia.notice)   // v0.8.13: no switch
+            DetailsDisclosure {
+                if mac.adblockSwitch != .setUpOnly {
+                    DetailText("Ads and trackers: " + (mac.adblockSwitch == .guardLive ? AppSettingsLayout.Line.adsLive
+                                                                                       : AppSettingsLayout.Line.adsServer))
+                }
+                if mac.canSync && mac.sync != nil {
+                    DetailText("Sync: " + AppSettingsLayout.Line.sync + " " + ListSyncLinker.detail(mac.sync))
+                }
+                if mac.youtubeAvailable {
+                    DetailText("YouTube: " + AppSettingsLayout.Line.youtube)
+                }
+                DetailText(AlwaysBlockedMedia.notice)      // v0.8.13: no switch
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
 /// v0.8.18 Settings › Turning Pax off: the turn-off wait, the trial day, and "Allow verified
-/// support release" (was Home's Details card).
+/// support release" (was Home's Details card). v0.8.23: the rules are under Details.
 private struct TurningOffSettings: View {
     @EnvironmentObject var mac: MacProtectModel
     @State private var confirmEndTrial = false
@@ -128,9 +193,6 @@ private struct TurningOffSettings: View {
             if let w = mac.status?.wait_seconds {
                 TurnOffWaitRow(seconds: w)
             }
-            Text(AppSettingsLayout.Line.turnOffWait + " Each iPhone or iPad shows its own on its page.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
-                .fixedSize(horizontal: false, vertical: true)
             if let line = TrialDay.settingsLine(mac.status?.trial) {
                 NoteRow(icon: "sun.max", text: line)
                 if mac.trialActive {
@@ -139,14 +201,15 @@ private struct TurningOffSettings: View {
                         .disabled(mac.busy)
                 }
             }
-            if let s = mac.status, s.support_id != nil || s.support_release != nil {
-                Divider().overlay(Theme.border)
-                if let sr = s.support_release {
-                    SupportReleaseRow(state: sr, busy: mac.busy, trialActive: mac.trialActive) { mac.setSupportRelease($0) }
+            if let sr = mac.status?.support_release {
+                SupportReleaseRow(state: sr, busy: mac.busy, trialActive: mac.trialActive) { mac.setSupportRelease($0) }
+            }
+            DetailsDisclosure {
+                DetailText(AppSettingsLayout.Line.turnOffWait + " Each iPhone or iPad shows its own on its page.")
+                if let s = mac.status, s.support_id != nil || s.support_release != nil {
+                    DetailText(VerifiedSupportRelease.title + ": " + AppSettingsLayout.Line.supportRelease)
+                    DetailText(AppSettingsLayout.Line.supportReleaseRule)
                 }
-                Text(AppSettingsLayout.Line.supportReleaseRule)
-                    .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,7 +229,7 @@ private struct MacDetailsSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("This Mac's details").font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            Text("This Mac's details").font(Theme.heading(17)).foregroundStyle(Theme.primaryText)
             if let id = mac.status?.support_id {
                 SupportIDRow(supportID: id)
                 Text(AppSettingsLayout.Line.supportID).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
@@ -189,11 +252,13 @@ private struct MacDetailsSettings: View {
                 }
             }
             FamilyLayerSettings()
-            if let t = mac.guardStatus?.tamper, !t.recent.isEmpty {
+            // v0.8.23: brief backup-filter episodes (e.g. after an update) aren't shown; no raw codes.
+            let notices = SecurityNotices.visible(mac.guardStatus?.tamper?.recent ?? [])
+            if !notices.isEmpty {
                 Text("Security notices").font(Theme.body(13, weight: .semibold)).foregroundStyle(Theme.primaryText)
                 Text(AppSettingsLayout.Line.securityNotices).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                ForEach(Array(t.recent.suffix(5).reversed().enumerated()), id: \.offset) { _, e in
-                    NoteRow(icon: "exclamationmark.shield", text: HomeLayout.tamperNotice(kind: e.kind, at: e.ts))
+                ForEach(Array(notices.suffix(5).reversed().enumerated()), id: \.offset) { _, n in
+                    NoteRow(icon: "exclamationmark.shield", text: n.text)
                 }
             }
         }
@@ -259,7 +324,7 @@ private struct MacKeySettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Where this Mac keeps its key").font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            Text("Where this Mac keeps its key").font(Theme.heading(17)).foregroundStyle(Theme.primaryText)
             Picker("", selection: Binding(get: { mac.escrowMode }, set: { mac.escrowMode = $0 })) {
                 Text("On this Mac (recommended)").tag(MacEscrowMode.local)
                 Text("On a Pax server").tag(MacEscrowMode.server)
@@ -283,27 +348,38 @@ private struct MacKeySettings: View {
 }
 
 /// v0.8.0: updates can't be switched off; this shows the version and last check.
+/// v0.8.23: one line (version · last check) and Update now; About is folded in here.
 private struct UpdateSettings: View {
     @EnvironmentObject var mac: MacProtectModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AppSettingsLayout.updates).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
-            Text("Version \(Brand.version)").font(Theme.body(13)).foregroundStyle(Theme.primaryText)
-            if let u = mac.guardStatus?.update {
-                Text(u.last_checked.map {
-                    "Last checked " + Date(timeIntervalSince1970: TimeInterval($0))
-                        .formatted(date: .abbreviated, time: .shortened)
-                } ?? "Not checked yet")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(versionLine).font(Theme.body(13)).foregroundStyle(Theme.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Button("Update now") { mac.updateNow() }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(mac.busy || mac.deviceID == nil)
             }
-            Button("Update now") { mac.updateNow() }
-                .buttonStyle(SecondaryButtonStyle())
-                .disabled(mac.busy || mac.deviceID == nil)
-            Text("Pax installs updates by itself, signed and checked, so a fix reaches you quickly.")
-                .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+            DetailsDisclosure(title: AppSettingsLayout.about) {
+                DetailText("Pax installs updates by itself, signed and checked, so a fix reaches you quickly.")
+                AboutDetails()
+            }
         }
         .onAppear { if mac.deviceID != nil { mac.refresh() } }
+    }
+
+    private var versionLine: String {
+        var line = "Version \(Brand.version)"
+        if let u = mac.guardStatus?.update {
+            line += " · " + (u.last_checked.map {
+                "last checked " + Date(timeIntervalSince1970: TimeInterval($0)).formatted(date: .abbreviated,
+                                                                                         time: .shortened)
+            } ?? "not checked yet")
+        }
+        return line
     }
 }
 
@@ -322,7 +398,7 @@ private struct PaxMaxSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(AppSettingsLayout.paxMax).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            // v0.8.23: the folded row above carries the title, state and one line.
             Text(PaxMax.explanation).font(Theme.body(13)).foregroundStyle(Theme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
             NoteRow(icon: "exclamationmark.circle", text: PaxMax.warning)
@@ -378,8 +454,53 @@ private struct PaxMaxSettings: View {
     }
 }
 
+/// v0.8.23 Settings › Accountability partner email: who it is and its state, plus one
+/// button. The form (how Pax sends the email, your own address) is in the Change sheet.
+/// Rules unchanged: they're told before any turn-off wait starts, and changing or
+/// removing them takes the turn-off wait (pax-guard enforces both).
 private struct PartnerEmailSettings: View {
     @EnvironmentObject var mac: MacProtectModel
+    @State private var showChange = false
+
+    private var available: Bool { mac.isLocal && mac.deviceID != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(AppSettingsLayout.partnerEmail).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            if available {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(PartnerSummary.value(partner: mac.partnerView?.partner))
+                        .font(Theme.body(14, weight: .medium)).foregroundStyle(Theme.primaryText)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 8)
+                    Button(PartnerSummary.button(partner: mac.partnerView?.partner)) { showChange = true }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(mac.busy)
+                }
+            }
+            Text(stateLine).font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .sheet(isPresented: $showChange) {
+            PartnerEmailForm().environmentObject(mac)
+        }
+    }
+
+    private var stateLine: String {
+        let p = mac.partnerView?.pending_partner
+        return PartnerSummary.state(
+            partner: mac.partnerView?.partner, available: available, pending: p != nil, pendingEmail: p?.email,
+            pendingWhen: p.map { Date(timeIntervalSince1970: TimeInterval($0.effective_at))
+                .formatted(date: .abbreviated, time: .shortened) },
+            queued: mac.partnerView?.queued?.count ?? 0)
+    }
+}
+
+/// v0.8.23: the former Settings form, unchanged, in a sheet.
+private struct PartnerEmailForm: View {
+    @EnvironmentObject var mac: MacProtectModel
+    @Environment(\.dismiss) private var dismiss
     @State private var useSMTP = false
     @State private var relayURL = ""
     @State private var relayToken = ""
@@ -392,17 +513,23 @@ private struct PartnerEmailSettings: View {
     @State private var partner = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(AppSettingsLayout.partnerEmail).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
-            Text("Optional: someone you trust. With someone set, Pax tells them before any turn-off wait starts; "
-                 + "if it can't reach them, the wait doesn't start yet. Changing or removing them takes your turn-off wait.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+            Text(PartnerSummary.rule).font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
-            if !(mac.isLocal && mac.deviceID != nil) {
-                Text("Available once this Mac is protected with its key on this Mac. On the server path, the server "
-                     + "emails them.")
+            TextField("Trusted person's email", text: $partner).textFieldStyle(.roundedBorder)
+            TextField("Your email (optional, for copies)", text: $owner).textFieldStyle(.roundedBorder)
+            if needsOwnerEmail {
+                Text("Add your email: Pax's server needs it to send on your behalf.")
                     .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-            } else {
+            }
+            if let p = mac.partnerView?.pending_partner {
+                Text("Changing to \(p.email ?? "no one") on "
+                     + Date(timeIntervalSince1970: TimeInterval(p.effective_at)).formatted(date: .abbreviated,
+                                                                                           time: .shortened))
+                    .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+            }
+            DetailsDisclosure(title: "How Pax sends the email") {
                 Picker("Send email through", selection: $useSMTP) {
                     Text("A Pax server").tag(false)
                     Text("My own email account").tag(true)
@@ -419,30 +546,22 @@ private struct PartnerEmailSettings: View {
                         .textFieldStyle(.roundedBorder)
                 } else {
                     // v0.8.5: the Pax server this app uses relays the emails by default.
-                    Text("Pax's server sends them (\(mac.escrow.baseURL.host ?? "the Pax server")). To use your own "
-                         + "Pax server, enter its address and your account token there.")
-                        .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                        .fixedSize(horizontal: false, vertical: true)
+                    DetailText("Pax's server sends them (\(mac.escrow.baseURL.host ?? "the Pax server")). To use your own "
+                               + "Pax server, enter its address and your account token.")
                     TextField(mac.escrow.baseURL.absoluteString, text: $relayURL).textFieldStyle(.roundedBorder)
                     SecureField("Account token (only for your own server)", text: $relayToken)
                         .textFieldStyle(.roundedBorder)
-                    if needsOwnerEmail {
-                        Text("Add your email below: Pax's server needs it to send on your behalf.")
-                            .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                    }
                 }
-                TextField("Your email (optional, for copies)", text: $owner).textFieldStyle(.roundedBorder)
-                TextField("Trusted person's email", text: $partner).textFieldStyle(.roundedBorder)
-                if let p = mac.partnerView?.pending_partner {
-                    Text("Changing to \(p.email ?? "no one") on "
-                         + Date(timeIntervalSince1970: TimeInterval(p.effective_at)).formatted(date: .abbreviated,
-                                                                                               time: .shortened))
-                        .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                }
-                Button("Save") { save() }.buttonStyle(PrimaryButtonStyle(accent: true))
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.buttonStyle(SecondaryButtonStyle())
+                Button("Save") { save(); dismiss() }.buttonStyle(PrimaryButtonStyle(accent: true))
                     .disabled(mac.busy || needsOwnerEmail)
-                }
+            }
         }
+        .padding(24)
+        .frame(width: 480)
         .onAppear {
             partner = mac.partnerView?.partner ?? ""
             owner = mac.partnerView?.owner_email ?? ""

@@ -24,7 +24,7 @@ import helper_runtime as hr  # noqa: E402
 import lock_bundle  # noqa: E402
 import pax_device  # noqa: E402
 
-VERSION = "0.8.22"
+VERSION = "0.8.23"
 
 
 def macho(filetype=6, cpu=0x0100000C):

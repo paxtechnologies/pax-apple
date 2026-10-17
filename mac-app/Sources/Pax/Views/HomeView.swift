@@ -157,10 +157,10 @@ struct MacStatusCard: View {
         if let r = g?.browser_rules, r.outdated, let note = BrowserRulesNotice.text(browser: r.browser, missing: r.missing) {
             out.append(HomeNotice(id: "browser", icon: "puzzlepiece.extension", text: note))
         }
-        if let last = g?.tamper?.recent.last {
+        // v0.8.23: brief backup-filter episodes aren't notices; no raw log codes.
+        if let last = SecurityNotices.visible(g?.tamper?.recent ?? []).last {
             out.append(HomeNotice(id: "tamper", icon: "exclamationmark.shield",
-                                  text: HomeLayout.tamperNotice(kind: last.kind, at: last.ts)
-                                      + " More in Settings › Advanced."))
+                                  text: last.text + " More in Settings › Advanced."))
         }
         if setupPartnerPending {
             out.append(HomeNotice(id: "partner", icon: "envelope",

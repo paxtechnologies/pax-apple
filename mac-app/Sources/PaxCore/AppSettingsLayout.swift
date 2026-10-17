@@ -18,15 +18,27 @@ public enum AppSettingsLayout {
     /// Turn-off wait, the trial day, verified support release.
     public static let turningOff = "Turning Pax off"
     public static let partnerEmail = "Accountability partner email"
+    /// v0.8.23: Updates and About are one card; About's text is folded inside it.
     public static let updates = "Updates"
-    public static let about = "About"
+    public static let about = "About Pax"
     /// Closed by default.
     public static let advanced = "Advanced"
     public static let advancedItems = ["Support ID", "Security notices", "Filter", "Extra family filter layer", "Where this Mac keeps its key",
                                        "Pax server", "For testers"]
 
-    /// The sections, top to bottom.
-    public static let sections = [blocking, paxMax, turningOff, partnerEmail, updates, about, advanced]
+    /// v0.8.23 (Ruben: "only keep what is necessary"): each card shows a title and its
+    /// current state; explanations and rare actions sit behind a "Details" disclosure.
+    /// Pax Max is folded like Advanced, just above it (off by default; most people
+    /// won't use it). Nothing was removed: everything is at most one click deeper.
+    public static let sections = [blocking, turningOff, partnerEmail, updates, paxMax, advanced]
+    /// Cards closed until clicked (a row with an arrow).
+    public static let foldedSections = [paxMax, advanced]
+    /// Inside the Updates card, folded.
+    public static let foldedInUpdates = about
+    /// The disclosure inside a card that holds its explanations and rare actions.
+    public static let details = "Details"
+    /// Settings' one-line subtitle.
+    public static let subtitle = "This Mac and the app. An iPhone's or iPad's own details are on its page."
 
     /// The one plain line under each switch or row (Settings).
     public enum Line {
@@ -47,6 +59,45 @@ public enum AppSettingsLayout {
         public static let familyLayerRule = "Turning it on is instant. Turning it off takes your turn-off wait, "
             + "and your trusted person is told first."
         public static let securityNotices = "Changes Pax noticed to this Mac's security settings."
+    }
+}
+
+/// v0.8.23 Settings › Accountability partner email: one line for who it is and its state,
+/// plus one button. How Pax sends the email lives in the Change sheet. The rules are
+/// unchanged (told before any turn-off wait starts; changing or removing them waits).
+public enum PartnerSummary {
+    public static let notSet = "Not set"
+    /// The one rule, shown in the Change sheet.
+    public static let rule = "Optional: someone you trust. Pax tells them before any turn-off wait starts; "
+        + "if it can't reach them, the wait doesn't start yet. Changing or removing them takes your turn-off wait."
+    public static let unavailable = "Available once this Mac is protected with its key on this Mac. On the "
+        + "server path, the server emails them."
+
+    /// The value on the right: their email, or "Not set".
+    public static func value(partner: String?) -> String {
+        let p = (partner ?? "").trimmingCharacters(in: .whitespaces)
+        return p.isEmpty ? notSet : p
+    }
+
+    /// The button: "Add…" with no one set, else "Change…".
+    public static func button(partner: String?) -> String {
+        value(partner: partner) == notSet ? "Add…" : "Change…"
+    }
+
+    /// The one state line under it. `pendingWhen` is the formatted date of a waiting change.
+    public static func state(partner: String?, available: Bool, pending: Bool = false, pendingEmail: String? = nil,
+                             pendingWhen: String? = nil, queued: Int = 0) -> String {
+        guard available else { return unavailable }
+        if pending {
+            let when = pendingWhen.map { " on \($0)" } ?? ""
+            if let e = pendingEmail, !e.isEmpty { return "Changing to \(e)\(when)." }
+            return "Being removed\(when)."
+        }
+        let set = value(partner: partner) != notSet
+        if set && queued > 0 {
+            return queued == 1 ? "1 email waiting to send. Pax keeps trying." : "\(queued) emails waiting to send. Pax keeps trying."
+        }
+        return set ? "Told before any turn-off wait starts." : "Optional. Someone you trust, told before any turn-off wait starts."
     }
 }
 

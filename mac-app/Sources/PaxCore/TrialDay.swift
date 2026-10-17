@@ -167,7 +167,9 @@ public enum HomeLayout {
         return dns.active == nil || dns.active != "CleanBrowsing Family"
     }
 
-    /// "Pax noticed a change to this Mac's security settings (sip, 17 Oct 2026 at 12:43)."
+    /// A security notice in plain words, e.g. "The list of administrators on this Mac changed
+    /// (17 Oct 2026 at 12:43)." v0.8.23: never shows the raw log code; an unknown kind gets a
+    /// general sentence. Brief backup-filter episodes are dropped by `SecurityNotices.visible`.
     public static func tamperNotice(kind: String, at ts: Int) -> String {
         let when = Date(timeIntervalSince1970: TimeInterval(ts)).formatted(date: .abbreviated, time: .shortened)
         // v0.8.19: filter pack outcomes (signed list updates).
@@ -178,8 +180,7 @@ public enum HomeLayout {
             return "New filter lists failed Pax's self-test, so Pax went back to the previous lists (\(when))."
         default: break
         }
-        let what = kind.replacingOccurrences(of: "changed:", with: "").replacingOccurrences(of: "_", with: " ")
-        return "Pax noticed a change to this Mac's security settings (\(what), \(when))."
+        return "\(SecurityNotices.sentence(kind)) (\(when))."
     }
 
     /// The one line under "What's blocked".

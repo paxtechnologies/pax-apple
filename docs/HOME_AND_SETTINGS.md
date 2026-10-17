@@ -1,4 +1,4 @@
-# Home and Settings (v0.8.18)
+# Home and Settings (v0.8.18; Settings v0.8.23)
 
 Ruben, 2026-10-17: "simplify, simplify, simplify: 1, 2, 3, not option overwhelm", without removing any
 functionality.
@@ -41,18 +41,46 @@ functionality.
     the page lists them under the sites (with *Add* and *Unblock…* on a Mac that keeps its own key).
 * Settings has no device header: it is this Mac's settings plus app-wide ones, as before.
 
-## Settings (sidebar › Settings, ⌘,)
+## Settings (sidebar › Settings, ⌘,) (v0.8.23)
 
-* **Blocking** (this Mac): Ads and trackers · Sync blocked sites across devices · YouTube Restricted Mode ·
+Ruben, 2026-10-17: "settings looks a bit cluttered … only keep what is necessary … without affecting any core
+functions." Each card is a short title and its current state; explanations and rare actions sit under a closed
+**Details** disclosure. Nothing was removed: every switch, button and check is at most one click deeper.
+Order (PaxCore `AppSettingsLayout.sections`):
+
+* **Blocking** (this Mac): the switches Ads and trackers · Sync blocked sites across devices · YouTube
+  Restricted Mode, with no line under each. *Details*: what each one does (incl. the sync state line) and
   "Pictures and video on X and Bluesky are always off" (no switch).
-* **Pax Max** (unchanged).
-* **Turning Pax off**: Turn-off wait · trial day state and "Start my wait now" · Allow verified support release.
-* **Accountability partner email**, **Updates**, **About** (unchanged).
-* **Advanced** (folded): this Mac's Support ID (copy), which filter is answering (Pax filter, Pax filter +
-  extra family layer, or the backup, with its reason and time while the backup is on), the **Extra family
-  filter layer** switch (off by default; on is immediate, off waits like a removal: partner told first, then
-  the turn-off wait, cancellable with "I've changed my mind"), the last security notices, where this Mac
-  keeps its key, Pax server, for testers.
+* **Turning Pax off**: Turn-off wait row · trial day line and "Start my wait now" (in the trial) · the
+  *Allow verified support release* switch with its one state line. *Details*: what the wait applies to, what
+  support release is, and its rule (off instant; on takes the turn-off wait, instant in the trial day).
+* **Accountability partner email**: their email (or "Not set"), one state line ("Told before any turn-off
+  wait starts.", "Changing to … on …", "Being removed on …", "N emails waiting to send. Pax keeps trying.") and
+  one button, *Add…* / *Change…*. The sheet holds the rule, the partner and your own email, and under *How Pax
+  sends the email* the Pax server / own email account choice with its fields. Rules unchanged (told first,
+  fail closed; changing or removing them waits; pax-guard enforces both).
+* **Updates**: "Version 0.8.23 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
+  line, wordmark, tagline, principles, licence and site link (About was its own card before).
+* **Pax Max** (folded like Advanced, closed by default, just above it; off by default for everyone): the row
+  shows *On* / *Off* / *Turning off* and "Blurs pictures and video in Firefox. Other browsers aren't covered
+  yet." Opening it shows the explanation, the "isn't perfect" note, the rule and the switch (unchanged
+  behaviour: on instant; off partner first, then 1 hour, cancellable). Pax Max is only installed in Firefox
+  (Pax Image Blur); Chrome and Safari aren't covered.
+* **Advanced** (folded, unchanged): this Mac's Support ID (copy), which filter is answering (and the backup's
+  reason and time while it's on), filter lists, the **Extra family filter layer** switch (off by default; on
+  is immediate, off waits like a removal), security notices, where this Mac keeps its key, Pax server, for
+  testers.
+
+### Security notices (v0.8.23)
+
+* Shown as plain sentences ("The list of administrators on this Mac changed (17 Oct 2026, 12:43)."), never
+  as log codes; an unknown kind gets a general sentence.
+* pax-guard still writes every `dns:fallback_on` / `dns:fallback_off` to the tamper log. A backup episode
+  shorter than 10 minutes (pax-guard starts on the backup after an update until its lists load and the
+  self-check passes) isn't shown, in Settings or on Home. A longer one is one line: "Pax used its backup
+  family filter for 25 minutes on 17 Oct (its own filter wasn't ready or didn't pass a self-check). You
+  stayed protected." One still running is shown once it has lasted 10 minutes. pax-guard's status leaves
+  brief pairs out of `tamper.recent` too (`_shown_tamper_events`).
 
 ## Set-up
 

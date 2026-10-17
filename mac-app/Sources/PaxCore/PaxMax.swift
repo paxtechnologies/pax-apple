@@ -7,11 +7,22 @@ import Foundation
 public enum PaxMax {
     public static let offDelaySeconds = 3600
 
-    public static let title = "Pax Max: blur images everywhere"
+    /// v0.8.23: was "blur images everywhere", which overstated it: only Firefox is covered.
+    public static let title = "Pax Max: blur pictures and video in Firefox"
+
+    /// v0.8.23: the one line on the folded Settings row (and its honest scope).
+    public static let summary = "Blurs pictures and video in Firefox. Other browsers aren't covered yet."
 
     /// Before choosing: what it does.
     public static let explanation = "Pax Max blurs pictures and video in Firefox on this Mac until a check "
-        + "on this Mac finds them safe. Nothing you see is sent anywhere."
+        + "on this Mac finds them safe. Nothing you see is sent anywhere. Other browsers, such as Safari and "
+        + "Chrome, aren't covered yet."
+
+    /// v0.8.23: the short state on the folded row.
+    public static func stateLabel(on: Bool?, pending: Bool) -> String {
+        if on == true && pending { return "Turning off" }
+        return on == true ? "On" : "Off"
+    }
 
     /// Before choosing: the honest warning.
     public static let warning = "It isn't perfect. It can sometimes blur or hide ordinary pictures and video "

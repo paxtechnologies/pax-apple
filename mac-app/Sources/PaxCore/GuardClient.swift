@@ -239,6 +239,13 @@ public struct GuardClient: Sendable {
         public let owner_email: String?
         public let pending_partner: Pending?
         public let transport: Transport?
+        /// v0.8.23: emails pax-guard is still trying to send (shown as a count). Older pax-guards
+        /// send it too; nil if absent.
+        public let queued: [Queued]?
+        public struct Queued: Decodable, Sendable, Equatable {
+            public let kind: String?
+            public let attempts: Int?
+        }
         public struct Pending: Decodable, Sendable, Equatable {
             public let email: String?
             public let effective_at: Int

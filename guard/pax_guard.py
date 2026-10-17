@@ -83,7 +83,33 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.22"
+VERSION = "0.8.23"
+
+
+# v0.8.23: a short backup-filter episode (pax-guard restarting after an update starts on
+# the backup until its lists load and the self-check passes) is still written to the
+# tamper log, but isn't sent to the app as a recent notice: it isn't a security change.
+BRIEF_FALLBACK_SECONDS = 600
+
+
+def _shown_tamper_events(events: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    start: dict | None = None
+    for e in events:
+        k = e.get("kind")
+        if k == "dns:fallback_on":
+            if start is None:
+                start = e
+            continue
+        if k == "dns:fallback_off":
+            if start is not None and int(e.get("ts", 0)) - int(start.get("ts", 0)) >= BRIEF_FALLBACK_SECONDS:
+                out += [start, e]
+            start = None
+            continue
+        out.append(e)
+    if start is not None:
+        out.append(start)          # still on the backup: the app decides when it's worth showing
+    return out
 BASE = Path("/Library/PaxGuard")
 CONFIG_PATH = BASE / "config.json"
 STATE_DIR = BASE / "state"
@@ -1773,7 +1799,8 @@ class Guard:
             except Exception as exc:  # noqa: BLE001
                 esc = {"error": str(exc), "code": getattr(exc, "code", "PAX-GUARD-010")}
         intact, n = self.tamper_log.verify()
-        events = [e for e in self.tamper_log.entries(20) if e.get("kind") != "baseline"]
+        events = _shown_tamper_events(
+            [e for e in self.tamper_log.entries(80) if e.get("kind") != "baseline"])
         return {
             "version": VERSION,
             "escrow_mode": "local" if self.cfg.local_escrow else "server",

@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.22
+# Pax Peace (Apple), v0.8.23
 
 **Less scrolling. More living.**
 
@@ -368,11 +368,15 @@ trial-day countdown, and at most one "1 thing to know" line that opens to notice
 on a Mac it reads "Emergency release is self-serve. You give a reason, your trusted person is emailed, and
 Pax turns off after 24 hours instead of your full turn-off wait. You can use it once every 90 days.", with
 the hours taken from `PAX_EMERGENCY_COOLOFF_SECONDS` and "straight away" in the trial day).
-This Mac's switches and details are in **Settings**: *Blocking* (ads and trackers, sync, YouTube
-Restricted Mode, the X/Bluesky line), *Pax Max*, *Turning Pax off* (turn-off wait, trial day, verified
-support release), *Accountability partner email*, *Updates*, *About*, and *Advanced* (Support ID, filter and
-its backup state, the *Extra family filter layer* switch, security notices, where the key is kept, server,
-testers).
+This Mac's switches and details are in **Settings** (v0.8.23: each card is a title and its state, with
+explanations under *Details*): *Blocking* (ads and trackers, sync, YouTube Restricted Mode; the X/Bluesky
+line under Details), *Turning Pax off* (turn-off wait, trial day, verified support release), *Accountability
+partner email* (their email, one state line and *Change…*; the form is in a sheet), *Updates* (version, last
+check, *Update now*; *About Pax* folded inside), *Pax Max* (folded, off by default: "Blurs pictures and video
+in Firefox. Other browsers aren't covered yet.") and *Advanced* (Support ID, filter and its backup state, the
+*Extra family filter layer* switch, security notices, where the key is kept, server, testers). Security
+notices are plain sentences; a backup-filter episode shorter than 10 minutes (as when pax-guard restarts
+after an update) stays in the tamper log but isn't shown.
 
 **Blocked Sites / Apps** (v0.3; renamed in v0.8.21): once you have an account on this Mac (the token is
 kept in the Keychain) or this Mac keeps its own key, the sidebar shows *Blocked Sites / Apps* (also
