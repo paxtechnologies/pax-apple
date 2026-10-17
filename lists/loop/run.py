@@ -6,8 +6,8 @@ checks new candidates by their homepage, builds the lists reproducibly, runs the
 gates, and leaves a pack ready to sign only if every gate passes.
 
   run.py run --work DIR --state DIR --out DIR      build + gates (exit 0 pass, 3 refused)
-  run.py sign --out DIR                            sign with the key derived from $PAX_UPDATE_SIGNING_KEY
-  run.py public-key                                print the derived filter public key (public, safe)
+  run.py sign --out DIR                            sign with $PAX_FILTER_SIGNING_KEY
+  run.py public-key                                print that key's public half (public, safe)
   run.py published --state DIR --out DIR           record a pack the workflow published
   run.py check-published [--version V]             fetch + verify the live pack
 

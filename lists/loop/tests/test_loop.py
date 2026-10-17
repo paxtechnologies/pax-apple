@@ -31,9 +31,8 @@ WORD = sorted(pr.data()["lookup_rule"]["words"])[0]
 
 @pytest.fixture
 def test_key(monkeypatch):
-    """The app update seed (as in the secret); packs are signed with the key derived from it."""
-    monkeypatch.setattr(pax_signing, "FILTER_PUBLIC_KEYS_HEX",
-                        [ed25519.public_key(pax_signing.derive_filter_seed(SEED)).hex()])
+    """The filter seed as the secret holds it (base64)."""
+    monkeypatch.setattr(pax_signing, "FILTER_PUBLIC_KEYS_HEX", [PUB.hex()])
     import base64
     return base64.b64encode(SEED).decode()
 
@@ -280,10 +279,10 @@ def test_build_block_takes_checked_additions_and_held_back_entries(tmp_path):
 
 
 def test_public_key_matches_derivation(test_key, monkeypatch, capsys):
-    monkeypatch.setenv("PAX_UPDATE_SIGNING_KEY", test_key)
+    monkeypatch.setenv("PAX_FILTER_SIGNING_KEY", test_key)
+    monkeypatch.delenv("PAX_UPDATE_SIGNING_KEY", raising=False)
     assert loop.main(["public-key"]) == 0
     assert capsys.readouterr().out.strip() == pax_signing.FILTER_PUBLIC_KEYS_HEX[0]
-    assert pack.public_key_hex(test_key) != PUB.hex()          # never the update key itself
 
 
 def test_cli_limits():
@@ -297,7 +296,7 @@ def test_cli_limits():
 def test_workflow_shape():
     wf = (REPO / ".github" / "workflows" / "filter-loop.yml").read_text()
     assert "cron: \"0 3 * * *\"" in wf and "workflow_dispatch" in wf
-    assert "secrets.PAX_UPDATE_SIGNING_KEY" in wf and "PAX_FILTER_SIGNING_KEY" not in wf
+    assert "secrets.PAX_FILTER_SIGNING_KEY" in wf and "PAX_UPDATE_SIGNING_KEY" not in wf
     assert "issues: write" in wf and "contents: write" in wf
     assert "filter-pack" in wf and "filter-packs" in wf and "filter-loop" in wf
 

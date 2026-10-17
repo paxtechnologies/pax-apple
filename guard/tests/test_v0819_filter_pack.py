@@ -81,18 +81,6 @@ def test_keys_are_separate_and_pinned():
         importlib.reload(pax_signing)
 
 
-def test_filter_key_is_derived_with_hkdf_sha512():
-    seed = bytes(range(32))
-    f = pax_signing.derive_filter_seed(seed)
-    assert len(f) == 32 and f != seed and pax_signing.derive_filter_seed(seed) == f
-    # RFC 5869 HKDF-SHA-512, empty salt, info "pax-filter-pack-v1", L = 32
-    import hashlib
-    import hmac
-    prk = hmac.new(bytes(64), seed, hashlib.sha512).digest()
-    assert f == hmac.new(prk, b"pax-filter-pack-v1\x01", hashlib.sha512).digest()[:32]
-    assert pax_signing.derive_filter_seed(bytes(32)) != f
-
-
 def test_signatures_never_cross_between_packs_and_app_updates():
     """Even with the very same key, a pack signature can't pass as an app update or back."""
     payload = {"version": "2026.1018.300", "schema": fl.PACK_SCHEMA, "lists": {}}
@@ -357,3 +345,16 @@ def test_a_newer_pack_with_the_same_lists_takes_the_version_only(tmp_path):
     assert calls == [BASE + fl.PACK_MANIFEST]                 # nothing downloaded
     assert st.load().info["version"] == "2026.1018.300" and st.pack_status()["origin"] == "pack"
     assert st.update(fetcher(urls), bases=[BASE]).get("up_to_date")
+
+
+def test_pin_filter_key_tool(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("pin", REPO / "tools" / "pin-filter-key.py")
+    pin = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pin)
+    p = tmp_path / "pax_signing.py"
+    p.write_text((GUARD / "pax_signing.py").read_text())
+    pin.pin("AB" * 32, p)
+    assert 'FILTER_PUBLIC_KEYS_HEX = [\n    "' + "ab" * 32 + '",\n]' in p.read_text()
+    with pytest.raises(SystemExit):
+        pin.pin("xyz", p)

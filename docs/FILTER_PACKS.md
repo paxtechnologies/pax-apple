@@ -32,7 +32,7 @@ workflow runs from this repository on GitHub Actions; anyone can read what it di
       new pack must not lose more held-out names than it gains, beyond noise (1% of the set, at least 2),
       or block more ordinary sites the reference leaves open (0.5%, at least 1). The reference is a
       yardstick only: its answers are never copied into Pax's lists.
-6. **Publish** (only if every gate passed): the pack is signed with the filter key (derived from `PAX_UPDATE_SIGNING_KEY`, see Keys) and uploaded to the release tagged `filter-pack`, then mirrored to the orphan
+6. **Publish** (only if every gate passed): the pack is signed with the filter key (Actions secret `PAX_FILTER_SIGNING_KEY`, see Keys) and uploaded to the release tagged `filter-pack`, then mirrored to the orphan
    branch `filter-packs` (served by jsDelivr). The run then downloads and verifies what it published.
 7. **Record**: the scoreboard (`scoreboard/history.csv`, `latest.md`, `latest.json`) and the loop's memory
    (`state/`) are committed to the `filter-loop` branch every night, published or not. Site names there are
@@ -61,25 +61,25 @@ status (`filter_pack`), in Settings › Advanced › Filter lists, and in the se
 
 ## Keys
 
-- Filter key: Ed25519, derived from the app update key's seed with HKDF-SHA-512 (RFC 5869, empty salt,
-  info `pax-filter-pack-v1`, 32 bytes; `pax_signing.derive_filter_seed`). Its public half is pinned in
-  `guard/pax_signing.py` (`FILTER_PUBLIC_KEYS_HEX`). The workflow derives it at signing time from the
-  Actions secret `PAX_UPDATE_SIGNING_KEY`; no second secret exists, and the sign step checks the derived
-  key against the pinned one before anything is published.
+- Filter key: Ed25519, its public half pinned in `guard/pax_signing.py` (`FILTER_PUBLIC_KEYS_HEX`). The
+  private half (base64 of the 32-byte seed) exists only in the Actions secret `PAX_FILTER_SIGNING_KEY`;
+  it was generated on the maintainer's own Mac and never shared. The sign step checks it against the
+  pinned key before anything is published.
+- The filter workflow never has the app update key (`PAX_UPDATE_SIGNING_KEY`, used by Build DMG only).
 - Domain separation: a pack's signature covers `pax-filter-pack-v1` + a zero byte + the canonical payload;
   an app update's covers the canonical payload alone. So, besides being made with a different key, a pack
   signature can never verify as an app update, and an app update signature never as a pack.
-- Why one secret: both keys would sit in this repository's Actions secrets either way, so a second secret
-  added little; the separation that matters (which documents a key can sign) is enforced by the clients.
 
-Rotating: rotating the app update key changes the filter key too. Add the new derived public key to
-`FILTER_PUBLIC_KEYS_HEX` (print it with the workflow's `show_key` input or `run.py public-key`) in the same
-app release that adds the new update key.
+Checking the secret: run the workflow by hand with `show_key` ticked; it prints the secret's public half
+next to the pinned one and does nothing else.
+
+Rotating the filter key: add the new public key to `FILTER_PUBLIC_KEYS_HEX`, ship an app release, then
+change the secret.
 
 ## Running it by hand
 
 ```sh
 python3 lists/loop/run.py run --work /tmp/w --state /tmp/state --out /tmp/pack   # exit 0 = passed, 3 = refused
-PAX_UPDATE_SIGNING_KEY=... python3 lists/loop/run.py sign --out /tmp/pack
+PAX_FILTER_SIGNING_KEY=... python3 lists/loop/run.py sign --out /tmp/pack
 python3 lists/loop/run.py check-published                                         # verify the live pack
 ```

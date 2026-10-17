@@ -10,9 +10,9 @@
 #      homepage, else its list entry is held back from the pack
 #   5. a benchmark on fresh held-out samples against a reference resolver (at most
 #      8 queries a second, 1,000 a night): no regression against the last pack
-# All pass: the pack is signed with the filter key, derived from the app update
-# secret (HKDF-SHA-512, context "pax-filter-pack-v1"; signatures carry the same
-# context, so a pack signature never verifies as an app update) and published as the `filter-pack` release assets plus
+# All pass: the pack is signed with the filter key (secret PAX_FILTER_SIGNING_KEY;
+# this workflow never sees the app update key, and pack signatures carry the
+# context "pax-filter-pack-v1", so one never verifies as an app update) and published as the `filter-pack` release assets plus
 # the `filter-packs` branch (jsDelivr mirror). pax-guard and the DoH servers check
 # for it every 6 hours and run their own checks and canary before using it.
 # Any gate fails: nothing is published, and an issue labelled filter-loop says why.
@@ -30,7 +30,7 @@ on:
         type: boolean
         default: true
       show_key:
-        description: "Only print the filter public key derived from the update key (nothing else runs)"
+        description: "Only print the public half of PAX_FILTER_SIGNING_KEY and the pinned key (nothing else runs)"
         type: boolean
         default: false
 
@@ -59,7 +59,7 @@ jobs:
       - name: Filter public key (show_key only)
         if: inputs.show_key == true
         env:
-          PAX_UPDATE_SIGNING_KEY: ${{ secrets.PAX_UPDATE_SIGNING_KEY }}
+          PAX_FILTER_SIGNING_KEY: ${{ secrets.PAX_FILTER_SIGNING_KEY }}
         run: |
           echo "filter public key: $(python3 lists/loop/run.py public-key)"
           echo "pinned:            $(python3 -c 'import sys; sys.path.insert(0, "guard"); import pax_signing; print(pax_signing.FILTER_PUBLIC_KEYS_HEX[0])')"
@@ -100,7 +100,7 @@ jobs:
         id: sign
         if: steps.run.outputs.passed == 'true' && (github.event_name == 'schedule' || inputs.publish == true)
         env:
-          PAX_UPDATE_SIGNING_KEY: ${{ secrets.PAX_UPDATE_SIGNING_KEY }}
+          PAX_FILTER_SIGNING_KEY: ${{ secrets.PAX_FILTER_SIGNING_KEY }}
         run: python3 lists/loop/run.py sign --out "$PACK"
       - name: Publish the pack
         id: publish
@@ -200,7 +200,7 @@ jobs:
           for f in r.get("failures") or []:
               lines.append(f"- {f}")
           if os.environ.get("SIGN") == "failure":
-              lines.append("- Signing failed (does the key derived from PAX_UPDATE_SIGNING_KEY match FILTER_PUBLIC_KEYS_HEX in guard/pax_signing.py?).")
+              lines.append("- Signing failed (is the PAX_FILTER_SIGNING_KEY secret set, and does it match FILTER_PUBLIC_KEYS_HEX in guard/pax_signing.py?).")
           if os.environ.get("PUBLISH") == "failure":
               lines.append("- Publishing failed after signing; the run log has the step that stopped.")
           lines += ["", f"Run: {sys.argv[2]}", "",

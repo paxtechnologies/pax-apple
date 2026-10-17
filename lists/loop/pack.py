@@ -59,23 +59,23 @@ def assemble(out: Path, lists: dict, version: str, meta: dict | None = None) -> 
     return payload
 
 
-def filter_seed(update_key_text: str) -> bytes:
-    """The filter-pack seed, derived from the app update key (pax_signing.derive_filter_seed)."""
-    if not update_key_text.strip():
-        raise SystemExit("PAX_UPDATE_SIGNING_KEY is empty: refusing to publish an unsigned pack")
-    return pax_signing.derive_filter_seed(pax_signing.seed_from_text(update_key_text))
+def filter_seed(key_text: str) -> bytes:
+    """The filter key's seed, from the PAX_FILTER_SIGNING_KEY secret (base64 or hex)."""
+    if not key_text.strip():
+        raise SystemExit("PAX_FILTER_SIGNING_KEY is empty: refusing to publish an unsigned pack")
+    return pax_signing.seed_from_text(key_text)
 
 
-def public_key_hex(update_key_text: str) -> str:
+def public_key_hex(key_text: str) -> str:
     import ed25519
-    return ed25519.public_key(filter_seed(update_key_text)).hex()
+    return ed25519.public_key(filter_seed(key_text)).hex()
 
 
-def sign(out: Path, update_key_text: str) -> dict:
-    """Sign payload.json into filter-pack.json with the derived filter key, then check
-    it against the public key pinned in this checkout (a wrong secret fails here,
+def sign(out: Path, key_text: str) -> dict:
+    """Sign payload.json into filter-pack.json with the filter key, then check it
+    against the public key pinned in this checkout (a wrong secret fails here,
     before publishing)."""
-    seed = filter_seed(update_key_text)
+    seed = filter_seed(key_text)
     payload = json.loads((out / "payload.json").read_text())
     doc = pax_signing.sign_document(payload, seed, context=pax_signing.FILTER_CONTEXT)
     verify(doc, out)
@@ -121,5 +121,5 @@ def fetch_published(fetch=lu.fetch, base: str = fl.PACK_BASES[0]):
 
 
 def env_key() -> str:
-    """The app update key's seed (Actions secret); the filter key is derived from it."""
-    return os.environ.get("PAX_UPDATE_SIGNING_KEY", "")
+    """The filter key's seed (Actions secret PAX_FILTER_SIGNING_KEY; never the app update key)."""
+    return os.environ.get("PAX_FILTER_SIGNING_KEY", "")

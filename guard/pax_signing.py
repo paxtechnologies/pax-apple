@@ -19,7 +19,6 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
-import hmac
 import json
 
 import ed25519
@@ -32,15 +31,15 @@ PUBLIC_KEYS_HEX = [
 
 
 # v0.8.19: filter packs (list-only updates published by the nightly filter workflow,
-# .github/workflows/filter-loop.yml) are signed with a key of their own, derived from
-# the app update key's seed with HKDF-SHA-512 and the fixed context FILTER_CONTEXT
-# (derive_filter_seed). The derived key's public half is pinned here. On top of the
-# separate key, a pack's signature covers FILTER_CONTEXT + the canonical payload, while
-# an app update's covers the canonical payload alone (which always starts with "{"),
-# so a pack signature can never verify as an app update, nor the other way round.
+# .github/workflows/filter-loop.yml) are signed with a key of their own. Its private
+# half lives only in the Actions secret PAX_FILTER_SIGNING_KEY (base64 of the 32-byte
+# seed); the workflow never sees the app update secret. On top of the separate key, a
+# pack's signature covers FILTER_CONTEXT + a zero byte + the canonical payload, while an
+# app update's covers the canonical payload alone (which always starts with "{"), so a
+# pack signature can never verify as an app update, nor the other way round.
 FILTER_CONTEXT = b"pax-filter-pack-v1"
 FILTER_PUBLIC_KEYS_HEX = [
-    "__FILTER_PUBLIC_KEY__",
+    "83b0cbd5e697ab9c6beacf5a0763058d2e48b0779e0c2ee4927421b598251445",
 ]
 
 
@@ -90,13 +89,6 @@ def seed_from_text(text: str) -> bytes:
     if len(raw) != 32:
         raise ValueError("signing key must be a 32-byte Ed25519 seed")
     return raw
-
-
-def derive_filter_seed(update_seed: bytes) -> bytes:
-    """v0.8.19: the filter-pack signing seed, HKDF-SHA-512 (RFC 5869, empty salt) of the
-    app update seed with info FILTER_CONTEXT."""
-    prk = hmac.new(b"\x00" * 64, update_seed, hashlib.sha512).digest()
-    return hmac.new(prk, FILTER_CONTEXT + b"\x01", hashlib.sha512).digest()[:32]
 
 
 def filter_message(payload: dict) -> bytes:
