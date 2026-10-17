@@ -337,6 +337,7 @@ def run(args) -> int:
     result: dict = {"version": version, "ok": False, "failures": [], "started_at": version_now(),
                     "code": args.code or None}
     rng = random.Random(version)
+    dropped: list = []
     try:
         last_payload, last_files = pack.fetch_published()
         last_version = (last_payload or {}).get("version") or pack.bundled_manifest()["version"]
@@ -480,6 +481,10 @@ def run(args) -> int:
     except Exception as exc:  # noqa: BLE001 - reported, never published
         result["failures"].append(f"the run stopped: {type(exc).__name__}: {str(exc)[:300]}")
         log(f"error: {exc!r}")
+    if not result["ok"] and dropped:
+        # Drops only stick with a published pack, so a refused night can't leave the
+        # list short of what the last pack had.
+        state.add_bypass |= set(dropped)
     result["finished_at"] = version_now()
     out.mkdir(parents=True, exist_ok=True)
     (out / "result.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=list) + "\n")
