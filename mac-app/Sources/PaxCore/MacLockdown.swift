@@ -476,7 +476,7 @@ public actor MacLockdown {
         var toDemote: [String] = []
         if !others.isEmpty && allowExtraAdmins {
             warnings.append("Test mode: \(others.joined(separator: ", ")) is also an administrator and can "
-                            + "undo Pax at any time, so the wait isn't real on this Mac. Everything else works.")
+                            + "undo Pax at any time, so the turn-off wait isn't real on this Mac. Everything else works.")
         } else if !others.isEmpty {
             // v0.8.10: Pax makes them standard itself (with the user's OK), never via
             // System Settings or Terminal. Names it can't pass safely still block.
@@ -484,10 +484,10 @@ public actor MacLockdown {
             if !unsafe.isEmpty {
                 problems.append("There are other administrator accounts Pax can't change safely "
                                 + "(\(unsafe.joined(separator: ", "))). Pax would not be the only way back in, "
-                                + "so the wait wouldn't mean anything.")
+                                + "so the turn-off wait wouldn't mean anything.")
             } else if !demoteOtherAdmins {
                 problems.append("There are other administrator accounts (\(others.joined(separator: ", "))). "
-                                + "Pax would not be the only way back in, so the wait wouldn't mean anything. "
+                                + "Pax would not be the only way back in, so the turn-off wait wouldn't mean anything. "
                                 + "Leave \"Also make these standard accounts\" on and Pax will do it for you.")
             }
             toDemote = others
@@ -935,6 +935,9 @@ extension EscrowClient {
         public let support_id: String?
         /// v0.8.15: "Allow verified support release" (nil from an older server or pax-guard).
         public let support_release: SupportReleaseState?
+        /// v0.8.16: the device's turn-off wait in seconds, for "Turn-off wait: 7 days"
+        /// (pax-guard has always sent it; the server from 0.8.16; nil from older ones).
+        public let wait_seconds: Int?
 
         public struct SupportReleaseState: Decodable, Sendable {
             public let allowed: Bool

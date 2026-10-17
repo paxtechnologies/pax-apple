@@ -211,3 +211,19 @@ Public sources were checked for a reusable list; none was found under a permissi
 category, so no third-party list is included.
 
 The build is reproducible from these sources with `lists/build.py`, which is the corresponding source.
+
+## v0.8.16: brand fonts bundled in Pax.app (SIL Open Font License 1.1)
+
+Static instances of three OFL fonts, made with fontTools' `varLib.instancer` and renamed as the OFL
+asks of modified versions. They ship in `mac-app/Resources/fonts` and in `Pax.app/Contents/Resources/Fonts`,
+with the full licence text and copyright notices in `OFL.txt` beside them.
+
+* **Fraunces** (Copyright 2020 The Fraunces Project Authors, github.com/undercasetype/Fraunces):
+  `PaxFrauncesSoft-Regular.ttf` (opsz 72, wght 420, SOFT 100, WONK 0). Headings.
+* **Inter** (Copyright 2016 The Inter Project Authors, github.com/rsms/inter): `PaxInter-Regular`,
+  `-Medium`, `-SemiBold.ttf`. Body and UI text.
+* **Playfair Display Italic** (Copyright 2017 The Playfair Display Project Authors,
+  github.com/clauseggers/Playfair-Display, Reserved Font Name "Playfair Display"): `PaxAccent-Italic.ttf`,
+  renamed "Pax Accent" so the Reserved Font Name isn't used. One accent word on the welcome screen.
+
+The logo and app icon images in `mac-app/Resources/branding` are Pax Peace's own artwork.

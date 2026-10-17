@@ -27,10 +27,10 @@ public enum VerifiedSupportRelease {
         }
         if let at = pendingOnAt {
             let when = Date(timeIntervalSince1970: TimeInterval(at)).formatted(date: .abbreviated, time: .shortened)
-            return "Turns on \(when), after your wait. Turning it off cancels that."
+            return "Turns on \(when), after your turn-off wait. Turning it off cancels that."
         }
         if tellingPartner {
-            return "Telling your trusted person first. Your wait starts once they're told."
+            return "Telling your trusted person first. Your turn-off wait starts once they're told."
         }
         return "Off: no support code works on this device. Turning it on takes your full wait, "
             + "and your trusted person is told."

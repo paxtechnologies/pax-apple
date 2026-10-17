@@ -53,7 +53,6 @@ struct BlockedSitesView: View {
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .background(Theme.background)
         .onAppear { blocklist.refresh() }
         .alert(item: $confirmRemoval) { site in
             Alert(title: Text("Remove \(site.display_domain)?"),
@@ -275,7 +274,7 @@ private struct NoticeBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: isError ? "exclamationmark.circle" : "checkmark.circle")
-                .foregroundStyle(isError ? Theme.accent : Theme.primaryText)
+                .foregroundStyle(isError ? Theme.warning : Theme.primaryText)
             Text(text).font(Theme.body(13)).foregroundStyle(Theme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }

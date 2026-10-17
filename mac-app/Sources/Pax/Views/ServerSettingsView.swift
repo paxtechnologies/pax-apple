@@ -26,7 +26,7 @@ struct ServerSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Pax server").font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
             Text("Pax's own server (\(ServerURLSetting.defaultURL.absoluteString)) is used unless you run your own. "
-                 + "It keeps your iPhone's key and releases it after your wait, and sends partner emails. "
+                 + "It keeps your iPhone's key and releases it after your turn-off wait, and sends partner emails. "
                  + "To self-host, enter your server here: https:// for a server on the internet, plain "
                  + "http:// only for this Mac or your own network.")
                 .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
@@ -63,7 +63,7 @@ struct ServerSettingsView: View {
             }
             if let message {
                 Text(message).font(Theme.body(12))
-                    .foregroundStyle(isError ? Theme.accent : Theme.primaryText)
+                    .foregroundStyle(isError ? Theme.warning : Theme.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if saved {

@@ -326,12 +326,13 @@ class Escrow:
             effective = now + current
             # Partner first: no email, no countdown.
             self._notify(
-                acct, "wait_decrease_requested", "Wait time decrease requested",
-                f"Your wait time will drop from {fmt_duration(current)} to "
-                f"{fmt_duration(wait_seconds)} in {fmt_duration(current)}.",
-                f"{acct['email']} asked to shorten their Pax wait time from "
-                f"{fmt_duration(current)} to {fmt_duration(wait_seconds)}. It takes "
-                f"effect in {fmt_duration(current)}.",
+                acct, "wait_decrease_requested", "Turn-off wait shortening requested",
+                f"You asked to shorten your turn-off wait (how long turning Pax off takes after you ask) "
+                f"from {fmt_duration(current)} to {fmt_duration(wait_seconds)}. It takes effect in "
+                f"{fmt_duration(current)}.",
+                f"{acct['email']} asked to shorten their Pax turn-off wait (how long turning Pax off "
+                f"takes after they ask) from {fmt_duration(current)} to {fmt_duration(wait_seconds)}. "
+                f"It takes effect in {fmt_duration(current)}.",
             )
             self.db.execute(
                 "UPDATE accounts SET pending_wait_seconds=?, pending_wait_effective=? WHERE id=?",
@@ -658,6 +659,8 @@ class Escrow:
             "support_id": d["support_id"],
             "support_release": {"allowed": bool(d["support_release"]),
                                 "pending_on_at": d["support_pending_on"]},
+            # v0.8.16: the account's turn-off wait, for the app's "Turn-off wait: 7 days" row.
+            "wait_seconds": acct["wait_seconds"],
         }
 
     def list_devices(self, acct) -> list[dict]:
@@ -682,14 +685,16 @@ class Escrow:
         unlock_at = now + wait
         # A grace request can only be confirmed while the grace period lasts.
         expires_at = grace_until if in_grace else unlock_at + self.settings.reveal_window_seconds
-        when = "now (grace period)" if in_grace else f"in {fmt_duration(wait)}"
+        # v0.8.16: plain words for the wait (new users found "the wait" confusing).
+        when = ("straight away (it's still the first hour after set-up)" if in_grace
+                else f"in {fmt_duration(wait)}, when the turn-off wait ends")
         # Partner first (fail closed): if they can't be told, no countdown starts.
         self._notify(
             acct, "removal_requested", f"Removal requested for {d['name']}",
-            f"You asked to remove Pax from {d['name']}. The password can be revealed {when}. "
-            "You can cancel at any time before then.",
-            f"{acct['email']} asked to remove Pax from {d['name']}. The password can be "
-            f"revealed {when}. You might want to check in with them.",
+            f"You asked to turn Pax off on {d['name']}. It can be turned off {when}. "
+            "You can cancel any time during the wait.",
+            f"{acct['email']} asked to turn Pax off on {d['name']}. It can be turned off "
+            f"{when}. You might want to check in with them.",
         )
         rid = _id()
         self.db.execute(

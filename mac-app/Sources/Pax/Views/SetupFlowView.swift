@@ -42,7 +42,7 @@ struct SetupFlowView: View {
                 }
             }
         }
-        .background(Theme.background)
+        .background(SkyBackground())
         .onChange(of: mac.phase) { phase in
             if phase == .protected {
                 model.selectedDevice = "mac"
@@ -150,7 +150,7 @@ struct DeviceSidebar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 18)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Theme.section.opacity(0.6))
+        .background(Theme.sidebar)   // v0.8.16: translucent Mist over the sky wash
     }
 
     /// The picked device is highlighted, except on Settings (which isn't about one device).
@@ -181,8 +181,9 @@ private struct DeviceRowButton: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 10).fill(selected ? Theme.card : Color.clear))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(selected ? Theme.border : Color.clear))
+            .background(RoundedRectangle(cornerRadius: 12).fill(selected ? Theme.card : Color.clear)
+                .shadow(color: selected ? Theme.shadow : Color.clear, radius: 8, x: 0, y: 2))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Theme.border.opacity(0.6) : Color.clear))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -198,11 +199,16 @@ private struct NavRow: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
+            // v0.8.16: selected is a soft Haze pill with a dusk-blue icon (no orange).
+            Label {
+                Text(title).foregroundStyle(Theme.primaryText)
+            } icon: {
+                Image(systemName: icon).foregroundStyle(selected ? Theme.accent : Theme.mutedText)
+            }
                 .font(Theme.body(13, weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? Theme.accent : Theme.primaryText)
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 10).fill(selected ? Theme.secondary : Color.clear))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -250,9 +256,10 @@ struct WelcomeView: View {
     var body: some View {
         PageColumn(maxWidth: 700) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(Brand.tagline)
-                    .font(Theme.heading(40))
-                    .foregroundStyle(Theme.primaryText)
+                // v0.8.16: "living." as the one italic accent word, in dusk blue.
+                (Text("Less scrolling. More ").font(Theme.heading(40)).foregroundColor(Theme.primaryText)
+                    + Text("living.").font(Theme.accentItalic(42)).foregroundColor(Theme.accent))
+                    .accessibilityLabel(Brand.tagline)
                 Text("What would you like to protect?")
                     .font(Theme.body(15))
                     .foregroundStyle(Theme.mutedText)
@@ -275,7 +282,7 @@ struct WelcomeView: View {
 
 // MARK: - iPhone path
 
-/// iPhone path (v0.7.0): 1 Plug in, 2 Choose what to block, 3 Set your wait time,
+/// iPhone path (v0.7.0): 1 Plug in, 2 Choose what to block, 3 Turn-off wait,
 /// 4 Lock it in. The checks, backup and method choice are all still here; Pax
 /// works out what it can and only asks for what it can't.
 struct PhoneFlowView: View {
@@ -443,7 +450,7 @@ private struct PhoneLockInStep: View {
                 Divider().overlay(Theme.border)
                 CheckRow(isOn: $model.agreed,
                          text: "I'm 18 or over, this \(deviceWord) is mine, and I understand that turning Pax "
-                             + "off takes my wait time.")
+                             + "off takes my turn-off wait (\(TurnOffWait.duration(days: model.config.waitDays))).")
             }
             if let p = model.preflight, !p.blocking.isEmpty || !p.warnings.isEmpty {
                 Card {
@@ -550,7 +557,7 @@ private struct PhoneLockInStep: View {
                 if model.waitingTooLong {
                     Text("Still waiting after 5 minutes. Unplug the \(deviceWord), plug it back in and unlock it. "
                          + "Pax keeps looking.")
-                        .font(Theme.body(12.5)).foregroundStyle(Theme.accent)
+                        .font(Theme.body(12.5)).foregroundStyle(Theme.warning)
                 }
             }
         }
@@ -599,10 +606,9 @@ private struct PhoneDoneStep: View {
         VStack(alignment: .leading, spacing: 22) {
             StepHeader(eyebrow: "", title: "You're protected",
                        subtitle: model.config.mode == .keepData
-                           ? "Everything on your iPhone is where you left it. For the next 7 days you can undo "
-                               + "Pax without waiting if something isn't right."
-                           : "Finish the setup screens on the phone and sign back in to iCloud. For the next 7 days "
-                               + "you can undo Pax without waiting if something isn't right.")
+                           ? "Everything on your iPhone is where you left it. " + TurnOffWait.firstHour
+                           : "Finish the setup screens on the phone and sign back in to iCloud. "
+                               + TurnOffWait.firstHour)
             Card {
                 Label("Turn Find My back on", systemImage: "location.circle")
                     .font(Theme.body(15, weight: .semibold)).foregroundStyle(Theme.primaryText)

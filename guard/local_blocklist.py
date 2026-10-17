@@ -340,8 +340,8 @@ class LocalBlocklist:
             what = {"unblock": f"unblock {d}", "unblock_app": f"unblock the app {label or d}",
                     "pax_max_off": "turn off Pax Max (the image blur)"}.get(
                 action, f"allow {d} (a site Pax blocks)")
-            when_you = "in 1 hour" if action == "pax_max_off" else "after your wait"
-            when_they = "in 1 hour" if action == "pax_max_off" else "after their wait"
+            when_you = "in 1 hour" if action == "pax_max_off" else "after your turn-off wait"
+            when_they = "in 1 hour" if action == "pax_max_off" else "after their turn-off wait"
             ok = self.partner.notify(
                 f"blocklist_{action}_requested", "Pax: change requested",
                 f"You asked to {what}. It takes effect {when_you}; you can cancel before then.",

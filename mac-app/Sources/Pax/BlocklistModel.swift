@@ -49,9 +49,10 @@ final class BlocklistModel: ObservableObject {
         }
         // v0.8.9: this Mac's list syncs with the account (on by default, Home switch).
         return "Sites you add here are blocked on this Mac at once, and on your iPhone and iPad within seconds "
-            + "while \"Sync blocked sites across devices\" is on. Unblocking waits, and your partner is told first."
+            + "while \"Sync blocked sites across devices\" is on. Unblocking takes your turn-off wait, and your partner is told first."
     }
-    var delayText: String { Countdown.string(seconds: view?.limits.delay_seconds ?? 72 * 3600) }
+    /// v0.8.16: plain words ("3 days"), not a clock ("72h 00m 00s").
+    var delayText: String { TurnOffWait.duration(seconds: view?.limits.delay_seconds ?? 72 * 3600) }
     var normalisedNewSite: String? { DomainInput.normalise(newSite) }
 
     func remaining(_ r: BlocklistRequest, at now: Date) -> Int {

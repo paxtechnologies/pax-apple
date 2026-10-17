@@ -70,14 +70,30 @@ struct SupportCodeEntry: View {
     }
 }
 
+/// v0.8.16: "Turn-off wait   7 days" on a Details card.
+struct TurnOffWaitRow: View {
+    let seconds: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(TurnOffWait.label).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+            Spacer(minLength: 8)
+            Text(TurnOffWait.duration(seconds: seconds)).font(Theme.body(13, weight: .medium))
+                .foregroundStyle(Theme.primaryText)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// v0.8.15: this Mac's Details card (its Support ID and the support-release switch).
 struct MacDetailsCard: View {
     @EnvironmentObject var mac: MacProtectModel
 
     var body: some View {
-        if let s = mac.status, s.support_id != nil || s.support_release != nil {
+        if let s = mac.status, s.support_id != nil || s.support_release != nil || s.wait_seconds != nil {
             Card {
                 Text("Details").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
+                if let w = s.wait_seconds { TurnOffWaitRow(seconds: w) }     // v0.8.16
                 if let id = s.support_id { SupportIDRow(supportID: id) }
                 if let sr = s.support_release {
                     SupportReleaseRow(state: sr, busy: mac.busy) { mac.setSupportRelease($0) }

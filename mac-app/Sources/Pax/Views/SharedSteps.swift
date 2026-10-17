@@ -73,12 +73,12 @@ struct ChooseBlocksStep: View {
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.body(14))
-                Text("Anything that pulls you in. Unblocking one later takes your wait time.")
+                Text("Anything that pulls you in. Unblocking one later takes your turn-off wait.")
                     .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
                 if !choices.unreadableSites.isEmpty {
                     Text("Pax can't read \(choices.unreadableSites.prefix(5).joined(separator: ", ")) as a website.")
-                        .font(Theme.body(12.5)).foregroundStyle(Theme.accent)
+                        .font(Theme.body(12.5)).foregroundStyle(Theme.warning)
                 }
                 HStack(spacing: 12) {
                     Button("Import list…") { showImport = true }.buttonStyle(SecondaryButtonStyle())
@@ -119,7 +119,7 @@ struct ChooseBlocksStep: View {
     }
 }
 
-/// "Set your wait time" (Mac step 2, iPhone step 3), plus the account email the
+/// "How long should turning Pax off take?", the turn-off wait (Mac step 2, iPhone step 3), plus the account email the
 /// first time (Pax writes only when someone asks to change or turn off Pax).
 struct WaitStep: View {
     @EnvironmentObject var model: SetupModel
@@ -139,9 +139,8 @@ struct WaitStep: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            StepHeader(eyebrow: "", title: "Set your wait time",
-                       subtitle: "If you ever want to turn Pax off or unblock a site, it happens after this "
-                           + "wait. Long enough to sleep on it.")
+            // v0.8.16: says what the wait is for, in plain words.
+            StepHeader(eyebrow: "", title: TurnOffWait.setupTitle, subtitle: TurnOffWait.setupHelp)
             HStack(spacing: 14) {
                 ForEach(WaitChoice.allCases.filter { limits.allows(days: $0.rawValue) }) { choice in
                     ChoiceCard(icon: choice == .day ? "sunrise" : choice == .threeDays ? "moon.stars" : "calendar",
@@ -152,6 +151,9 @@ struct WaitStep: View {
                     }
                 }
             }
+            Text(TurnOffWait.setupAlsoApplies)
+                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
             DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
                 VStack(alignment: .leading, spacing: 10) {
                     Stepper(value: $model.config.waitDays, in: limits.dayRange) {
@@ -159,8 +161,8 @@ struct WaitStep: View {
                             .font(Theme.body(13, weight: .medium)).foregroundStyle(Theme.primaryText)
                     }
                     .frame(maxWidth: 280)
-                    Text("You can lengthen it any time. Shortening it only counts once your current wait "
-                         + "has passed.")
+                    Text("You can make it longer any time. Making it shorter only counts once your current "
+                         + "turn-off wait has passed.")
                         .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                 }
                 .padding(.top, 8)
@@ -195,8 +197,7 @@ struct WaitStep: View {
                     .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            NoteRow(icon: "heart", text: "For the first hour you can undo Pax without waiting, in case "
-                    + "something isn't right.")
+            NoteRow(icon: "heart", text: TurnOffWait.firstHour)
             // v0.8.15: one calm line, on by default, switchable here and later on the device's page.
             Card {
                 ToggleRow(title: VerifiedSupportRelease.title, detail: VerifiedSupportRelease.setUpDetail,

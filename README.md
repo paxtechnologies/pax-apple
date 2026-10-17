@@ -1,11 +1,13 @@
-# Pax Peace (Apple), v0.8.15
+# Pax Peace (Apple), v0.8.16
 
 **Less scrolling. More living.**
 
 Pax (Latin for *peace*) is a free, open-source (GPL-3.0) content blocker for restricted content on
 **iPhone and iPad**, set up from a Mac, and since v0.4 on **the Mac itself** ([Pax for Mac](#pax-for-mac)). It's built for people who choose this for themselves.
-Turning it off is never impossible. It just takes a wait you picked in advance, so the decision
-gets made by the calm version of you.
+Turning it off is never impossible. It just takes a **turn-off wait** you picked in advance: if you
+ever decide to switch Pax off, you ask first, then wait that long before it turns off, and you can
+cancel any time during the wait. So the decision gets made by the calm version of you. (The same
+wait applies before a blocked site or app is unblocked.)
 
 *Decentralised. Open source. Free for everyone. Power at the local level.* (Pax Peace: [paxpeace.com](https://paxpeace.com))
 
@@ -23,9 +25,10 @@ It needs no MDM server and no staff in the loop:
    Erase All Content and Settings, manual profile installs and known bypass apps. It also has a
    **removal password**.
 3. That password is generated at random, sent straight to the **escrow server**, and never shown.
-4. To remove Pax you start a removal request. The **wait timer** runs (default 72 h, choose
+4. To remove Pax you start a removal request. The **turn-off wait** runs (default 3 days, choose
    24 hours to 365 days). When it ends you confirm, and the password is released. Your optional
-   **accountability partner** is emailed. The first **hour after set-up has no wait**. There's a
+   **accountability partner** is emailed. For your **first hour after set-up**, you can change your
+   mind instantly (no wait). There's a
    rate-limited **emergency release** with a short cooling-off and crisis-line auto-reply.
 5. **Verified support release** (v0.8.15): in a genuine emergency that Pax support has checked, support
    can issue a one-time code that removes Pax from **one device** straight away. There is no universal
@@ -339,8 +342,8 @@ PAX_DEMO=1 swift run Pax      # walk through the UI with a mock iPhone on iOS 27
 swift test                    # PaxCore unit tests
 ```
 
-The guided flow goes: welcome → consent (18+, my own device, I understand the wait) → account
-email → back-up reminder (backup, Find My **off**) → connect and detect the iPhone → wait time and
+The guided flow goes: welcome → consent (18+, my own device, I understand the turn-off wait) → account
+email → back-up reminder (backup, Find My **off**) → connect and detect the iPhone → turn-off wait and
 optional partner → set-up method and filter → prepare (Keep my data: checks, backup, restore,
 on-phone steps, confirmed; or Clean: back up, erase, supervise) → confirm supervision, generate
 profile, escrow password, install and verify → done (turn Find My back on).
@@ -352,11 +355,18 @@ Type a site and press *Block now*; it's added at once. *Remove* asks for confirm
 removal under *Waiting* with a live 72-hour countdown and *Cancel*. Exceptions to the Family Filter
 work the same way.
 
-Branding lives in `Sources/Pax/Theme.swift`: ink `#192124`, background `#FCFCFC`, cream `#F8F6F1`,
-terracotta accent `#E85830` (CTAs only), muted `#78736D`, border `#E5E1DC`, secondary `#ECF0F3`.
-Dark mode uses `#120F0D` / `#221F1B` with cream `#F8F6F1` text. Headings are Playfair Display
-(falls back to New York), body is Inter / DM Sans (falls back to SF), corner radius 8. To ship the
-fonts, add the `.ttf` files and `ATSApplicationFontsPath` to the app bundle.
+Branding (brand v2, v0.8.16) lives in `Sources/Pax/Theme.swift`: Mist `#F7F9FB` background, Navy
+`#1E2A38` text and primary pill buttons, Dusk blue `#6E8BA8` accents (selection, status dots, links,
+eyebrows), Haze `#C9D4DF` borders and subtle fills, White cards, Slate `#3B4654` body text, and a muted
+red only for errors. A very subtle sky wash sits behind the window (dusk-blue tint `#DCE5EE` at the top,
+Mist, faint peach `#F6EDE6` at the bottom) under white rounded cards (radius 18) with soft shadows.
+Headings use Fraunces Soft (opsz 72, wght 420, SOFT 100), body and UI use Inter, and Playfair Display
+Italic is the one accent word on the welcome screen. They're bundled as static, renamed OFL instances in
+`mac-app/Resources/fonts` (licence: `OFL.txt` there), copied to `Pax.app/Contents/Resources/Fonts` by
+`build-dmg.sh` and registered at launch; without them the app falls back to New York and SF Pro. The
+stacked logo ("pax" with an italic "peace" tucked beside the lower p) and the app icon are in
+`mac-app/Resources/branding` (`render_icons.py` rebuilds `AppIcon.iconset`/`AppIcon.icns`).
+Dark mode keeps the same layout on deep navy `#121A24` with Mist text.
 
 **Set-up modes**
 
@@ -487,8 +497,8 @@ the DMG and the update zip. Clean set-up still needs Apple Configurator's `cfgut
 ## Pax for Mac
 
 "Protect this Mac" makes restricted sites effectively unreachable on the Mac you run Pax on, with the same
-unlock model as the iPhone: an escrowed password, your wait, partner emails, the first-week grace
-period and the emergency release.
+unlock model as the iPhone: an escrowed password, your turn-off wait, partner emails, the first-hour
+grace period and the emergency release.
 
 ### What it does
 
@@ -843,13 +853,13 @@ Moved to [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md).
 
 | Action | Effect |
 |---|---|
-| Request removal | Starts a timer for your current wait (none in the first hour). Your partner is emailed first: if that email can't be sent, nothing starts (`PAX-ESCROW-010`). You get a copy when the daily email budget allows. |
+| Request removal | Starts your current turn-off wait (none in the first hour). Your partner is emailed first: if that email can't be sent, nothing starts (`PAX-ESCROW-010`). You get a copy when the daily email budget allows. |
 | Cancel | Ends the request. Your partner is emailed. |
 | Confirm (after the timer) | You must send `confirm: true`. The password is released and the device is marked released. Your partner is emailed. Asking again within the reveal window returns the same password. |
 | Don't confirm within 7 days | The request lapses, and a new one starts the full wait again. |
 | Don't confirm a grace-period request within the first hour | It lapses when the hour ends (v0.8.5); a new request takes the full wait. |
-| Lengthen wait | Takes effect immediately. |
-| Shorten wait | Takes effect only after your *current* wait has passed. Your partner is emailed. Requests already open keep the wait they started with. |
+| Lengthen the turn-off wait | Takes effect immediately. |
+| Shorten the turn-off wait | Takes effect only after your *current* wait has passed. Your partner is emailed. Requests already open keep the wait they started with. |
 | Add first partner | Takes effect immediately (more accountability is never delayed). |
 | Change or remove partner | Takes effect after the current wait. The current partner is emailed and keeps getting notifications until then. |
 | Emergency release | Needs a reason. It's logged, unlocks after 24 h (configurable), and you can use it once every 90 days. The auto-reply includes Samaritans **116 123** (UK & Ireland) and **988** (US). Your partner is emailed. |

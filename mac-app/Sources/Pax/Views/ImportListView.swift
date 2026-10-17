@@ -78,7 +78,7 @@ struct ImportListSheet: View {
                 if r.capReached {
                     Text("Your list holds up to \(min(cap, BulkSiteImport.maxPerImport)) more sites, so the "
                          + "last \(r.overCap) won't be added.")
-                        .font(Theme.body(12.5)).foregroundStyle(Theme.accent)
+                        .font(Theme.body(12.5)).foregroundStyle(Theme.warning)
                 }
             }
             if forIPhoneProfile && r.sites.count > BulkSiteImport.iosCustomLimit {
@@ -87,7 +87,7 @@ struct ImportListSheet: View {
                     .font(Theme.body(12.5)).foregroundStyle(Theme.accent)
             }
             if let fileError {
-                Text(fileError).font(Theme.body(12.5)).foregroundStyle(Theme.accent)
+                Text(fileError).font(Theme.body(12.5)).foregroundStyle(Theme.warning)
             }
         }
     }

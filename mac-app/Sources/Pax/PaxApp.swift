@@ -37,7 +37,7 @@ struct PaxApp: App {
                 .environmentObject(blocklist)
                 .environmentObject(mac)
                 .frame(minWidth: 760, minHeight: 640)
-                .background(Theme.background)
+                .background(SkyBackground())   // v0.8.16: the soft sky wash
         }
         .windowResizability(.contentMinSize)
         .commands {

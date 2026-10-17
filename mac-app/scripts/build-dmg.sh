@@ -41,7 +41,7 @@ for tool in swift codesign hdiutil plutil ditto; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found. Install the Command Line Tools: xcode-select --install"
 done
 
-VERSION="${PAX_VERSION:-0.8.15}"
+VERSION="${PAX_VERSION:-0.8.16}"
 BUNDLE_DEVICE_HELPER="${BUNDLE_DEVICE_HELPER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
@@ -118,9 +118,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/profile" "$APP/Contents/
 cp -X "$BIN" "$APP/Contents/MacOS/Pax"
 chmod 755 "$APP/Contents/MacOS/Pax"
 
-# v0.7.0 app icon (Pax Peace "p."): drawn as mac-app/Resources/branding/pax-icon.svg and
-# rendered by render_icons.py into AppIcon.iconset + AppIcon.icns. iconutil (macOS)
-# rebuilds the .icns from the iconset; the committed AppIcon.icns is the fallback.
+# v0.8.16 app icon (Pax Peace brand v2: a soft "p" on navy): mac-app/Resources/branding/
+# pax-icon-navy-1024.png, rendered by render_icons.py into AppIcon.iconset + AppIcon.icns.
+# iconutil (macOS) rebuilds the .icns from the iconset; the committed AppIcon.icns is the fallback.
 ICON_KEY=""
 ICONS="$MAC_APP/Resources"
 if [[ -d "$ICONS/AppIcon.iconset" ]] && command -v iconutil >/dev/null \
@@ -226,6 +226,12 @@ else
   echo "   (BUNDLE_DEVICE_HELPER=0: no bundled helper; Keep my data needs PAX_PYTHON)"
 fi
 cp -X "$REPO/LICENSE" "$REPO/THIRD_PARTY_NOTICES.md" "$APP/Contents/Resources/"
+# v0.8.16 brand: the bundled fonts (OFL; Theme.swift registers them at launch) and the
+# logo images. Without them the app falls back to the system serif and a drawn wordmark.
+mkdir -p "$APP/Contents/Resources/Fonts" "$APP/Contents/Resources/branding"
+cp -X "$MAC_APP"/Resources/fonts/*.ttf "$MAC_APP/Resources/fonts/OFL.txt" "$APP/Contents/Resources/Fonts/"
+cp -X "$MAC_APP"/Resources/branding/pax-peace-stacked-*.png "$MAC_APP"/Resources/branding/pax-navy.png \
+  "$MAC_APP"/Resources/branding/pax-white.png "$APP/Contents/Resources/branding/"
 # SwiftPM resource bundles, if any target ever gains resources.
 for b in "$(dirname "$BIN")"/*.bundle; do
   if [[ -e "$b" ]]; then ditto "$b" "$APP/Contents/Resources/$(basename "$b")"; fi

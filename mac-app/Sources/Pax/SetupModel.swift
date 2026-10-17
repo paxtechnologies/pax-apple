@@ -13,7 +13,7 @@ enum SetupStep: Int, CaseIterable, Identifiable {
         switch self {
         case .connect: return "Plug in"
         case .choose: return "What to block"
-        case .wait: return "Wait time"
+        case .wait: return TurnOffWait.stepTitle
         case .lockIn: return "Lock it in"
         case .done: return "Done"
         }
@@ -134,9 +134,7 @@ enum WaitChoice: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     var title: String {
         switch self {
-        case .day: return "24 hours"
-        case .threeDays: return "72 hours"
-        case .week: return "7 days"
+        case .day, .threeDays, .week: return TurnOffWait.choiceTitle(days: rawValue)   // "1 day", "3 days", "7 days"
         }
     }
 }

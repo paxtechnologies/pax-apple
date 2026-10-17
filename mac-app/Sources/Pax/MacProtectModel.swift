@@ -159,7 +159,7 @@ final class MacProtectModel: ObservableObject {
         switch step {
         case .preflight: line = "Checking your Mac…"
         case .createAdmin, .secureToken, .verifyAdmin: line = "Creating the key Pax keeps for you…"
-        case .escrow: line = "Storing your key safely behind your wait…"
+        case .escrow: line = "Storing your key safely behind your turn-off wait…"
         case .installProfile: line = "Adding Pax's protection settings…"
         case .installGuard: line = "Starting Pax's background protection…"
         case .demoteOthers: line = "Making the other administrator accounts standard…"

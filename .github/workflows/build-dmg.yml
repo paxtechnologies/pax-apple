@@ -41,7 +41,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PAX_VERSION: "0.8.15"
+  PAX_VERSION: "0.8.16"
 
 jobs:
   dmg:
@@ -135,6 +135,11 @@ jobs:
           plutil -p dist/Pax.app/Contents/Info.plist
           ls -l dist/Pax.app/Contents/Resources/AppIcon.icns
           ls -l dist/Pax.app/Contents/Resources/lists dist/Pax.app/Contents/Resources/extensions
+          # v0.8.16 brand: bundled fonts (OFL) and logo images.
+          ls -l dist/Pax.app/Contents/Resources/Fonts dist/Pax.app/Contents/Resources/branding
+          test -f dist/Pax.app/Contents/Resources/Fonts/PaxFrauncesSoft-Regular.ttf
+          test -f dist/Pax.app/Contents/Resources/Fonts/OFL.txt
+          test -f dist/Pax.app/Contents/Resources/branding/pax-peace-stacked-navy.png
           hdiutil imageinfo "dist/Pax-${PAX_VERSION}.dmg" | head -n 20
       - name: Check the bundled iPhone helper
         working-directory: mac-app

@@ -84,11 +84,11 @@ struct IPhoneAppPickerSheet: View {
                     .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             if let typedProblem {
-                Text(typedProblem).font(Theme.body(12.5)).foregroundStyle(Theme.accent)
+                Text(typedProblem).font(Theme.body(12.5)).foregroundStyle(Theme.warning)
             }
             HStack {
                 Text("\(count) of \(cap) chosen").font(Theme.body(12.5)).foregroundStyle(
-                    count > cap ? Theme.accent : Theme.mutedText)
+                    count > cap ? Theme.warning : Theme.mutedText)
                 Spacer()
                 Button("Done") { dismiss() }.buttonStyle(PrimaryButtonStyle(accent: true))
                     .disabled(count > cap)
@@ -189,7 +189,7 @@ struct MacBlockedAppsCard: View {
                         }
                     }
                 }
-                Text("Blocking is instant. Unblocking takes your wait time, and your partner is told first.")
+                Text("Blocking is instant. Unblocking takes your turn-off wait, and your partner is told first.")
                     .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
             } else {
                 Text("No apps yet. A blocked app is closed and put away, even if it's renamed or copied.")

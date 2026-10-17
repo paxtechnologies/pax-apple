@@ -83,7 +83,7 @@ CODES: list[PaxCode] = [
             "pax-guard: fdesetup changerecovery -personal failed (exit 38 = preflight refused, old key "
             "stays valid) or printed no key."),
     PaxCode("PAX-MAC-013", "Pax kept a new recovery key but couldn't check it.",
-            "Contact us before restarting in Recovery. Pax kept the key behind your wait.",
+            "Contact us before restarting in Recovery. Pax kept the key behind your turn-off wait.",
             "pax-guard: the rotated PRK did not pass fdesetup validaterecovery; it stays escrowed (alarm)."),
     PaxCode("PAX-MAC-014", "Pax couldn't set the startup password on this Mac.",
             "Nothing to do: protection still works. Pax tries again later.",
@@ -264,8 +264,8 @@ CODES: list[PaxCode] = [
     PaxCode("PAX-ESCROW-001", "Pax needs to sign you in again.",
             "Try again: Pax will set up your account afresh.",
             "Escrow API 401 unauthorized: the saved account token is unknown to this server."),
-    PaxCode("PAX-ESCROW-002", "That wait time isn't available.",
-            "Choose a wait between 24 hours and 365 days, then try again.",
+    PaxCode("PAX-ESCROW-002", "That turn-off wait isn't available.",
+            "Choose a turn-off wait between 24 hours and 365 days, then try again.",
             "PUT /v1/accounts/me/wait refused: outside min_wait_seconds..max_wait_seconds. v0.8.9: "
             "24 h to 365 days on the server and on a Mac's own key alike (0.8.8 servers refused under "
             "3 days); the app offers only what the path in use allows."),
@@ -281,7 +281,7 @@ CODES: list[PaxCode] = [
     PaxCode("PAX-ESCROW-006", "Too many tries in a short time.",
             "Wait a little and try again.",
             "Escrow API 429 rate_limited."),
-    PaxCode("PAX-ESCROW-007", "That isn't possible until your wait is over.",
+    PaxCode("PAX-ESCROW-007", "That isn't possible until your turn-off wait is over.",
             "Check the timer on the home screen.",
             "Escrow API 425 too_early (reveal before unlock_at)."),
     PaxCode("PAX-ESCROW-008", "Pax couldn't store that in its safe.",
@@ -291,7 +291,7 @@ CODES: list[PaxCode] = [
             "Check Settings > Advanced: this Mac uses either itself or a Pax server.",
             "App socket escrow./blocklist. request while the guard is in server mode, or nothing held yet. "
             "v0.8.7: settings.set adblock while the guard is in server mode (the server holds that setting)."),
-    PaxCode("PAX-ESCROW-010", "Your partner hasn't been told yet, so your wait hasn't started.",
+    PaxCode("PAX-ESCROW-010", "Your partner hasn't been told yet, so your turn-off wait hasn't started.",
             "Nothing to do: Pax keeps trying and starts the wait once they're told.",
             "partner.py: partner email not delivered (relay/SMTP failed); action queued, countdown not "
             "started (fail closed). Server (v0.8.5): HTTP 503 partner_unreachable (email failed or the "
@@ -321,7 +321,7 @@ CODES: list[PaxCode] = [
             "v0.8.15: the nonce is in local escrow support.used_nonces or the server's support_nonces table "
             "(kept for good). Server: 409 support_code_used."),
     PaxCode("PAX-ESCROW-017", "Verified support release is off on this device.",
-            "Nothing was released. Your usual wait still works from Request a change.",
+            "Nothing was released. Your usual turn-off wait still works from Request a change.",
             "v0.8.15: the device's \"Allow verified support release\" is off (devices set up before 0.8.15 "
             "start off; turning it on waits the full wait). Every code is refused. Server: 403 "
             "support_release_off."),

@@ -3,7 +3,7 @@ import SwiftUI
 import PaxCore
 
 /// Home (v0.7.0) for the device picked in the switcher: its status, your blocked
-/// sites (shared by all your devices), and "Request a change" with the wait timer.
+/// sites (shared by all your devices), and "Request a change" with the turn-off wait countdown.
 /// v0.8.14: this is the device's page. Its details and its own switches live here too
 /// (they used to be a separate "Settings" screen); app-wide things are in Settings.
 struct HomeView: View {
@@ -123,45 +123,33 @@ struct PhoneHome: View {
         Card {
             Text("Request a change").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
             if let pw = model.revealedPhonePassword[rec.id] {
-                Text("Your wait is over. To remove Pax from the \(rec.isIPad ? "iPad" : "iPhone"): Settings › General › "
+                Text("Your turn-off wait is over. To remove Pax from the \(rec.isIPad ? "iPad" : "iPhone"): Settings › General › "
                      + "VPN & Device Management › Pax › Remove Management, then enter this password:")
                     .font(Theme.body(13)).foregroundStyle(Theme.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(pw).font(.system(size: 18, design: .monospaced)).textSelection(.enabled)
             } else if let st = model.phoneStatus[rec.id] {
                 if st.in_grace_period {
-                    NoteRow(icon: "heart", text: "First hour: you can turn Pax off without waiting until "
+                    NoteRow(icon: "heart", text: TurnOffWait.firstHour + " That's until "
                             + Date(timeIntervalSince1970: TimeInterval(st.grace_until))
                                 .formatted(date: .abbreviated, time: .shortened) + ".")
                 }
                 if let rr = st.removal_request {
+                    // v0.8.16: "Pax turns off in 2 days 14 h · Cancel".
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        let left = model.phoneRemaining(rec, at: ctx.date)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(left > 0 ? "Pax turns off in" : "Your wait is over.")
-                                .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
-                            if left > 0 {
-                                Text(Countdown.string(seconds: left))
-                                    .font(Theme.heading(28).monospacedDigit()).foregroundStyle(Theme.primaryText)
-                            }
-                        }
+                        TurnOffCountdownRow(seconds: model.phoneRemaining(rec, at: ctx.date),
+                                            cancel: rr.status == "pending" ? { model.cancelPhoneRemoval(rec) } : nil)
                     }
-                    HStack(spacing: 12) {
-                        if rr.can_reveal || model.phoneRemaining(rec, at: Date()) == 0 {
-                            Button("Show how to turn Pax off") { model.revealPhonePassword(rec) }
-                                .buttonStyle(PrimaryButtonStyle(accent: true))
-                        }
-                        if rr.status == "pending" {
-                            Button("I've changed my mind") { model.cancelPhoneRemoval(rec) }
-                                .buttonStyle(PrimaryButtonStyle())
-                        }
+                    if rr.can_reveal || model.phoneRemaining(rec, at: Date()) == 0 {
+                        Button("Show how to turn Pax off") { model.revealPhonePassword(rec) }
+                            .buttonStyle(PrimaryButtonStyle(accent: true))
                     }
                 } else {
-                    Text("Want to turn Pax off on this \(rec.isIPad ? "iPad" : "iPhone")? It happens after your wait, "
-                         + "and you can change your mind until then.")
+                    Text("Want to turn Pax off on this \(rec.isIPad ? "iPad" : "iPhone")? Ask here, and it turns off "
+                         + "after your turn-off wait. You can cancel any time during the wait.")
                         .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Start my wait") { confirmOff = true }
+                    Button("Start the turn-off wait") { confirmOff = true }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(model.busy)
                 }
@@ -183,11 +171,12 @@ struct PhoneHome: View {
                 .foregroundStyle(Theme.mutedText)
             }
         }
-        .alert("Start your wait?", isPresented: $confirmOff) {
-            Button("Start my wait", role: .destructive) { model.requestPhoneRemoval(rec) }
+        .alert("Start your turn-off wait?", isPresented: $confirmOff) {
+            Button("Start the wait", role: .destructive) { model.requestPhoneRemoval(rec) }
             Button("Keep Pax on", role: .cancel) {}
         } message: {
-            Text("Pax stays on until your wait ends. Your trusted person, if you added one, is told.")
+            Text("Pax stays on until your turn-off wait ends. Your trusted person, if you added one, is told. "
+                 + "You can cancel any time during the wait.")
         }
     }
 }
@@ -204,6 +193,9 @@ struct PhoneDetailsCard: View {
         Card {
             Text("Details").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
             detail("Status", rec.status == .protected ? "Protected" : "Setting up")
+            if let w = model.phoneStatus[rec.id]?.wait_seconds {          // v0.8.16
+                detail(TurnOffWait.label, TurnOffWait.duration(seconds: w))
+            }
             if let v = rec.iosVersion { detail(rec.isIPad ? "iPadOS" : "iOS", v) }
             if let k = rec.keepData { detail("Set up by", k ? "Keeping everything on it" : "Erasing and setting up fresh") }
             if let f = rec.filter { detail("Filter", f) }

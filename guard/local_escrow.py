@@ -426,14 +426,16 @@ class LocalEscrow:
             self._write("state.json", st)
             if partner:
                 what = "remove Pax from this Mac" if reason == "remove" else "get back into this Mac (locked out)"
-                when = "now (first hour)" if in_grace else f"in {_fmt(wait)}"
+                # v0.8.16: plain words for the wait.
+                when = ("straight away (it's still the first hour after set-up)" if in_grace
+                        else f"in {_fmt(wait)}, when the turn-off wait ends")
                 ok = self.partner.notify(
                     "removal_requested", "Removal requested for this Mac",
-                    f"You asked to {what}. It unlocks {when}. You can cancel any time before then.",
+                    f"You asked to {what}. It unlocks {when}. You can cancel any time during the wait.",
                     f"Your Pax partner asked to {what}. It unlocks {when}. You might want to check in with them.",
                     gate={"type": "removal", "id": rid})
                 if not ok:
-                    raise EscrowError("PAX-ESCROW-010", "We couldn't tell your partner yet, so your wait hasn't "
+                    raise EscrowError("PAX-ESCROW-010", "We couldn't tell your partner yet, so your turn-off wait hasn't "
                                       "started. Pax keeps trying and starts it once they're told.")
                 self._activate_removal(rid)
         return self.status()
@@ -617,10 +619,12 @@ class LocalEscrow:
                 st["wait_notifying"] = seconds
                 self._write("state.json", st)
                 ok = self.partner.notify(
-                    "wait_decrease_requested", "Wait time decrease requested",
-                    f"You asked to shorten your wait to {_fmt(seconds)}. It takes {_fmt(st['wait_seconds'])}.",
-                    f"Your Pax partner asked to shorten their wait from {_fmt(st['wait_seconds'])} to "
-                    f"{_fmt(seconds)}. It takes {_fmt(st['wait_seconds'])}.",
+                    "wait_decrease_requested", "Turn-off wait shortening requested",
+                    f"You asked to shorten your turn-off wait (how long turning Pax off takes after you ask) "
+                    f"to {_fmt(seconds)}. That takes {_fmt(st['wait_seconds'])}.",
+                    f"Your Pax partner asked to shorten their turn-off wait (how long turning Pax off takes "
+                    f"after they ask) from {_fmt(st['wait_seconds'])} to {_fmt(seconds)}. "
+                    f"That takes {_fmt(st['wait_seconds'])}.",
                     gate={"type": "wait", "seconds": seconds})
                 if not ok:
                     raise EscrowError("PAX-ESCROW-010", "We couldn't tell your partner yet, so the change "

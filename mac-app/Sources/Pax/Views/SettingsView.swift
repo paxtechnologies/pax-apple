@@ -18,6 +18,7 @@ struct AppSettingsView: View {
             if let failure = mac.failure {
                 ErrorCard(error: failure, retry: { mac.refresh() }, details: { mac.supportDetails(failure) })
             }
+            Card { TurnOffWaitSettings() }                     // v0.8.16
             Card { PaxMaxSettings() }                          // v0.8.12
             Card { PartnerEmailSettings() }
             Card { UpdateSettings() }
@@ -69,6 +70,27 @@ private struct GeneralSettings: View {
 }
 
 
+/// v0.8.16: what the turn-off wait is, in plain words, and this Mac's own.
+private struct TurnOffWaitSettings: View {
+    @EnvironmentObject var mac: MacProtectModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(TurnOffWait.label).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            if let w = mac.status?.wait_seconds {
+                Text(TurnOffWait.row(seconds: w) + " on this Mac").font(Theme.body(14, weight: .medium))
+                    .foregroundStyle(Theme.primaryText)
+            }
+            Text("How long turning Pax off takes after you ask. You can cancel any time during the wait. "
+                 + "The same wait applies before a blocked site or app is unblocked. Each device shows its own on its page.")
+                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            NoteRow(icon: "heart", text: TurnOffWait.firstHour)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 /// v0.8.0: where this Mac keeps the key that undoes Pax. Local is the default;
 /// the server path stays for anyone who wants it (iPhones always use a server).
 private struct MacKeySettings: View {
@@ -85,8 +107,8 @@ private struct MacKeySettings: View {
             .disabled(mac.deviceID != nil)
             Text(mac.escrowMode == .local
                  ? "Pax's background protection keeps the key in a safe only it can open, and hands it over "
-                   + "after your wait. No server, no account."
-                 : "The Pax server below keeps the key and releases it after your wait.")
+                   + "after your turn-off wait. No server, no account."
+                 : "The Pax server below keeps the key and releases it after your turn-off wait.")
                 .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
             if mac.deviceID != nil {
@@ -211,8 +233,8 @@ private struct PartnerEmailSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(AppSettingsLayout.partnerEmail).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
-            Text("Optional: someone you trust. With someone set, Pax tells them before any wait starts; if it can't, the wait waits "
-                 + "too. Changing or removing them takes your wait.")
+            Text("Optional: someone you trust. With someone set, Pax tells them before any turn-off wait starts; "
+                 + "if it can't reach them, the wait doesn't start yet. Changing or removing them takes your turn-off wait.")
                 .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
             if !(mac.isLocal && mac.deviceID != nil) {
