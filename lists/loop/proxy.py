@@ -20,7 +20,10 @@ homepage check before it is added, and the Tranco and known-good gates after):
   - (round 4) the UT1 "vpn" category, from the same maintainer as the redirector
     category (`ut1_vpn`)
   - (round 5) the Chrome UX Report top-sites lists (CC BY 4.0), worldwide and per
-    country: names that read like a proxy or VPN (`crux_candidates`)
+    country (20 always, 5 more a night in turn): names that read like a proxy or
+    VPN (`crux_candidates`)
+  - (round 5b) the Majestic Million (CC BY 3.0), ranked by linking sites: names
+    that read like a proxy or VPN (`majestic_candidates`)
   - (round 5) curated circumvention lists other maintainers publish under open
     licences (`curated()`, `curated_candidates`): VPN / proxy / bypass categories of
     public DNS blocklists and per-engine mirror lists, read as candidates only
@@ -278,6 +281,20 @@ CRUX_COUNTRIES = ("gb", "ie", "us", "ca", "au", "nz", "in", "pk", "id", "ph", "t
                   "vn", "br", "de", "fr")
 
 
+# More countries, a few a night in turn (all of them within a fortnight).
+CRUX_ROTATING = ("my", "th", "sg", "hk", "tw", "kr", "jp", "cn", "bd", "lk", "np", "kz", "ua", "by", "uz", "az",
+                 "ge", "am", "iq", "jo", "lb", "kw", "qa", "om", "bh", "ma", "dz", "tn", "ng", "ke", "za", "gh",
+                 "mx", "ar", "co", "cl", "pe", "ve", "es", "it", "nl", "be", "pl", "ro", "gr", "se", "no", "dk",
+                 "fi", "pt", "cz", "hu", "at", "ch", "il", "sy", "af", "mm", "kh", "la")
+CRUX_ROTATING_PER_NIGHT = 5
+
+
+def crux_rotation(day: str, n: int = CRUX_ROTATING_PER_NIGHT) -> tuple:
+    """The rotating countries for `day` (yyyy-mm-dd): the next `n` in turn."""
+    i = dt.date.fromisoformat(day).toordinal() * n % len(CRUX_ROTATING)
+    return tuple((CRUX_ROTATING * 2)[i:i + n])
+
+
 def crux_months(today: dt.date | None = None, back: int = 3) -> list[str]:
     """yyyymm of the last `back` full months, newest first (a snapshot lands a few
     days into the next month)."""
@@ -303,11 +320,14 @@ def parse_crux(text: str) -> list[str]:
     return out
 
 
-def crux_candidates(fetch=lu.fetch, countries=CRUX_COUNTRIES, today: dt.date | None = None) -> list[str]:
+def crux_candidates(fetch=lu.fetch, countries=None, today: dt.date | None = None) -> list[str]:
     """Names in the CrUX top-sites lists (global first, then each country, rank
     order) that read like a proxy or VPN. A missing month or country is skipped."""
     import gzip
     out: dict = {}
+    if countries is None:
+        day = (today or dt.datetime.now(dt.timezone.utc).date()).isoformat()
+        countries = CRUX_COUNTRIES + crux_rotation(day)
     months = crux_months(today)
     for where in ("global",) + tuple(f"country/{c}" for c in countries):
         for m in months:
@@ -323,6 +343,30 @@ def crux_candidates(fetch=lu.fetch, countries=CRUX_COUNTRIES, today: dt.date | N
         else:
             log(f"chrome top sites {where}: unavailable")
     return list(out)
+
+
+# Round 5b: the Majestic Million (Majestic-12, CC BY 3.0), ranked by the number of
+# sites linking to a name. Long-lived proxies collect links for years, so it reaches
+# established ones that Tranco and the Chrome lists miss.
+MAJESTIC_URL = "https://downloads.majestic.com/majestic_million.csv"
+
+
+def majestic_candidates(fetch=lu.fetch, start: int = 10_000) -> list[str]:
+    """Names below rank `start` whose label reads like a proxy or VPN, in rank order."""
+    try:
+        text = fetch(MAJESTIC_URL, timeout=180).decode("utf-8", "ignore")
+    except Exception as exc:  # noqa: BLE001
+        log(f"majestic million unavailable ({type(exc).__name__})")
+        return []
+    out = []
+    for i, line in enumerate(text.splitlines()):
+        parts = line.split(",")
+        if i == 0 or len(parts) < 3 or i <= start:
+            continue
+        n = parts[2].strip().lower()
+        if "." in n and reads_like_bypass(n):
+            out.append(n)
+    return list(dict.fromkeys(out))
 
 
 def ut1_vpn(fetch=lu.fetch) -> list[str]:

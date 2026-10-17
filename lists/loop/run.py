@@ -277,7 +277,8 @@ def build_lists(src: Path, state: State, held: set, last_files: dict, work: Path
 
 def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
                      nrd_days: int = 14, qps: float = 8.0, crawl: int = CRAWL_PER_NIGHT,
-                     skip=frozenset(), top=(), github=None, curated=None, chrome_top=None) -> dict:
+                     skip=frozenset(), top=(), github=None, curated=None, chrome_top=None,
+                     majestic=None) -> dict:
     """v0.8.21 loop: proxy candidates beyond the redirector list (proxy.py): links
     on confirmed proxy pages (and last night's unchecked links), new registrations,
     certificate transparency and lookalikes of confirmed brands."""
@@ -313,9 +314,11 @@ def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
     curated_names = [n for ns in cur.values() for n in ns if n not in skip]
     chrome = proxy.crux_candidates(fetch) if chrome_top is None else chrome_top
     chrome = [n for n in chrome if n not in skip]
+    linked_rank = proxy.majestic_candidates(fetch) if majestic is None else majestic
+    linked_rank = [n for n in linked_rank if n not in skip]
     log(f"proxy discovery: {len(curated_names)} names in {sum(1 for v in cur.values() if v)} curated lists, "
-        f"{len(chrome)} chrome top-site names")
-    return {"links": links, "project_sites": gh, "curated": curated_names, "chrome_ranked": chrome,
+        f"{len(chrome)} chrome top-site names, {len(linked_rank)} majestic names")
+    return {"links": links, "project_sites": gh, "curated": curated_names, "chrome_ranked": chrome, "majestic": linked_rank,
             "new_registrations": nrd, "ranked": ranked, "vpn_category": vpn,
             "certificates": ct, "lookalikes": look[:3000]}
 
@@ -374,7 +377,7 @@ def run(args) -> int:
         # Ranked names (sites people actually visit) before new registrations (round 3).
         # Round 5: curated lists and Chrome top sites right after the links and projects.
         for n in (found["links"] + found["project_sites"] + found["curated"] + found["chrome_ranked"]
-                  + found["ranked"] + found["vpn_category"]
+                  + found["ranked"] + found["majestic"] + found["vpn_category"]
                   + found["new_registrations"]
                   + found["certificates"] + found["lookalikes"] + cbypass):
             if n not in seen_p and n not in known_bypass and fresh(n) and not last.blocked(n):

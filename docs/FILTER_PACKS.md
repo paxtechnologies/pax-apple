@@ -159,7 +159,11 @@ judged wrongly. So round 2 widens discovery and tightens the judgement:
     Names whose registrable label reads like a proxy or VPN are checked right
     after the links and project sites, before the Tranco names. These lists rank
     sites by real visits, so they reach busy proxies and VPN services that never
-    make Tranco.
+    make Tranco. Five more countries are added each night in turn (60 more in
+    all, every one within a fortnight).
+  - Majestic Million (Majestic-12, CC BY 3.0; ranked by the number of linking
+    sites): names below the top 10k that read like a proxy or VPN, checked after
+    the Tranco names. Long-lived proxies collect links for years.
   - Curated lists other maintainers publish under open licences (Unlicense,
     CC0-1.0, Apache-2.0): VPN / proxy categories of public DNS blocklists, a
     per-engine list of web-proxy mirrors, and per-family lists of unblocker

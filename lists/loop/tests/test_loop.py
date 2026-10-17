@@ -596,3 +596,23 @@ def test_candidate_verdict_round5_unblock_alone_is_not_a_proxy():
     assert cv({"st": 200, "title": "Unblock", "host": "u2.example", "frame": True}) == "proxy"
     assert cv({"st": 200, "title": "Unblock any website free", "host": "u3.example"}) == "proxy"
     assert cv({"st": 200, "title": "SpotVPN - fast VPN", "host": "spotvpn.example"}) == "proxy"
+
+
+def test_chrome_rotation_and_majestic_candidates():
+    import datetime as _dt
+    days = [(_dt.date(2026, 10, 1) + _dt.timedelta(d)).isoformat() for d in range(12)]
+    seen = set()
+    for d in days:
+        r = proxy.crux_rotation(d)
+        assert len(r) == proxy.CRUX_ROTATING_PER_NIGHT and set(r) <= set(proxy.CRUX_ROTATING)
+        seen |= set(r)
+    assert seen == set(proxy.CRUX_ROTATING)
+    assert not set(proxy.CRUX_ROTATING) & set(proxy.CRUX_COUNTRIES)
+    csv = "GlobalRank,TldRank,Domain,TLD\n1,1,topproxy.example,example\n2,2,fastproxy.example,example\n" \
+          "3,3,news.example,example\n4,4,myvpn.example,example\n"
+    assert proxy.majestic_candidates(fetch=lambda url, timeout=None: csv.encode(), start=1) == [
+        "fastproxy.example", "myvpn.example"]
+
+    def boom(url, timeout=None):
+        raise OSError("down")
+    assert proxy.majestic_candidates(fetch=boom) == []
