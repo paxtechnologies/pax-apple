@@ -23,6 +23,24 @@ functionality.
    off "straight away, as it's your trial day". On an iPhone or iPad, *Device details* (folded) holds its details,
    Support ID and support-release switch.
 
+## Sidebar and Blocked sites / apps (v0.8.21)
+
+* The sidebar lists the devices, then **Blocked sites / apps** and **Settings**. There is no *Home* row: the
+  app opens on Home (when something is protected), and clicking a device opens its Home. Settings and
+  Blocked sites / apps each start with a *‹ Home* link; the Pax logo and *Pax › Home* (⇧⌘H) also go Home.
+  In a narrow window the header links are *Blocked sites / apps* and *Settings*.
+* **Blocked sites / apps** starts with one calm line naming the device the sidebar has picked:
+  "Blocking on Ruben's MacBook Air" (this Mac's name) or the iPhone's or iPad's name. Under it, how far the
+  blocks reach (PaxCore `BlockedPage`):
+  * "Sites: applies to all your devices." for the account's list, or this Mac's list while sync is on.
+  * "Sites: applies to this Mac only. Turn on sync in Settings › Blocking to use them on all your devices."
+    while this Mac keeps its own list with sync off.
+  * "Sites: applies to all your iPhones and iPads. This Mac keeps its own list while sync is off." when a
+    phone is picked and this Mac's sync is off.
+  * "Apps: this Mac only." or "Apps: this iPhone only, chosen at set-up." Apps are always per device, and
+    the page lists them under the sites (with *Add* and *Unblock…* on a Mac that keeps its own key).
+* Settings has no device header: it is this Mac's settings plus app-wide ones, as before.
+
 ## Settings (sidebar › Settings, ⌘,)
 
 * **Blocking** (this Mac): Ads and trackers · Sync blocked sites across devices · YouTube Restricted Mode ·

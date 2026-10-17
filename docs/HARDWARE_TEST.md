@@ -235,7 +235,8 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
 
 ### v0.8.14: one Settings, device details on the device's page
 
-1. The top bar has no gear. The sidebar shows the devices, then Home, Blocked sites and **Settings**.
+1. The top bar has no gear. The sidebar shows the devices, then *Blocked sites / apps* and **Settings**
+   (v0.8.21: no *Home* row; clicking a device opens its Home, and Settings has a *‹ Home* link).
 2. Click *This Mac*: its page shows the status card, Request a change, the This Mac switches (ads, sync,
    YouTube Restricted Mode, the X/Bluesky notice, Pax Max line) and Blocked apps.
 3. Click an iPhone/iPad: its page shows the status card, Request a change, then **Details**: Status, iOS,

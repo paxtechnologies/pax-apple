@@ -51,7 +51,7 @@ struct PaxApp: App {
             CommandMenu("Pax") {
                 Button("Home") { model.screen = .home }
                     .keyboardShortcut("h", modifiers: [.command, .shift])
-                Button("Blocked Sites") { model.screen = .blockedSites }
+                Button(AppNav.blockedMenuTitle) { model.screen = .blockedSites }
                     .keyboardShortcut("b", modifiers: [.command, .shift])
                     .disabled(!model.hasAccount && !(mac.deviceID != nil && mac.isLocal))
                 Divider()

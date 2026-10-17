@@ -13,12 +13,81 @@ struct BlockedSitesView: View {
     @State private var showMore = false
     @State private var showImport = false
     @EnvironmentObject var model: SetupModel
+    @EnvironmentObject var mac: MacProtectModel
+    @State private var showAppPicker = false
+
+    /// v0.8.21: the device this page is about (the one picked in the sidebar).
+    private var phone: PaxDeviceRecord? { model.selectedRecord }
+    private var deviceName: String? { phone?.name ?? Host.current().localizedName ?? "this Mac" }
+    private var reach: BlockedPage.SitesReach {
+        BlockedPage.sitesReach(phoneSelected: phone != nil, macLocalList: mac.deviceID != nil && mac.isLocal,
+                               macSyncOn: mac.canSync ? mac.sync?.enabled : nil)
+    }
+
+    /// "Blocking on Ruben's MacBook Air", then where sites and apps apply.
+    private var scopeCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: phone == nil ? "laptopcomputer" : (phone!.isIPad ? "ipad" : "iphone"))
+                    .font(.system(size: 14, weight: .light)).foregroundStyle(Theme.accent)
+                Text(BlockedPage.deviceLine(name: deviceName))
+                    .font(Theme.body(14, weight: .medium)).foregroundStyle(Theme.primaryText)
+            }
+            Text(BlockedPage.sitesLine(reach) + " " + BlockedPage.appsLine(phone: phone != nil, isIPad: phone?.isIPad ?? false))
+                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Theme.cornerRadius).fill(Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).stroke(Theme.border))
+    }
+
+    /// v0.8.21: the apps for this device, on the same page as its sites.
+    @ViewBuilder private var appsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let rec = phone {
+                let names = rec.blockedAppNames ?? []
+                SectionTitle("Apps (\(names.count))")
+                Text(names.isEmpty ? "No apps chosen at set-up." : DeviceDetails.appList(names))
+                    .font(Theme.body(13)).foregroundStyle(names.isEmpty ? Theme.mutedText : Theme.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                Text("These were chosen when this \(rec.isIPad ? "iPad" : "iPhone") was set up. To change them, set it up again.")
+                    .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if mac.deviceID != nil, mac.canBlockApps {
+                let list = mac.blockedApps?.apps ?? []
+                HStack {
+                    SectionTitle("Apps (\(list.count))")
+                    Spacer()
+                    Button("Add") { showAppPicker = true }.buttonStyle(SecondaryButtonStyle()).disabled(mac.busy)
+                }
+                if list.isEmpty {
+                    Text("No apps yet.").font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                } else {
+                    MacBlockedAppRows()
+                }
+            } else if mac.deviceID != nil {
+                SectionTitle("Apps")
+                Text("Blocking apps works when this Mac keeps its own key (Settings › Advanced).")
+                    .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .sheet(isPresented: $showAppPicker) {
+            MacAppPickerSheet(already: Set(mac.blockedApps?.apps.map(\.bundle_id) ?? [])) { path in
+                mac.blockApp(path: path)
+            }
+        }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                BackLink { model.screen = .home }
-                StepHeader(eyebrow: "", title: "Blocked sites",
+                BackLink(title: AppNav.backToHome) { model.screen = .home }
+                scopeCard   // v0.8.21: which device, and how far its blocks reach
+                StepHeader(eyebrow: "", title: AppNav.blockedTitle,
                            subtitle: blocklist.scopeText + " Removing one takes \(blocklist.delayText), "
                                + "and you can change your mind until then.")
                 addCard
@@ -36,6 +105,7 @@ struct BlockedSitesView: View {
                     pendingSection
                 }
                 listSection
+                appsSection
                 DisclosureGroup("More options", isExpanded: $showMore) {
                     VStack(alignment: .leading, spacing: 24) {
                         exceptionsSection

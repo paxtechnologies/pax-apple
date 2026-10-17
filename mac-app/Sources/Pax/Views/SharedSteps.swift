@@ -233,10 +233,11 @@ struct WaitStep: View {
 
 /// "Back" link used under the step content.
 struct BackLink: View {
+    var title: String = "Back"
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Label("Back", systemImage: "chevron.left").font(Theme.body(13))
+            Label(title, systemImage: "chevron.left").font(Theme.body(13))
         }
         .buttonStyle(.plain)
         .foregroundStyle(Theme.mutedText)

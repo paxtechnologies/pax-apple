@@ -108,8 +108,8 @@ extension MacProtectModel {
     }
 }
 
-/// The sidebar: devices first (each opens its own page), then Home / Blocked sites, and
-/// the one app-wide Settings (v0.8.14).
+/// The sidebar: devices first (each opens its Home page), then Blocked sites / apps and
+/// the one app-wide Settings (v0.8.14; v0.8.21: no separate "Home" row).
 struct DeviceSidebar: View {
     @EnvironmentObject var model: SetupModel
     @EnvironmentObject var mac: MacProtectModel
@@ -135,11 +135,11 @@ struct DeviceSidebar: View {
 
             Divider().overlay(Theme.border).padding(.vertical, 12)
 
-            NavRow(title: "Home", icon: "house", selected: model.screen == .home) { model.screen = .home }
-            NavRow(title: "Blocked sites", icon: "nosign", selected: model.screen == .blockedSites) {
+            // v0.8.21: no "Home" row. The app opens on Home; a device above goes back to it.
+            NavRow(title: AppNav.blockedTitle, icon: "nosign", selected: model.screen == .blockedSites) {
                 model.screen = .blockedSites
             }
-            .disabled(!model.hasAccount)
+            .disabled(!model.hasAccount && !(mac.deviceID != nil && mac.isLocal))
             NavRow(title: "Settings", icon: "gearshape", selected: model.screen == .settings) {
                 model.screen = .settings
             }
@@ -234,14 +234,16 @@ struct DeviceSegmentedPicker: View {
     }
 }
 
-/// Narrow window: Home / Blocked sites / Settings as links in the header.
+/// Narrow window: Blocked sites / apps and Settings as links in the header (v0.8.21: no
+/// "Home" link; the device picker, the logo and each page's back link go to Home).
 private struct CompactNav: View {
     @EnvironmentObject var model: SetupModel
+    @EnvironmentObject var mac: MacProtectModel
 
     var body: some View {
         HStack(spacing: 14) {
-            Button("Home") { model.screen = .home }.buttonStyle(.link)
-            Button("Blocked sites") { model.screen = .blockedSites }.buttonStyle(.link).disabled(!model.hasAccount)
+            Button(AppNav.blockedTitle) { model.screen = .blockedSites }.buttonStyle(.link)
+                .disabled(!model.hasAccount && !(mac.deviceID != nil && mac.isLocal))
             Button("Settings") { model.screen = .settings }.buttonStyle(.link)
         }
     }

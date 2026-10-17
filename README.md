@@ -374,8 +374,15 @@ support release), *Accountability partner email*, *Updates*, *About*, and *Advan
 its backup state, the *Extra family filter layer* switch, security notices, where the key is kept, server,
 testers).
 
-**Blocked sites** (v0.3): once you have an account on this Mac (the token is kept in the Keychain),
-the sidebar shows *Blocked sites* (also *Pax › Blocked Sites*, ⇧⌘B, and a card on Home). v0.7.0 adds
+**Blocked sites / apps** (v0.3; renamed in v0.8.21): once you have an account on this Mac (the token is
+kept in the Keychain) or this Mac keeps its own key, the sidebar shows *Blocked sites / apps* (also
+*Pax › Blocked Sites / Apps*, ⇧⌘B, and a card on Home). Since v0.8.21 the page starts with a calm line
+saying which device it's about ("Blocking on Ruben's MacBook Air", or the selected iPhone's or iPad's
+name) and how far blocks reach ("Sites: applies to all your devices." while sync is on or for the
+account's list; "Sites: applies to this Mac only." while this Mac's sync is off; "Apps: this Mac only." /
+"Apps: this iPhone only, chosen at set-up."), and it lists that device's apps under the sites. The sidebar
+has no *Home* row any more (v0.8.21): the app opens on Home, and a device row, the Pax logo, the *‹ Home*
+link on Settings and on this page, or *Pax › Home* (⇧⌘H) goes back to it. v0.7.0 adds
 *Import list…* for pasted lists and .txt/.csv files.
 Type a site and press *Block now*; it's added at once. *Remove* asks for confirmation, then shows the
 removal under *Waiting* with a live 72-hour countdown and *Cancel*. Exceptions to the Family Filter

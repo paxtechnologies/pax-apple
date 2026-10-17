@@ -13,6 +13,8 @@ struct AppSettingsView: View {
 
     var body: some View {
         PageColumn(maxWidth: 680) {
+            // v0.8.21: no Home row in the sidebar any more, so Settings has its own way back.
+            BackLink(title: AppNav.backToHome) { model.screen = .home }
             StepHeader(eyebrow: "", title: "Settings", subtitle: "Everything you can change, in plain words. "
                        + "An iPhone's or iPad's own details are on its page.")
             if let failure = mac.failure {
