@@ -192,6 +192,25 @@ public enum HomeLayout {
         return "Takes \(wait) after you ask. You can cancel any time during the wait."
     }
 
+    /// v0.8.21: the description under Turn off › "In an emergency" (Mac). The cooling-off
+    /// is the server's PAX_EMERGENCY_COOLOFF_SECONDS (or pax-guard's own 24 h); nil means an
+    /// older server or pax-guard that doesn't send it, so the default, 24 hours, is said.
+    /// In the trial day there is no cooling-off, so that line doesn't promise 24 hours.
+    public static let defaultEmergencyCooloffSeconds = 24 * 3600
+
+    public static func emergencyDescription(cooloffSeconds: Int?, trialActive: Bool) -> String {
+        let intro = "Emergency release is self-serve. You give a reason, your trusted person is emailed, and Pax turns off "
+        let when: String
+        if trialActive {
+            when = "straight away, as it's your trial day."
+        } else {
+            let s = cooloffSeconds ?? defaultEmergencyCooloffSeconds
+            when = s <= 0 ? "straight away instead of your full turn-off wait."
+                : "after \(TurnOffWait.duration(seconds: s)) instead of your full turn-off wait."
+        }
+        return intro + when + " You can use it once every 90 days."
+    }
+
     /// The button: one action whatever the state.
     public static func turnOffButton(trialActive: Bool) -> String {
         trialActive ? "Turn Pax off" : "Start the turn-off wait"

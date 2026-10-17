@@ -270,8 +270,8 @@ struct MacTurnOffCard: View {
             }
             DisclosureGroup("In an emergency", isExpanded: $showEmergency) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("For a genuine emergency: a short cooling-off instead of your turn-off wait, once every 90 days. "
-                         + "Your trusted person is told.")
+                    Text(HomeLayout.emergencyDescription(cooloffSeconds: mac.status?.emergency_cooloff_seconds,
+                                                         trialActive: mac.trialActive))
                         .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
                     TextField("What's happening?", text: $mac.emergencyReason).textFieldStyle(.roundedBorder)

@@ -515,6 +515,8 @@ class LocalEscrow:
                 "removal_request": view, "wait_seconds": st["wait_seconds"],
                 "pending_wait": st.get("pending_wait"), "holds": self.holds(),
                 "last_emergency_at": st.get("last_emergency_at"),
+                # v0.8.21: for the app's "Pax turns off after 24 hours" line.
+                "emergency_cooloff_seconds": EMERGENCY_COOLOFF,
                 "partner": self.partner.public_view(),
                 # v0.8.18: {"active", "until", "ended_at", "started_at"} or None (no trial day).
                 "trial": self._trial_view(st, now),

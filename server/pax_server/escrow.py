@@ -756,6 +756,8 @@ class Escrow:
             "wait_seconds": acct["wait_seconds"],
             # v0.8.18: {"active", "until", "ended_at"}, or None (no trial day).
             "trial": self._trial_view(d, now),
+            # v0.8.21: the emergency release cooling-off, for "turns off after 24 hours".
+            "emergency_cooloff_seconds": self.settings.emergency_cooloff_seconds,
         }
 
     def list_devices(self, acct) -> list[dict]:

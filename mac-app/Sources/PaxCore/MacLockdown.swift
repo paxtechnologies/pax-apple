@@ -951,6 +951,9 @@ extension EscrowClient {
         public let wait_seconds: Int?
         /// v0.8.18: the trial day (nil: none, or an older server or pax-guard).
         public let trial: TrialState?
+        /// v0.8.21: the emergency release cooling-off in seconds (nil from an older
+        /// server or pax-guard; the app then says the default, 24 hours).
+        public let emergency_cooloff_seconds: Int?
 
         /// v0.8.18: {"active", "until", "ended_at"}. `active` is as of when it was read;
         /// the app also checks `until` against the clock for its countdown.

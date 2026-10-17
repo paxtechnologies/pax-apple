@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.20
+# Pax Peace (Apple), v0.8.21
 
 **Less scrolling. More living.**
 
@@ -364,7 +364,10 @@ profile, escrow password, install and verify → done (turn Find My back on).
 **Home and Settings** (v0.8.18, "1, 2, 3, not option overwhelm"; docs/HOME_AND_SETTINGS.md): Home is
 three cards: **1 Status** (one big line, "Protected" or "Pax turns off in 12 h 19 min · Cancel", the
 trial-day countdown, and at most one "1 thing to know" line that opens to notices), **2 What's blocked**
-(sites and apps, a count and one *Add* each) and **3 Turn off** (one button, *In an emergency* inside).
+(sites and apps, a count and one *Add* each) and **3 Turn off** (one button, *In an emergency* inside;
+on a Mac it reads "Emergency release is self-serve. You give a reason, your trusted person is emailed, and
+Pax turns off after 24 hours instead of your full turn-off wait. You can use it once every 90 days.", with
+the hours taken from `PAX_EMERGENCY_COOLOFF_SECONDS` and "straight away" in the trial day).
 This Mac's switches and details are in **Settings**: *Blocking* (ads and trackers, sync, YouTube
 Restricted Mode, the X/Bluesky line), *Pax Max*, *Turning Pax off* (turn-off wait, trial day, verified
 support release), *Accountability partner email*, *Updates*, *About*, and *Advanced* (Support ID, filter and

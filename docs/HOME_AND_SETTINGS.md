@@ -15,7 +15,12 @@ functionality.
    apps are a count "chosen at set-up". One line: "Blocking is instant. Unblocking takes your turn-off wait."
 3. **Turn off**: one button ("Start the turn-off wait", or "Turn Pax off" in the trial day), then "Turn Pax
    off on this Mac" when the wait is over. *In an emergency* (folded): emergency release, a support code,
-   and (Mac) "I'm locked out of this Mac". On an iPhone or iPad, *Device details* (folded) holds its details,
+   and (Mac) "I'm locked out of this Mac". On a Mac it opens with (v0.8.21): "Emergency release is self-serve.
+   You give a reason, your trusted person is emailed, and Pax turns off after 24 hours instead of your full
+   turn-off wait. You can use it once every 90 days." The hours follow the server's
+   `PAX_EMERGENCY_COOLOFF_SECONDS` (sent as `emergency_cooloff_seconds` in device status; 24 hours when an
+   older server or pax-guard doesn't send it). In the trial day there is no cooling-off, so it says Pax turns
+   off "straight away, as it's your trial day". On an iPhone or iPad, *Device details* (folded) holds its details,
    Support ID and support-release switch.
 
 ## Settings (sidebar › Settings, ⌘,)
