@@ -72,6 +72,7 @@ RECHECK_DAYS = 30           # a confirming verdict (restricted / proxy) is reuse
 RECHECK_OTHER_DAYS = 90     # an "other" / "down" / "gone" verdict: check the site again after this
 PROXY_SHARE = 0.5           # v0.8.21 loop: share of the night's homepage checks spent on proxy candidates
 CT_BRANDS_PER_NIGHT = 12
+RECHECK_BYPASS_PER_NIGHT = 400   # round 4: confirmed proxies re-judged a night; "other" ones are dropped
 CRAWL_PER_NIGHT = 800       # confirmed proxy pages re-read a night for their links (round 2: was 300)
 FRONTIER_MAX = 20_000
 HOLD_DAYS = 30
@@ -304,8 +305,28 @@ def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
     log(f"proxy discovery: {len(links)} linked names, {len(gh)} open-source project sites, "
         f"{len(nrd)} new registrations, {len(ranked)} ranked names, "
         f"{len(ct)} certificate names, {len(look)} lookalikes of {len(brands)} brands")
-    return {"links": links, "project_sites": gh, "new_registrations": nrd, "ranked": ranked,
+    vpn = [n for n in proxy.ut1_vpn(fetch) if n not in skip]
+    log(f"proxy discovery: {len(vpn)} names in the vpn category")
+    return {"links": links, "project_sites": gh, "new_registrations": nrd, "ranked": ranked, "vpn_category": vpn,
             "certificates": ct, "lookalikes": look[:3000]}
+
+
+def recheck_bypass(state: State, qps: float, n: int = RECHECK_BYPASS_PER_NIGHT, checker=None) -> list[str]:
+    """Round 4: re-judge the proxies this workflow confirmed, the longest-unchecked
+    first, with the current candidate verdict. A page that is now plainly something
+    else ("other": repurposed, or judged too loosely before) leaves the list; a page
+    that is down stays (proxies come and go)."""
+    names = sorted(state.add_bypass, key=lambda d: ((state.checked.get(d) or ["", "0"])[1], lu.name_hash(d)))[:n]
+    if not names:
+        return []
+    checker = checker or (lambda ns: homepage.check(ns, qps=qps, judge=homepage.candidate_verdict))
+    verdicts = checker(names)
+    dropped = [d for d in names if verdicts.get(d) == "other"]
+    for d, v in verdicts.items():
+        state.checked[d] = state.new_checked[d] = [v, lu.today()]
+    state.add_bypass -= set(dropped)
+    log(f"re-checked {len(names)} confirmed proxies: {len(dropped)} dropped")
+    return dropped
 
 
 def run(args) -> int:
@@ -341,7 +362,8 @@ def run(args) -> int:
         result["discovery"] = {k: len(v) for k, v in found.items()}
         todo_p, seen_p = [], set()
         # Ranked names (sites people actually visit) before new registrations (round 3).
-        for n in (found["links"] + found["project_sites"] + found["ranked"] + found["new_registrations"]
+        for n in (found["links"] + found["project_sites"] + found["ranked"] + found["vpn_category"]
+                  + found["new_registrations"]
                   + found["certificates"] + found["lookalikes"] + cbypass):
             if n not in seen_p and n not in known_bypass and fresh(n) and not last.blocked(n):
                 seen_p.add(n)
@@ -379,7 +401,8 @@ def run(args) -> int:
         state.frontier = [h for h in dict.fromkeys(new_links + [n for n in found["links"] if n not in tried])
                           if h not in top_set and state.recent_verdict(h) is None and h not in known_bypass
                           and h not in state.add_bypass]
-        result["verification"] = {"checked": len(verdicts), "added_restricted": len(added_b),
+        dropped = recheck_bypass(state, args.qps)
+        result["verification"] = {"rechecked_dropped": len(dropped), "checked": len(verdicts), "added_restricted": len(added_b),
                                   "added_proxy": len(added_p), "proxy_checked": len(todo_p),
                                   "proxy_gone": len(gone),
                                   "waiting": {"restricted": max(0, n_todo_b - len(todo_b)),

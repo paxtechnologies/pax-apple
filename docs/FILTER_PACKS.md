@@ -142,6 +142,15 @@ judged wrongly. So round 2 widens discovery and tightens the judgement:
   a night) are read for the sites they link to (unblocker READMEs list their
   official mirrors), and ranked names are checked before new registrations, since
   they are sites people actually visit.
+- Round 4 (precision): the UT1 "vpn" category (same maintainer and licence as the
+  redirector category) is a candidate source. The candidate verdict no longer takes
+  a handful of proxy words in the body (fewer than 10) as enough when the title says
+  nothing about proxies, unblocking or hiding your IP (IP checkers, fingerprint
+  tests and hosting lists were getting in), and a bot check or loading screen counts
+  as "down", not as evidence. Each night up to 400 proxies the workflow confirmed
+  earlier are re-judged, longest-unchecked first: one that is now plainly something
+  else ("other") leaves the list; one that is down stays. The proxy gate still
+  refuses a pack that loses more benchmark proxies than it gains.
 
 ## Running it by hand
 

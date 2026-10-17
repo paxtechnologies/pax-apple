@@ -17,6 +17,8 @@ homepage check before it is added, and the Tranco and known-good gates after):
   - (round 2) the Tranco top 1M below the top 10k: names whose registrable label
     reads like a proxy or a VPN (`tranco_candidates`), the list the workflow
     already downloads for its gates
+  - (round 4) the UT1 "vpn" category, from the same maintainer as the redirector
+    category (`ut1_vpn`)
   - (round 2) GitHub: the published sites (repository homepages and
     <user>.github.io sites) of open-source web-proxy and unblocker projects, found
     by repository topic and name (`github_candidates`, the GitHub search API);
@@ -187,6 +189,30 @@ def github_candidates(token: str | None = None, pages: int = 2, fetch=None, paus
         for h in readme_hosts(text):
             keep(h)
     return list(out)
+
+
+def ut1_vpn(fetch=lu.fetch) -> list[str]:
+    """The UT1 "vpn" category (same maintainer and licence, CC BY-SA 4.0, as the
+    redirector category the workflow already reads): VPN services and their sites.
+    A candidate source only; every name still needs its homepage verdict."""
+    import tarfile
+    url = pr.source("verify_bypass_url").replace("redirector", "vpn")
+    try:
+        data = fetch(url)
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+            member = next(m for m in tf.getmembers() if m.name.endswith("/domains") or m.name == "domains")
+            text = tf.extractfile(member).read().decode("utf-8", "ignore")
+    except Exception as exc:  # noqa: BLE001
+        log(f"vpn category unavailable ({type(exc).__name__})")
+        return []
+    out = []
+    for line in text.splitlines():
+        n = line.strip().lower().strip(".")
+        if n.startswith("www."):
+            n = n[4:]
+        if "." in n and not n.startswith("#") and not re.fullmatch(r"[0-9.]+", n):
+            out.append(n)
+    return list(dict.fromkeys(out))
 
 
 def priority(names) -> list[str]:

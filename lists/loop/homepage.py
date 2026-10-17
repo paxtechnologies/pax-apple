@@ -30,7 +30,9 @@ proxies (NOT_PROXY: developer and network tools, email security, game test
 servers, trading-card "proxies"; "unblock" inside another word). Tuned on Tranco
 names that read like a proxy or VPN, never on the held-out lists. The benchmark
 keeps labelling its fresh held-out sample with `verdict`, so what counts as a
-working proxy there does not move with these changes."""
+working proxy there does not move with these changes. Round 4: a handful of proxy
+words in the body (fewer than 10) with no proxy word in the title is no longer
+enough on its own."""
 from __future__ import annotations
 
 import re
@@ -71,6 +73,10 @@ NOT_PROXY = re.compile(r"debug|developer|reverse proxy|load balanc|api gateway|i
 # proxies (unless the page also carries proxy code or says it is a proxy).
 GAMES = re.compile(r"\bgames?\b|\bplay\b|clicker|\b\d+x\b", re.I)
 PROXY_WORD = re.compile(r"prox|vpn|bypass|anonym|hide (?:my|your) ip|mirror", re.I)
+WEAK_OK = re.compile(r"unblock|hid(?:e|ing) (?:my|your)|glype|censor|pirate ?bay|\btpb\b", re.I)
+# A bot check or loading screen says nothing about the site behind it.
+CHALLENGE = re.compile(r"^\s*(?:loading\.*|just a moment\.*|attention required.*|security check.*|"
+                       r"checking your browser.*|ddos-guard|安全检查.*|one moment, please\.*)\s*$", re.I)
 _EMBEDDED_UNBLOCK = re.compile(r"(?<=[a-z])unblock", re.I)
 _LINK = re.compile(r"""href\s*=\s*["']?https?://([a-z0-9][a-z0-9.-]*[a-z0-9])""", re.I)
 MAX_LINKS = 300
@@ -163,15 +169,23 @@ def verdict(rec: dict) -> str:
 def candidate_verdict(rec: dict) -> str:
     """Round 2 verdict for new candidates (see the module notes): `verdict`, minus
     pages that use "proxy" for something else, plus consumer VPN services."""
-    v = verdict(dict(rec, title=_EMBEDDED_UNBLOCK.sub(" ", rec.get("title") or "")))
     title = rec.get("title") or ""
+    if rec.get("st") == 200 and not rec.get("frame") and CHALLENGE.search(title):
+        return "down"
+    v = verdict(dict(rec, title=_EMBEDDED_UNBLOCK.sub(" ", title)))
     if v == "proxy":
         # Proxy-engine code on the page is evidence on its own; a title or a word count is not
         # when the page is plainly about something else.
         if not rec.get("frame") and NOT_PROXY.search(title):
             return "other"
+        own = _without_own_name(title, rec.get("host", ""))
         if (not rec.get("frame") and rec.get("pxy", 0) < 3 and GAMES.search(title)
-                and not PROXY_WORD.search(_without_own_name(title, rec.get("host", "")))):
+                and not PROXY_WORD.search(own)):
+            return "other"
+        # A few proxy words in the body alone (an IP checker, a fingerprint test, a list
+        # of hosting sites) is not enough: the title has to say so too (round 4).
+        if (not rec.get("frame") and rec.get("pxy", 0) < 10 and not PROXY_WORD.search(title)
+                and not WEAK_OK.search(own)):
             return "other"
         return v
     if v != "other" or GAMBLE.search(title) or NOT_PROXY.search(title):

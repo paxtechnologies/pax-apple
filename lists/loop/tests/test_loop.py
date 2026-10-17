@@ -502,3 +502,41 @@ def test_github_candidates_read_readme_links():
         return readme if url.endswith("/readme") else search
     assert proxy.github_candidates(fetch=fake, pages=1, pause=0) == ["mirror-one.example", "mirror-two.example"]
     assert proxy.readme_hosts("see http://a.example and https://b.example/path") == ["a.example", "b.example"]
+
+
+def test_ut1_vpn_category_parses_and_survives_errors():
+    import io as _io
+    import tarfile as _tar
+    buf = _io.BytesIO()
+    with _tar.open(fileobj=buf, mode="w:gz") as tf:
+        data = b"fastvpn.example\nwww.othervpn.example\n10.0.0.1\nfastvpn.example\n"
+        ti = _tar.TarInfo("vpn/domains")
+        ti.size = len(data)
+        tf.addfile(ti, _io.BytesIO(data))
+    assert proxy.ut1_vpn(fetch=lambda url: buf.getvalue()) == ["fastvpn.example", "othervpn.example"]
+
+    def boom(url):
+        raise OSError("down")
+    assert proxy.ut1_vpn(fetch=boom) == []
+
+
+def test_candidate_verdict_round4_weak_evidence_and_bot_checks():
+    cv = homepage.candidate_verdict
+    # a few proxy words in the body and nothing in the title: not enough
+    assert cv({"st": 200, "title": "Find IP Address Country Location", "host": "ip.example", "pxy": 4}) == "other"
+    assert cv({"st": 200, "title": "Tips for hiding your identity online", "host": "h.example", "pxy": 8}) == "proxy"
+    assert cv({"st": 200, "title": "Pirate Bay mirror", "host": "tpb.example", "pxy": 3}) == "proxy"
+    assert cv({"st": 200, "title": "Home", "host": "big.example", "pxy": 40}) == "proxy"
+    # a bot check says nothing either way
+    assert cv({"st": 200, "title": "Just a moment...", "host": "p.example", "pxy": 0}) == "down"
+    assert cv({"st": 200, "title": "Security Check Required", "host": "p.example"}) == "down"
+
+
+def test_recheck_bypass_drops_only_pages_that_are_now_something_else(tmp_path):
+    st = loop.State(tmp_path)
+    st.add_bypass = {"still.example", "gone.example", "repurposed.example"}
+    verdicts = {"still.example": "proxy", "gone.example": "down", "repurposed.example": "other"}
+    dropped = loop.recheck_bypass(st, 8, n=10, checker=lambda names: {n: verdicts[n] for n in names})
+    assert dropped == ["repurposed.example"]
+    assert st.add_bypass == {"still.example", "gone.example"}
+    assert st.checked["repurposed.example"][0] == "other"
