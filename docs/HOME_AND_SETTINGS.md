@@ -23,13 +23,13 @@ functionality.
    off "straight away, as it's your trial day". On an iPhone or iPad, *Device details* (folded) holds its details,
    Support ID and support-release switch.
 
-## Sidebar and Blocked sites / apps (v0.8.21)
+## Sidebar and Blocked Sites / Apps (v0.8.21)
 
-* The sidebar lists the devices, then **Blocked sites / apps** and **Settings**. There is no *Home* row: the
+* The sidebar lists the devices, then **Blocked Sites / Apps** and **Settings**. There is no *Home* row: the
   app opens on Home (when something is protected), and clicking a device opens its Home. Settings and
-  Blocked sites / apps each start with a *‹ Home* link; the Pax logo and *Pax › Home* (⇧⌘H) also go Home.
-  In a narrow window the header links are *Blocked sites / apps* and *Settings*.
-* **Blocked sites / apps** starts with one calm line naming the device the sidebar has picked:
+  Blocked Sites / Apps each start with a *‹ Home* link; the Pax logo and *Pax › Home* (⇧⌘H) also go Home.
+  In a narrow window the header links are *Blocked Sites / Apps* and *Settings*.
+* **Blocked Sites / Apps** starts with one calm line naming the device the sidebar has picked:
   "Blocking on Ruben's MacBook Air" (this Mac's name) or the iPhone's or iPad's name. Under it, how far the
   blocks reach (PaxCore `BlockedPage`):
   * "Sites: applies to all your devices." for the account's list, or this Mac's list while sync is on.

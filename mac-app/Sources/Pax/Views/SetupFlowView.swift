@@ -108,7 +108,7 @@ extension MacProtectModel {
     }
 }
 
-/// The sidebar: devices first (each opens its Home page), then Blocked sites / apps and
+/// The sidebar: devices first (each opens its Home page), then Blocked Sites / Apps and
 /// the one app-wide Settings (v0.8.14; v0.8.21: no separate "Home" row).
 struct DeviceSidebar: View {
     @EnvironmentObject var model: SetupModel
@@ -234,7 +234,7 @@ struct DeviceSegmentedPicker: View {
     }
 }
 
-/// Narrow window: Blocked sites / apps and Settings as links in the header (v0.8.21: no
+/// Narrow window: Blocked Sites / Apps and Settings as links in the header (v0.8.21: no
 /// "Home" link; the device picker, the logo and each page's back link go to Home).
 private struct CompactNav: View {
     @EnvironmentObject var model: SetupModel

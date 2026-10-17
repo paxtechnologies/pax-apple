@@ -83,7 +83,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.21"
+VERSION = "0.8.22"
 BASE = Path("/Library/PaxGuard")
 CONFIG_PATH = BASE / "config.json"
 STATE_DIR = BASE / "state"

@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.21
+# Pax Peace (Apple), v0.8.22
 
 **Less scrolling. More living.**
 
@@ -374,8 +374,8 @@ support release), *Accountability partner email*, *Updates*, *About*, and *Advan
 its backup state, the *Extra family filter layer* switch, security notices, where the key is kept, server,
 testers).
 
-**Blocked sites / apps** (v0.3; renamed in v0.8.21): once you have an account on this Mac (the token is
-kept in the Keychain) or this Mac keeps its own key, the sidebar shows *Blocked sites / apps* (also
+**Blocked Sites / Apps** (v0.3; renamed in v0.8.21): once you have an account on this Mac (the token is
+kept in the Keychain) or this Mac keeps its own key, the sidebar shows *Blocked Sites / Apps* (also
 *Pax › Blocked Sites / Apps*, ⇧⌘B, and a card on Home). Since v0.8.21 the page starts with a calm line
 saying which device it's about ("Blocking on Ruben's MacBook Air", or the selected iPhone's or iPad's
 name) and how far blocks reach ("Sites: applies to all your devices." while sync is on or for the

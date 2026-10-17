@@ -3,16 +3,16 @@ import Foundation
 
 /// v0.8.21 (Ruben): the sidebar no longer has a "Home" row. The app opens on Home, and
 /// a device row (or the Pax logo, the page's "Home" back link, Pax › Home ⇧⌘H) goes
-/// back to it. "Blocked sites" is now "Blocked sites / apps", and that page says at the
+/// back to it. "Blocked sites" is now "Blocked Sites / Apps", and that page says at the
 /// top which device it is about and how far its blocks reach.
 public enum AppNav {
-    /// Sidebar row, compact header link and page title (sentence case like the sidebar).
-    public static let blockedTitle = "Blocked sites / apps"
+    /// Sidebar row, compact header link and page title (v0.8.22: title case, like the Pax menu).
+    public static let blockedTitle = "Blocked Sites / Apps"
     /// The Pax menu item (menus use title case).
     public static let blockedMenuTitle = "Blocked Sites / Apps"
     /// The rows under the device list, top to bottom. No "Home": the devices are Home.
     public static let sidebarRows = [blockedTitle, "Settings"]
-    /// The back link on Settings and on Blocked sites / apps.
+    /// The back link on Settings and on Blocked Sites / Apps.
     public static let backToHome = "Home"
 }
 

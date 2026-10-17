@@ -2,12 +2,13 @@
 import XCTest
 @testable import PaxCore
 
-/// v0.8.21: no Home row in the sidebar; "Blocked sites / apps" says which device it's about.
+/// v0.8.21: no Home row in the sidebar; "Blocked Sites / Apps" says which device it's about.
 final class V0821NavTests: XCTestCase {
     func testSidebarHasNoHomeRow() {
         XCTAssertFalse(AppNav.sidebarRows.contains("Home"))
-        XCTAssertEqual(AppNav.sidebarRows, ["Blocked sites / apps", "Settings"])
+        XCTAssertEqual(AppNav.sidebarRows, ["Blocked Sites / Apps", "Settings"])
         XCTAssertEqual(AppNav.blockedMenuTitle, "Blocked Sites / Apps")
+        XCTAssertEqual(AppNav.blockedTitle, AppNav.blockedMenuTitle)  // v0.8.22: title case everywhere
         XCTAssertEqual(AppNav.backToHome, "Home")
     }
 
