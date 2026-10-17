@@ -30,12 +30,15 @@ struct SupportIDRow: View {
 struct SupportReleaseRow: View {
     let state: EscrowClient.DeviceStatus.SupportReleaseState
     let busy: Bool
+    /// v0.8.18: during the trial day turning it on is instant.
+    var trialActive = false
     let change: (Bool) -> Void
 
     var body: some View {
         ToggleRow(title: VerifiedSupportRelease.title,
                   detail: VerifiedSupportRelease.detail(allowed: state.allowed, pendingOnAt: state.pending_on_at,
-                                                        tellingPartner: state.telling_partner ?? false),
+                                                        tellingPartner: state.telling_partner ?? false,
+                                                        trialActive: trialActive),
                   isOn: Binding(get: { state.allowed || state.pending_on_at != nil },
                                 set: { on in if !busy { change(on) } }))
     }
@@ -82,23 +85,5 @@ struct TurnOffWaitRow: View {
                 .foregroundStyle(Theme.primaryText)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// v0.8.15: this Mac's Details card (its Support ID and the support-release switch).
-struct MacDetailsCard: View {
-    @EnvironmentObject var mac: MacProtectModel
-
-    var body: some View {
-        if let s = mac.status, s.support_id != nil || s.support_release != nil || s.wait_seconds != nil {
-            Card {
-                Text("Details").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
-                if let w = s.wait_seconds { TurnOffWaitRow(seconds: w) }     // v0.8.16
-                if let id = s.support_id { SupportIDRow(supportID: id) }
-                if let sr = s.support_release {
-                    SupportReleaseRow(state: sr, busy: mac.busy) { mac.setSupportRelease($0) }
-                }
-            }
-        }
     }
 }

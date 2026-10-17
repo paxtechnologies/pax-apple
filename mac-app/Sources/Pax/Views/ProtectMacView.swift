@@ -57,12 +57,11 @@ struct ProtectMacView: View {
     private var summary: some View {
         Card {
             Text("Here's what Pax will do").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
-            NoteRow(icon: "checkmark.shield", text: "Block unwanted content in every browser and app on this Mac.")
-            if model.choices.adblock { NoteRow(icon: "hand.raised", text: "Block ads and trackers.") }
+            // v0.8.18: one line for what's blocked (was three).
+            NoteRow(icon: "checkmark.shield", text: "Block unwanted content in every browser and app on this Mac"
+                    + (model.choices.adblock ? ", plus ads and trackers" : "")
+                    + (model.choices.youtubeRestricted ? ", with YouTube Restricted Mode on" : "") + ".")
             NoteRow(icon: "photo", text: AlwaysBlockedMedia.planLine)   // v0.8.13: always
-            if model.choices.youtubeRestricted {
-                NoteRow(icon: "play.rectangle", text: "Turn on YouTube Restricted Mode.")
-            }
             if model.choices.paxMax {
                 NoteRow(icon: "eye.slash", text: "Blur pictures and video in Firefox until they look safe (Pax Max). "
                         + "It can sometimes blur ordinary ones too; turning it off later takes 1 hour.")
@@ -73,7 +72,7 @@ struct ProtectMacView: View {
             }
             NoteRow(icon: "hourglass", text: "Set your turn-off wait to \(waitText): if you ask to turn Pax off, or to "
                     + "unblock something, it happens \(waitText) later. You can cancel any time during the wait.")
-            NoteRow(icon: "heart", text: TurnOffWait.firstHour)
+            NoteRow(icon: "sun.max", text: TrialDay.setUpLine)        // v0.8.18
             NoteRow(icon: "person.crop.circle", text: "Make your account a standard account. Pax keeps the key "
                     + "to undo this until your turn-off wait ends.")
             NoteRow(icon: "lock.open", text: "Private windows still work, and they're filtered too.")
@@ -145,7 +144,10 @@ struct ProtectMacView: View {
                                  text: "I've saved my FileVault recovery key outside this Mac (or given it to "
                                      + "someone I trust).")
                     }
-                    CheckRow(isOn: $mac.madeBackup, text: "I have a recent backup of this Mac.")
+                    // v0.8.18: asked once already on "Lock it in"; only shown again if it was unticked.
+                    if !mac.madeBackup {
+                        CheckRow(isOn: $mac.madeBackup, text: "I have a recent backup of this Mac.")
+                    }
                 }
             }
             if let failure = mac.failure {
@@ -216,97 +218,36 @@ struct InstructionRow: View {
 
 // MARK: - Home cards for this Mac
 
-/// "This Mac": live switches that still make sense after set-up.
-struct MacSettingsCard: View {
-    @EnvironmentObject var mac: MacProtectModel
-
-    var body: some View {
-        Card {
-            HStack {
-                Label("This Mac", systemImage: "laptopcomputer").font(Theme.body(15, weight: .semibold))
-                    .foregroundStyle(Theme.primaryText)
-                Spacer()
-            }
-            switch mac.adblockSwitch {
-            case .guardLive:
-                ToggleRow(title: "Ads and trackers",
-                          detail: "Switches straight away, for every app and browser. "
-                              + "Restricted content stays blocked either way.",
-                          isOn: Binding(get: { mac.adblock }, set: { mac.setAdblock($0) }))
-            case .server:
-                ToggleRow(title: "Ads and trackers", detail: "Switches within a minute, for every app and browser.",
-                          isOn: Binding(get: { mac.adblock }, set: { mac.setAdblock($0) }))
-            case .setUpOnly:
-                NoteRow(icon: "hand.raised",
-                        text: "Ads and trackers: \(mac.adblock ? "blocked" : "allowed"), as chosen at set-up. "
-                            + "The switch works here once Pax has finished updating.")
-            }
-            if mac.canSync && mac.sync != nil {
-                ToggleRow(title: "Sync blocked sites across devices",
-                          detail: ListSyncLinker.detail(mac.sync),
-                          isOn: Binding(get: { mac.sync?.enabled ?? true }, set: { mac.setSyncEnabled($0) }))
-            }
-            if mac.youtubeAvailable {
-                ToggleRow(title: "YouTube Restricted Mode",   // v0.8.13: a plain switch again
-                          detail: "Hides videos YouTube marks as mature. Switches straight away; "
-                              + "SafeSearch and everything else stay on.",
-                          isOn: Binding(get: { mac.youtubeRestricted }, set: { mac.setYouTubeRestricted($0) }))
-            }
-            NoteRow(icon: "info.circle", text: AlwaysBlockedMedia.notice)   // v0.8.13
-            NoteRow(icon: mac.paxMax ? "eye.slash" : "eye",
-                    text: (mac.paxMax ? "Pax Max is on: images are blurred until they look safe."
-                                      : "Pax Max is off.")
-                        + (mac.paxMaxView?.switchable == true ? " Change it in Settings › Pax Max."
-                                                              : " It's chosen when you set up Pax."))
-        }
-    }
-}
-
-/// "Request a change": turning Pax off on this Mac, with the turn-off wait countdown.
-struct MacRequestChangeCard: View {
+/// Home card 3 for this Mac (v0.8.18): one button to turn Pax off, the countdown's
+/// last step, and "In an emergency" tucked inside (emergency release, a support code,
+/// and "I'm locked out of this Mac"). The live switches moved to Settings › Blocking.
+struct MacTurnOffCard: View {
     @EnvironmentObject var mac: MacProtectModel
     @State private var confirmOff = false
     @State private var showEmergency = false
 
     var body: some View {
         Card {
-            Text("Request a change").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
+            HomeStepLabel(n: 3, title: HomeLayout.turnOffTitle)
             if let s = mac.status {
-                if s.in_grace_period {
-                    NoteRow(icon: "heart", text: TurnOffWait.firstHour + " That's until "
-                            + Date(timeIntervalSince1970: TimeInterval(s.grace_until))
-                                .formatted(date: .abbreviated, time: .shortened) + ".")
-                }
                 if let rr = s.removal_request {
-                    let cancellable = rr.status == "pending" || rr.status == "notifying"
-                    // v0.8.16: "Pax turns off in 2 days 14 h · Cancel".
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        TurnOffCountdownRow(seconds: mac.remaining(at: ctx.date),
-                                            cancel: cancellable ? { mac.cancelRemoval() } : nil)
-                    }
-                    if rr.can_reveal || mac.remaining(at: Date()) == 0 {
+                    if rr.can_reveal || mac.remaining(at: Date()) == 0 && rr.status == "pending" {
                         Button("Turn Pax off on this Mac") { mac.reveal() }
                             .buttonStyle(PrimaryButtonStyle(accent: true))
-                    }
-                    if rr.status == "notifying" {
-                        NoteRow(icon: "envelope", text: "Pax is telling your trusted person first. Your turn-off wait "
-                                + "starts once they're told.")
+                    } else {
+                        Text(rr.status == "notifying"
+                             ? "Pax is telling your trusted person first. Your turn-off wait starts once they're told."
+                             : "Pax turns off when the wait ends. Cancel any time from Status above.")
+                            .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
-                    Text("Want to turn Pax off on this Mac? Ask here, and it turns off after your turn-off wait. "
-                         + "You can cancel any time during the wait.")
+                    Text(HomeLayout.turnOffCaption(waitSeconds: s.wait_seconds, trialActive: mac.trialActive))
                         .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Start the turn-off wait") { confirmOff = true }
+                    Button(HomeLayout.turnOffButton(trialActive: mac.trialActive)) { confirmOff = true }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(mac.busy)
-                    if mac.isLocal {
-                        Button("I'm locked out of this Mac") { mac.requestRemoval(reason: "locked_out") }
-                            .buttonStyle(.link).font(Theme.body(12))
-                        Text("Releases the disk recovery key Pax keeps (and, on Intel Macs, the startup password) "
-                             + "after the same turn-off wait.")
-                            .font(Theme.body(11.5)).foregroundStyle(Theme.mutedText)
-                    }
                 }
                 if let r = mac.released, r.removal_password == nil {
                     Card {
@@ -332,6 +273,7 @@ struct MacRequestChangeCard: View {
                     Text("For a genuine emergency: a short cooling-off instead of your turn-off wait, once every 90 days. "
                          + "Your trusted person is told.")
                         .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
                     TextField("What's happening?", text: $mac.emergencyReason).textFieldStyle(.roundedBorder)
                     Button("Ask for an emergency release") { mac.emergency() }
                         .buttonStyle(SecondaryButtonStyle())
@@ -340,18 +282,29 @@ struct MacRequestChangeCard: View {
                     Divider().overlay(Theme.border).padding(.vertical, 4)
                     SupportCodeEntry(code: $mac.supportCode, busy: mac.busy,
                                      allowed: mac.status?.support_release?.allowed) { mac.redeemSupportCode() }
+                    if mac.isLocal, mac.status?.removal_request == nil {
+                        Divider().overlay(Theme.border).padding(.vertical, 4)
+                        Button("I'm locked out of this Mac") { mac.requestRemoval(reason: "locked_out") }
+                            .buttonStyle(.link).font(Theme.body(12))
+                        Text("Releases the disk recovery key Pax keeps (and, on Intel Macs, the startup password) "
+                             + "after the same turn-off wait.")
+                            .font(Theme.body(11.5)).foregroundStyle(Theme.mutedText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(.top, 6)
             }
             .font(Theme.body(13))
             .foregroundStyle(Theme.mutedText)
         }
-        .alert("Start your turn-off wait?", isPresented: $confirmOff) {
-            Button("Start the wait", role: .destructive) { mac.requestRemoval() }
+        .alert(mac.trialActive ? "Turn Pax off now?" : "Start your turn-off wait?", isPresented: $confirmOff) {
+            Button(mac.trialActive ? "Turn off" : "Start the wait", role: .destructive) { mac.requestRemoval() }
             Button("Keep Pax on", role: .cancel) {}
         } message: {
-            Text("Pax stays on until your turn-off wait ends. Your trusted person, if you added one, is told. "
-                 + "You can cancel any time during the wait.")
+            Text(mac.trialActive
+                 ? "It's your trial day, so there's no wait. Your trusted person, if you added one, is told first."
+                 : "Pax stays on until your turn-off wait ends. Your trusted person, if you added one, is told. "
+                     + "You can cancel any time during the wait.")
         }
     }
 }

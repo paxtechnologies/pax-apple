@@ -74,6 +74,11 @@ class DeviceIn(BaseModel):
     # v0.8.15 "Allow verified support release": the app sends its set-up choice (on by
     # default). Left out (an older app) it is off: that device never agreed to it.
     support_release: bool = False
+    # v0.8.18 trial day: a new set-up asks for one and sends a hashed hardware ID
+    # (hex SHA-256 the app makes from the phone's ECID or the Mac's hardware UUID).
+    # The server decides: only what is left of the account's / hardware's first day.
+    trial: bool = False
+    hardware_id: Optional[str] = Field(None, max_length=128)
 
 
 class SupportSettingIn(BaseModel):
@@ -237,6 +242,8 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     list_sync = ListSync(blocklist)
     if doh is None and settings.doh_enabled:
         doh = _make_doh(settings, blocklist)
+    if doh is not None and hasattr(doh, "lists_restricted"):
+        blocklist.lists_check = doh.lists_restricted      # v0.8.18: Pax's lists first
     caddy = None
     if settings.caddy_sync and settings.doh_enabled:
         from .caddy_sync import CaddySync
@@ -365,7 +372,8 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     def register_device(body: DeviceIn, acct=Depends(current_account)):
         return escrow.register_device(acct, body.name, body.platform,
                                       body.profile_identifier, body.removal_password,
-                                      support_release=body.support_release)
+                                      support_release=body.support_release,
+                                      trial=body.trial, hardware_id=body.hardware_id)
 
     @app.get("/v1/devices")
     def list_devices(acct=Depends(current_account)):
@@ -393,7 +401,9 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
             "released": d["released_at"] is not None,
             # v0.5: built-in categories pax-guard writes to /etc/hosts and pf.
             "categories": {"bypass": True,
-                           "remote_desktop": blocklist.remote_desktop_blocked(acct["id"])},
+                           "remote_desktop": blocklist.remote_desktop_blocked(acct["id"]),
+                           # v0.8.18: the extra family-filter layer (Advanced).
+                           "family_layer": blocklist.family_layer(acct["id"])},
         }
 
     @app.get("/v1/devices/{device_id}")
@@ -423,6 +433,12 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         """v0.8.15 "Allow verified support release": off at once; on after the wait,
         partner told first."""
         return escrow.set_support_release(acct, device_id, body.allowed)
+
+    @app.post("/v1/devices/{device_id}/trial/end")
+    def end_trial(device_id: str, acct=Depends(current_account)):
+        """v0.8.18 "Start my wait now": ends the device's trial day early (stricter,
+        instant, no email); a no-wait request made in it lapses."""
+        return escrow.end_trial(acct, device_id)
 
     @app.post("/v1/devices/{device_id}/support-release/redeem")
     def redeem_support(device_id: str, body: SupportCodeIn, acct=Depends(current_account)):

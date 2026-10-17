@@ -22,9 +22,17 @@ For each query (v0.8.1 order):
   4. the user's blocked sites, Pax categories -> blocked (0.0.0.0 / ::)
   5. Pax allowlist (tailscale.com, character.ai) -> upstream
   6. lists an exception may free (pax-bypass, other plug-ins) -> blocked
-  7. upstream: CleanBrowsing Family DoH, then AdGuard Family DoH on failure
-     or timeout. If every upstream fails: SERVFAIL. Never plain, unfiltered DNS.
-     Exceptions go the same way, so the upstream's own filtering always applies.
+  7. upstream. v0.8.18: Pax's own filter is the default path. Steps 0-6 decide,
+     then an allowed query goes to a fast resolver that filters only malware
+     (Quad9 over DNS-over-TLS, then Cloudflare's security resolver over DoH),
+     then the family-filter chain, else SERVFAIL. The family-filter chain
+     (CleanBrowsing Family DoH, then AdGuard Family DoH) is used for everything
+     when the user turns on the extra family layer (Advanced), or automatically
+     when Pax's own filter can't be trusted: lists missing, empty or failing
+     their checks, the decision code throwing or running slow, or a canary
+     self-test failing (see Forwarder.canary). Never plain, unfiltered DNS.
+     Without a primary chain (older callers, tests) the family chain is the
+     only upstream, as before.
 v0.8.6: with YouTube Restricted Mode switched off in Settings, step 1 skips the
 rewrite for YouTube's own names only (YOUTUBE_NAMES), and step 7 asks
 CleanBrowsing's Adult filter for them (it doesn't force Restricted Mode), then
@@ -89,6 +97,28 @@ YOUTUBE_NAMES = frozenset({
 })
 HEALTH_NAME = "example.com"
 HEALTH_INTERVAL = 60
+
+# v0.8.18: the primary chain, used once Pax's own lists and rules have decided.
+# These resolvers filter malware and phishing only, never content, so every content
+# decision is Pax's. Quad9's DoH answers HTTP/2 only (HTTP 505 to HTTP/1.1, checked
+# 2026-10-17) and the forwarder is standard-library Python, so Quad9 is reached over
+# DNS-over-TLS (RFC 7858, port 853) instead. Addresses from the providers' pages,
+# checked 2026-10-17.
+CLOUDFLARE_SECURITY = ("Cloudflare security", "https://security.cloudflare-dns.com/dns-query",
+                       ["1.1.1.2", "1.0.0.2", "2606:4700:4700::1112", "2606:4700:4700::1002"])
+QUAD9_DOT = ("Quad9", "tls://dns.quad9.net",
+             ["9.9.9.9", "149.112.112.112", "2620:fe::fe", "2620:fe::9"])
+# Quad9 first: in a 150-name test on 2026-10-17 its DoT answered in a median 17 ms
+# against 59 ms for Cloudflare's security DoH (p95 388 ms vs 553 ms).
+PRIMARY_UPSTREAMS = [QUAD9_DOT, CLOUDFLARE_SECURITY]
+# v0.8.18 canary self-test: run on start, after every list change and every
+# CANARY_INTERVAL seconds. A failure routes every query to the family chain at once;
+# the primary chain comes back only after the canary passes again.
+CANARY_INTERVAL = 180
+CANARY_MIN_ENTRIES = 100_000         # the restricted lists hold well over a million
+CANARY_TIMEOUT = 2.0                 # seconds for the whole self-test
+DECIDE_SLOW = 0.5                    # one decision slower than this: fall back, re-test
+CANARY_EVERYDAY = ("example.com", "wikipedia.org", "apple.com", "gov.uk", "bbc.co.uk")
 
 
 class DNSError(Exception):
@@ -448,6 +478,89 @@ class DohUpstream:
         return r.stdout
 
 
+class DotUpstream:
+    """v0.8.18: DNS-over-TLS (RFC 7858) to one resolver, at pinned addresses, with
+    kept-alive connections. Same interface as DohUpstream."""
+
+    def __init__(self, name: str, url: str, ips: list[str], timeout: float = 2.5,
+                 ssl_context: ssl.SSLContext | None = None, port: int = 853):
+        parts = urlsplit(url)
+        if parts.scheme != "tls" or not parts.hostname:
+            raise ValueError("DoT upstreams must be tls:// URLs")
+        self.name, self.url, self.host = name, url, parts.hostname
+        self.port = parts.port or port
+        self.ips = list(dict.fromkeys(ips))
+        self.timeout = timeout
+        self._ctx = ssl_context
+        self._pool: list[tuple[str, ssl.SSLSocket]] = []
+        self._lock = threading.Lock()
+        self.healthy = True
+        self.last_error = ""
+        self.last_ok = 0.0
+        self.trusted_time: tuple[float, float] | None = None   # no Date header over DoT
+
+    def _context(self) -> ssl.SSLContext:
+        if self._ctx is None:
+            self._ctx = _ssl_context()
+        return self._ctx
+
+    def _take(self, ip: str):
+        with self._lock:
+            for i, (pip, sock) in enumerate(self._pool):
+                if pip == ip:
+                    return self._pool.pop(i)[1]
+        fam = socket.AF_INET6 if ":" in ip else socket.AF_INET
+        raw = socket.create_connection((ip, self.port), self.timeout) if fam == socket.AF_INET \
+            else socket.create_connection((ip, self.port, 0, 0), self.timeout)
+        return self._context().wrap_socket(raw, server_hostname=self.host)
+
+    def _give(self, ip: str, sock) -> None:
+        with self._lock:
+            if len(self._pool) < 8:
+                self._pool.append((ip, sock))
+                return
+        sock.close()
+
+    def query(self, wire: bytes) -> bytes:
+        errors = []
+        for ip in self.ips:
+            for attempt in range(2):     # a kept-alive connection may have gone stale
+                sock = None
+                try:
+                    sock = self._take(ip)
+                    sock.settimeout(self.timeout)
+                    sock.sendall(struct.pack("!H", len(wire)) + wire)
+                    hdr = _recv_exact(sock, 2)
+                    if not hdr:
+                        raise ConnectionResetError("closed")
+                    (n,) = struct.unpack("!H", hdr)
+                    data = _recv_exact(sock, n)
+                    if not data or len(data) < 12 or data[:2] != wire[:2]:
+                        raise DNSError("bad answer")
+                    self._give(ip, sock)
+                    self.last_ok = time.time()
+                    return data
+                except (OSError, DNSError, struct.error) as exc:
+                    if sock is not None:
+                        try:
+                            sock.close()
+                        except OSError:
+                            pass
+                    errors.append(f"{ip}: {type(exc).__name__}")
+                    if attempt == 0 and isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+                        continue
+                    break
+        self.last_error = "; ".join(errors)[-300:]
+        raise DNSError(f"{self.name}: {self.last_error}")
+
+
+def make_upstream(name: str, url: str, ips: list[str], timeout: float = 2.5):
+    """DohUpstream for https://, DotUpstream for tls://."""
+    if url.startswith("tls://"):
+        return DotUpstream(name, url, ips, timeout=timeout)
+    return DohUpstream(name, url, ips, timeout=timeout)
+
+
 def monotonic_continuous() -> float:
     """A clock that keeps counting while the Mac sleeps and can't be set.
     macOS CLOCK_MONOTONIC continues during sleep (Python's time.monotonic()
@@ -471,8 +584,12 @@ class Policy:
     restricted-content name rule and top-level domains)."""
 
     def __init__(self, blocked=(), exceptions=(), categories=(), restricted=(),
-                 restricted_rules=(), never_except=None, youtube_restricted: bool = True):
+                 restricted_rules=(), never_except=None, youtube_restricted: bool = True,
+                 family_layer: bool = False):
         from domain_matcher import SmallSuffixSet
+        # v0.8.18: True = the user turned on the extra family-filter layer
+        # (Advanced): allowed queries go to the family chain, not the primary one.
+        self.family_layer = bool(family_layer)
         # v0.8.6: False = the user turned YouTube Restricted Mode off (Settings).
         self.youtube_restricted = bool(youtube_restricted)
         self.blocked = SmallSuffixSet(blocked)
@@ -485,8 +602,22 @@ class Policy:
 
 class Forwarder:
     def __init__(self, upstreams: list, filters=None, policy: Policy | None = None,
-                 log=print, cache_size: int = 10_000, clock=time.time, youtube_upstreams: list | None = None):
+                 log=print, cache_size: int = 10_000, clock=time.time, youtube_upstreams: list | None = None,
+                 primary_upstreams: list | None = None, canary_min_entries: int = CANARY_MIN_ENTRIES,
+                 on_fallback=None):
+        # `upstreams` is the family-filter chain. v0.8.18: `primary_upstreams` (the
+        # malware-only resolvers) take allowed queries while Pax's own filter is
+        # healthy; without them the family chain is the only one (as before 0.8.18).
         self.upstreams = upstreams
+        self.primary_upstreams = list(primary_upstreams) if primary_upstreams else []
+        self.canary_min_entries = canary_min_entries
+        # on_fallback(entering: bool, reason: str): pax-guard writes it to the tamper log.
+        self.on_fallback = on_fallback
+        self.fallback_reason: str | None = None
+        self.fallback_since: float | None = None
+        self.last_canary: dict = {}
+        self._canary_lock = threading.Lock()
+        self._last_canary_at = 0.0
         # v0.8.6: the chain for YouTube's names while Restricted Mode is off. Without
         # one, they keep the normal chain (Restricted Mode stays on: safe).
         self.youtube_upstreams = list(youtube_upstreams) if youtube_upstreams else []
@@ -508,6 +639,96 @@ class Forwarder:
         self.filters = filters
         self.ready = filters is not None
         self.flush()
+        if self.primary_upstreams:
+            self.canary()                 # after every list change
+
+    # ------------------------------------------------ v0.8.18 fallback + canary
+    @property
+    def pax_filter_ok(self) -> bool:
+        """True when allowed queries may use the primary (malware-only) chain."""
+        return bool(self.primary_upstreams) and self.ready and self.fallback_reason is None
+
+    def enter_fallback(self, reason: str) -> None:
+        """Route every query to the family chain at once (never open)."""
+        first = self.fallback_reason is None
+        self.fallback_reason = reason[:200]
+        if first:
+            self.fallback_since = time.time()
+            self.flush()
+            self.log(f"PAX-DNS-017 Pax's own filter failed a check ({reason}); every lookup now goes "
+                     "to the family filter until the self-test passes again")
+            if self.on_fallback:
+                try:
+                    self.on_fallback(True, self.fallback_reason)
+                except Exception:  # noqa: BLE001 - logging never stops DNS
+                    pass
+
+    def leave_fallback(self) -> None:
+        if self.fallback_reason is None:
+            return
+        was = self.fallback_reason
+        self.fallback_reason, self.fallback_since = None, None
+        self.flush()
+        self.log(f"Pax's own filter passed its self-test again (was: {was}); back to the primary chain")
+        if self.on_fallback:
+            try:
+                self.on_fallback(False, was)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def canary(self) -> dict:
+        """Self-test of Pax's own filter: the lists are loaded and big enough, known
+        restricted names (encoded in common/pax_restricted.py) are blocked by the lists
+        and by the decision code, a made-up name only the name rule knows is blocked,
+        and everyday names are allowed, all within CANARY_TIMEOUT. A failure enters the
+        fallback at once; a pass leaves it. Returns the result (also in status())."""
+        import pax_restricted as pr
+        with self._canary_lock:
+            t0 = time.monotonic()
+            failures: list[str] = []
+            f = self.filters
+            clean = Policy()
+            try:
+                if f is None:
+                    failures.append("lists not loaded")
+                else:
+                    if (f.info or {}).get("state") == "empty" or f.entries < self.canary_min_entries:
+                        failures.append(f"lists too small ({f.entries} entries)")
+                    for name in pr.samples():
+                        if not any(m.match(name) for m in f.restricted):
+                            failures.append("a known restricted name is missing from the lists")
+                            break
+                    for name in pr.samples():
+                        if self.decide(name, clean)[0] != "block":
+                            failures.append("a known restricted name was not blocked")
+                            break
+                    word = sorted(pr.data()["lookup_rule"]["words"])[0]
+                    made_up = f"{word}-paxcanary{random.randint(10_000, 99_999)}.com"
+                    if self.decide(made_up, clean)[0] != "block":
+                        failures.append("the name rule did not block a test name")
+                    for name in CANARY_EVERYDAY:
+                        if self.decide(name, clean)[0] == "block":
+                            failures.append(f"an everyday name was blocked ({name})")
+                            break
+            except Exception as exc:  # noqa: BLE001 - a throwing engine is a failure
+                failures.append(f"decision code error ({type(exc).__name__})")
+            took = time.monotonic() - t0
+            if took > CANARY_TIMEOUT:
+                failures.append(f"self-test too slow ({took:.2f}s)")
+            self._last_canary_at = time.monotonic()
+            self.last_canary = {"ok": not failures, "at": int(time.time()), "seconds": round(took, 3),
+                                "failures": failures}
+        if self.primary_upstreams:
+            if failures:
+                self.enter_fallback("canary: " + "; ".join(failures))
+            else:
+                self.leave_fallback()
+        return self.last_canary
+
+    def canary_due(self) -> bool:
+        """Every CANARY_INTERVAL; every health check (a minute) while in the fallback."""
+        every = HEALTH_INTERVAL - 1 if self.fallback_reason else CANARY_INTERVAL
+        return time.monotonic() - self._last_canary_at >= every
 
     def set_policy(self, policy: Policy) -> None:
         self.policy = policy
@@ -562,10 +783,13 @@ class Forwarder:
 
     def youtube_unrestricted(self, name: str, policy: Policy | None = None) -> bool:
         """v0.8.6: a YouTube name while the user has Restricted Mode off. Only
-        YouTube's rewrite is skipped: Google/Bing SafeSearch and every block stay."""
+        YouTube's rewrite is skipped: Google/Bing SafeSearch and every block stay.
+        v0.8.18: with Pax's filter healthy the rewrite is local, so skipping it is
+        enough (the primary chain leaves YouTube alone); otherwise it needs the
+        YouTube chain, as before."""
         p = policy if policy is not None else self.policy
         return (not p.youtube_restricted and name in YOUTUBE_NAMES
-                and bool(self.youtube_upstreams))
+                and bool(self.youtube_upstreams or (self.primary_upstreams and not self.family_route(p))))
 
     # ---------------------------------------------------------------- cache
     def _cache_get(self, key):
@@ -593,13 +817,34 @@ class Forwarder:
                 self._cache.popitem(last=False)
 
     # -------------------------------------------------------------- upstream
-    def ordered_upstreams(self) -> list:
-        healthy = [u for u in self.upstreams if u.healthy]
-        return healthy + [u for u in self.upstreams if not u.healthy]
+    @staticmethod
+    def _ordered(ups: list) -> list:
+        return [u for u in ups if u.healthy] + [u for u in ups if not u.healthy]
 
-    def forward(self, wire: bytes, chain: list | None = None) -> bytes | None:
+    def ordered_upstreams(self) -> list:
+        """The default chain: primary (when Pax's filter is healthy), then family."""
+        if self.pax_filter_ok:
+            return self._ordered(self.primary_upstreams) + self._ordered(self.upstreams)
+        return self._ordered(self.upstreams)
+
+    def family_route(self, policy: Policy | None = None) -> bool:
+        """v0.8.18: does this query go to the family chain only?"""
+        p = policy if policy is not None else self.policy
+        return not self.pax_filter_ok or bool(getattr(p, "family_layer", False))
+
+    def chain_for(self, policy: Policy | None, youtube: bool) -> list:
+        if self.family_route(policy):
+            return list(self.youtube_upstreams) if youtube else self._ordered(self.upstreams)
+        if youtube:
+            # Pax's filter decided; the primary chain doesn't touch YouTube, and the
+            # YouTube chain's last resort puts Restricted Mode back on (safe).
+            return self._ordered(self.primary_upstreams) + list(self.youtube_upstreams)
+        return self._ordered(self.primary_upstreams) + self._ordered(self.upstreams)
+
+    def forward(self, wire: bytes, chain: list | None = None, note: bool = True) -> bytes | None:
         """The first good upstream answer, or None when every upstream failed.
-        `chain` (v0.8.6, YouTube names) is tried in its own order instead."""
+        `chain` (v0.8.6 YouTube names, v0.8.18 per-query route) is tried in its
+        own order instead of the default one."""
         for u in (chain if chain else self.ordered_upstreams()):
             try:
                 resp = u.query(wire)
@@ -607,7 +852,7 @@ class Forwarder:
                     raise DNSError("short answer")
                 if not u.healthy:
                     u.healthy = True
-                if not chain:
+                if note:
                     self._note_active(u)
                 self.stats["upstream"][u.name] = self.stats["upstream"].get(u.name, 0) + 1
                 return resp
@@ -639,17 +884,31 @@ class Forwarder:
                 return bytes(hdr)
             return None
         self.stats["queries"] += 1
-        if not self.ready:
+        if not self.ready and not self.primary_upstreams:
             self.stats["servfail"] += 1
             return make_servfail(q)          # lists still loading: closed, not open
         if q.qclass != 1:
             return make_error(q, RCODE_REFUSED)
         name = q.name
-        action, detail = self.decide(name, policy)
+        # v0.8.18: lists still loading (with a primary chain configured) = family
+        # chain only; a throwing or slow decision = fallback for every lookup.
+        t0 = time.monotonic()
+        try:
+            action, detail = self.decide(name, policy)
+        except Exception as exc:  # noqa: BLE001 - never open: the family chain decides
+            self.enter_fallback(f"decision code error ({type(exc).__name__})")
+            if not self.primary_upstreams:
+                self.stats["servfail"] += 1
+                return make_servfail(q)
+            action, detail = "forward", "fallback"
+        took = time.monotonic() - t0
+        if took > DECIDE_SLOW and self.primary_upstreams:
+            self.enter_fallback(f"decision took {took:.2f}s")
         if action == "block":
             self.stats["blocked"] += 1
             return make_blocked(q)
-        key = (name, q.qtype, q.do_bit, action == "rewrite")
+        family = self.family_route(policy)
+        key = (name, q.qtype, q.do_bit, action == "rewrite", family)
         cached = self._cache_get(key)
         if cached is not None:
             return with_id(cached, q.id)
@@ -659,7 +918,8 @@ class Forwarder:
                 return _header(q, RCODE_NOERROR, 0) + q.question     # use A/AAAA instead
             upstream = None
             if q.qtype in (QTYPE_A, QTYPE_AAAA):
-                upstream = self.forward(build_query(detail, q.qtype, random.getrandbits(16)))
+                upstream = self.forward(build_query(detail, q.qtype, random.getrandbits(16)),
+                                        self.chain_for(policy, False))
                 if upstream is None:
                     self.stats["servfail"] += 1
                     return make_servfail(q)
@@ -672,7 +932,7 @@ class Forwarder:
             cached = self._cache_get(key)
             if cached is not None:
                 return with_id(cached, q.id)
-        resp = self.forward(raw, self.youtube_upstreams if youtube else None)
+        resp = self.forward(raw, self.chain_for(policy, youtube), note=not youtube)
         if resp is None:
             self.stats["servfail"] += 1
             return make_servfail(q)
@@ -688,7 +948,9 @@ class Forwarder:
     # ---------------------------------------------------------------- health
     def health_check(self) -> dict:
         probe = build_query(HEALTH_NAME, QTYPE_A, random.getrandbits(16))
-        for u in self.upstreams:
+        if self.primary_upstreams and self.canary_due():
+            self.canary()
+        for u in self.primary_upstreams + list(self.upstreams):
             try:
                 resp = u.query(probe)
                 rcode, _ = parse_answers(resp)
@@ -699,7 +961,7 @@ class Forwarder:
             if ok != u.healthy:
                 self.log(f"DNS upstream {u.name} is {'back' if ok else 'down'}")
             u.healthy = ok
-        first = next((u for u in self.upstreams if u.healthy), None)
+        first = next((u for u in self.ordered_upstreams() if u.healthy), None)
         if first:
             self._note_active(first)
         elif self.active is not None:
@@ -725,13 +987,16 @@ class Forwarder:
                         found.append(socket.inet_ntop(socket.AF_INET, rdata))
                     elif rtype == QTYPE_AAAA and len(rdata) == 16:
                         found.append(socket.inet_ntop(socket.AF_INET6, rdata))
+            # A filtering upstream may answer a resolver's own name with a block
+            # address; never pin one of those (v0.8.18).
+            found = [ip for ip in found if ip not in ("0.0.0.0", "::") and not ip.startswith("146.112.61.")]
             u.ips = list(dict.fromkeys(u.ips + found))[:8]
 
     def trusted_now(self, max_age: float = 24 * 3600) -> float | None:
         """Time from the upstreams' TLS-protected Date headers, if recent."""
         best = None
         mono = monotonic_continuous()
-        for u in self.upstreams:
+        for u in self.primary_upstreams + list(self.upstreams):
             if u.trusted_time:
                 when, at = u.trusted_time
                 if 0 <= mono - at <= max_age:
@@ -740,18 +1005,35 @@ class Forwarder:
         return best
 
     def status(self) -> dict:
+        allu = self.primary_upstreams + list(self.upstreams)
+        if not self.primary_upstreams:
+            mode = "family"
+        elif self.fallback_reason or not self.ready:
+            mode = "fallback"
+        elif getattr(self.policy, "family_layer", False):
+            mode = "family-layer"
+        else:
+            mode = "pax"
         return {
             "active": self.active,
             "ready": self.ready,
-            "all_down": not any(u.healthy for u in self.upstreams),
+            # v0.8.18: "pax" (Pax's filter + primary chain), "family-layer" (the user's
+            # Advanced choice), "fallback" (Pax's filter failed a check), "family" (no
+            # primary chain configured).
+            "filter_mode": mode,
+            "fallback_reason": self.fallback_reason,
+            "fallback_since": self.fallback_since,
+            "canary": dict(self.last_canary),
+            "all_down": not any(u.healthy for u in allu),
             "upstreams": [{"name": u.name, "url": u.url, "healthy": u.healthy,
-                           "last_error": u.last_error[-120:]} for u in self.upstreams],
+                           "role": "primary" if u in self.primary_upstreams else "family",
+                           "last_error": u.last_error[-120:]} for u in allu],
             "stats": dict(self.stats, upstream=dict(self.stats["upstream"])),
             "lists": (self.filters.info if self.filters is not None else {}),
         }
 
     def all_upstreams(self) -> list:
-        out = list(self.upstreams)
+        out = list(self.primary_upstreams) + list(self.upstreams)
         for u in self.youtube_upstreams:
             if all(u is not x for x in out):
                 out.append(u)
@@ -760,9 +1042,22 @@ class Forwarder:
     def pinned_ips(self) -> list[str]:
         return sorted({ip for u in self.all_upstreams() for ip in u.ips})
 
+    def primary_ips(self) -> list[str]:
+        """v0.8.18: the malware-only resolvers' addresses (pf: root only, always)."""
+        return sorted({ip for u in self.primary_upstreams for ip in u.ips})
+
+    def family_ips(self) -> list[str]:
+        prim = set(self.primary_ips())
+        return [ip for ip in self.pinned_ips() if ip not in prim]
+
 
 def default_upstreams(timeout: float = 2.5) -> list[DohUpstream]:
     return [DohUpstream(n, url, ips, timeout=timeout) for n, url, ips in DEFAULT_UPSTREAMS]
+
+
+def primary_upstreams(timeout: float = 2.5) -> list:
+    """v0.8.18: Quad9 (DoT), then Cloudflare's security resolver (DoH)."""
+    return [make_upstream(n, url, ips, timeout=timeout) for n, url, ips in PRIMARY_UPSTREAMS]
 
 
 def youtube_upstreams(upstreams: list, timeout: float = 2.5) -> list:

@@ -375,7 +375,8 @@ def pf_rules(*, allow_ips: list[str] | None = None, doh_ips: list[str] | None = 
              system_dns: list[str] | None = None,
              vpn_ports: dict[str, list[int]] | None = None,
              remote_desktop: bool = False,
-             local_dns: bool = False, root_only_upstream: bool = True) -> str:
+             local_dns: bool = False, root_only_upstream: bool = True,
+             primary_ips: list[str] | None = None) -> str:
     """Rules for the pax-guard pf anchor. Outbound only: nothing here blocks the
     Mac's normal traffic, DHCP, or port 53 to the router (the DNS profile
     already sends lookups over HTTPS).
@@ -398,11 +399,17 @@ def pf_rules(*, allow_ips: list[str] | None = None, doh_ips: list[str] | None = 
     (53) to anywhere off the Mac is blocked for everyone (the forwarder speaks DoH
     to pinned addresses, so it needs none). macOS pf matches `user` on sockets;
     if a pf build refuses it, pax-guard reloads with root_only_upstream=False,
-    which still allows only the filtered upstreams."""
+    which still allows only the filtered upstreams.
+
+    v0.8.18 primary_ips: the malware-only resolvers the forwarder uses once Pax's
+    own filter has decided (DoT 853 and DoH 443). They are never filtered for
+    content, so only root (the forwarder) may reach them, and when pf can't match
+    by user they are blocked for everyone: the forwarder then falls through to the
+    family-filter upstreams on its own."""
     if local_dns:
         return _pf_rules_local(allow_ips=allow_ips, doh_ips=doh_ips, dns_only_ips=dns_only_ips,
                                vpn_ports=vpn_ports, remote_desktop=remote_desktop,
-                               root_only_upstream=root_only_upstream)
+                               root_only_upstream=root_only_upstream, primary_ips=primary_ips)
     allow = sorted(set(allow_ips if allow_ips is not None else CLEANBROWSING_FAMILY_IPS))
     doh = [ip for ip in sorted(set(doh_ips if doh_ips is not None else PUBLIC_DOH_IPS))
            if ip not in allow]
@@ -468,19 +475,33 @@ def _port_rules(ports: dict[str, list[int]], remote_desktop: bool) -> list[str]:
 
 
 def _pf_rules_local(*, allow_ips, doh_ips, dns_only_ips, vpn_ports, remote_desktop,
-                    root_only_upstream) -> str:
+                    root_only_upstream, primary_ips=None) -> str:
+    primary = sorted(set(primary_ips or []))
     upstream = sorted(set(allow_ips if allow_ips is not None
-                          else CLEANBROWSING_FAMILY_IPS + ADGUARD_FAMILY_IPS))
-    doh = [ip for ip in sorted(set(doh_ips if doh_ips is not None else PUBLIC_DOH_IPS)) if ip not in upstream]
-    dns_only = [ip for ip in sorted(set(dns_only_ips or [])) if ip not in upstream and ip not in doh]
+                          else CLEANBROWSING_FAMILY_IPS + ADGUARD_FAMILY_IPS) - set(primary))
+    doh = [ip for ip in sorted(set(doh_ips if doh_ips is not None else PUBLIC_DOH_IPS))
+           if ip not in upstream and ip not in primary]
+    dns_only = [ip for ip in sorted(set(dns_only_ips or [])) if ip not in upstream and ip not in doh
+                and ip not in primary]
     lines = [f"# pax-guard anchor ({PF_ANCHOR}), local DNS mode. Generated: do not edit.",
              f"table <pax_upstream> const {{ {' '.join(upstream)} }}"]
+    if primary:
+        lines.append(f"table <pax_primary> const {{ {' '.join(primary)} }}")
     if doh:
         lines.append(f"table <pax_doh> const {{ {' '.join(doh)} }}")
     if dns_only:
         lines.append(f"table <pax_dns> const {{ {' '.join(dns_only)} }}")
     lines += ["# The Mac talking to itself (apps -> 127.0.0.1:53, the Pax forwarder).",
               "pass quick on lo0 all"]
+    if primary:
+        if root_only_upstream:
+            lines += ["# v0.8.18: the malware-only resolvers (DoT/DoH) are for pax-guard's forwarder (root) only.",
+                      f"pass out quick proto tcp from any to <pax_primary> port {{ 443 {DOT_PORT} }} user root",
+                      "block drop out quick proto { tcp udp } from any to <pax_primary>"]
+        else:
+            lines += ["# v0.8.18: pf can't match by user here, so nobody reaches the malware-only",
+                      "# resolvers; the forwarder uses the family-filter upstreams instead.",
+                      "block drop out quick proto { tcp udp } from any to <pax_primary>"]
     if root_only_upstream:
         lines += ["# Only pax-guard's forwarder (root) may reach the filtered DoH upstreams.",
                   "pass out quick proto tcp from any to <pax_upstream> port 443 user root",

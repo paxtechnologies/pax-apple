@@ -33,6 +33,11 @@ class Settings:
     # First N seconds after a device is registered: removal needs no wait.
     # A grace-period request lapses when this hour ends (v0.8.5), even if unconfirmed.
     grace_seconds: int = 3600  # first hour only
+    # v0.8.18 trial day: a genuinely new set-up (the app asks for it and sends a
+    # hashed hardware ID) can be turned off with no wait for this long, counted from
+    # the account's / the hardware's FIRST trial start, so it never restarts.
+    # 0 turns trial days off.
+    trial_seconds: int = 24 * HOUR
 
     # Once a removal request's timer expires, the user has this long to confirm
     # and reveal; after that the request lapses and must be made again. Stops a
@@ -141,6 +146,7 @@ class Settings:
             min_wait_seconds=_env_int("PAX_MIN_WAIT_SECONDS", d.min_wait_seconds),
             max_wait_seconds=_env_int("PAX_MAX_WAIT_SECONDS", d.max_wait_seconds),
             grace_seconds=_env_int("PAX_GRACE_SECONDS", d.grace_seconds),
+            trial_seconds=_env_int("PAX_TRIAL_SECONDS", d.trial_seconds),
             reveal_window_seconds=_env_int("PAX_REVEAL_WINDOW_SECONDS", d.reveal_window_seconds),
             emergency_cooloff_seconds=_env_int(
                 "PAX_EMERGENCY_COOLOFF_SECONDS", d.emergency_cooloff_seconds

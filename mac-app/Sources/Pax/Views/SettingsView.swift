@@ -13,19 +13,25 @@ struct AppSettingsView: View {
 
     var body: some View {
         PageColumn(maxWidth: 680) {
-            StepHeader(eyebrow: "", title: "Settings", subtitle: "For Pax on all your devices. A device's own "
-                       + "details are on its page in the sidebar.")
+            StepHeader(eyebrow: "", title: "Settings", subtitle: "Everything you can change, in plain words. "
+                       + "An iPhone's or iPad's own details are on its page.")
             if let failure = mac.failure {
                 ErrorCard(error: failure, retry: { mac.refresh() }, details: { mac.supportDetails(failure) })
             }
-            Card { TurnOffWaitSettings() }                     // v0.8.16
+            // v0.8.18: this Mac's switches and details moved here from Home, grouped simply.
+            if mac.deviceID != nil { Card { BlockingSettings() } }
             Card { PaxMaxSettings() }                          // v0.8.12
+            Card { TurningOffSettings() }                      // v0.8.16 turn-off wait; v0.8.18 trial, support release
             Card { PartnerEmailSettings() }
             Card { UpdateSettings() }
             Card { GeneralSettings() }                         // About
             Card {
                 DisclosureGroup(isExpanded: $showAdvanced) {
                     VStack(alignment: .leading, spacing: 18) {
+                        if mac.deviceID != nil {
+                            MacDetailsSettings()               // v0.8.18: Support ID, filter, security notices
+                            Divider().overlay(Theme.border)
+                        }
                         MacKeySettings()
                         Divider().overlay(Theme.border)
                         ServerSettingsView(current: model.coordinator.escrow.baseURL)
@@ -70,24 +76,169 @@ private struct GeneralSettings: View {
 }
 
 
-/// v0.8.16: what the turn-off wait is, in plain words, and this Mac's own.
-private struct TurnOffWaitSettings: View {
+/// v0.8.18 Settings › Blocking: this Mac's live switches (they were on Home's "This Mac"
+/// card), each with one plain line.
+private struct BlockingSettings: View {
     @EnvironmentObject var mac: MacProtectModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(TurnOffWait.label).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
-            if let w = mac.status?.wait_seconds {
-                Text(TurnOffWait.row(seconds: w) + " on this Mac").font(Theme.body(14, weight: .medium))
-                    .foregroundStyle(Theme.primaryText)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(AppSettingsLayout.blocking).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            switch mac.adblockSwitch {
+            case .guardLive:
+                ToggleRow(title: "Ads and trackers", detail: AppSettingsLayout.Line.adsLive,
+                          isOn: Binding(get: { mac.adblock }, set: { mac.setAdblock($0) }))
+            case .server:
+                ToggleRow(title: "Ads and trackers", detail: AppSettingsLayout.Line.adsServer,
+                          isOn: Binding(get: { mac.adblock }, set: { mac.setAdblock($0) }))
+            case .setUpOnly:
+                NoteRow(icon: "hand.raised",
+                        text: "Ads and trackers: \(mac.adblock ? "blocked" : "allowed"), as chosen at set-up. "
+                            + "The switch works here once Pax has finished updating.")
             }
-            Text("How long turning Pax off takes after you ask. You can cancel any time during the wait. "
-                 + "The same wait applies before a blocked site or app is unblocked. Each device shows its own on its page.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
-                .fixedSize(horizontal: false, vertical: true)
-            NoteRow(icon: "heart", text: TurnOffWait.firstHour)
+            if mac.canSync && mac.sync != nil {
+                Divider().overlay(Theme.border)
+                ToggleRow(title: "Sync blocked sites across devices",
+                          detail: AppSettingsLayout.Line.sync + " " + ListSyncLinker.detail(mac.sync),
+                          isOn: Binding(get: { mac.sync?.enabled ?? true }, set: { mac.setSyncEnabled($0) }))
+            }
+            if mac.youtubeAvailable {
+                Divider().overlay(Theme.border)
+                ToggleRow(title: "YouTube Restricted Mode", detail: AppSettingsLayout.Line.youtube,
+                          isOn: Binding(get: { mac.youtubeRestricted }, set: { mac.setYouTubeRestricted($0) }))
+            }
+            Divider().overlay(Theme.border)
+            NoteRow(icon: "info.circle", text: AlwaysBlockedMedia.notice)   // v0.8.13: no switch
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// v0.8.18 Settings › Turning Pax off: the turn-off wait, the trial day, and "Allow verified
+/// support release" (was Home's Details card).
+private struct TurningOffSettings: View {
+    @EnvironmentObject var mac: MacProtectModel
+    @State private var confirmEndTrial = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(AppSettingsLayout.turningOff).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            if let w = mac.status?.wait_seconds {
+                TurnOffWaitRow(seconds: w)
+            }
+            Text(AppSettingsLayout.Line.turnOffWait + " Each iPhone or iPad shows its own on its page.")
+                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            if let line = TrialDay.settingsLine(mac.status?.trial) {
+                NoteRow(icon: "sun.max", text: line)
+                if mac.trialActive {
+                    Button(TrialDay.startWaitButton) { confirmEndTrial = true }
+                        .buttonStyle(SecondaryButtonStyle())
+                        .disabled(mac.busy)
+                }
+            }
+            if let s = mac.status, s.support_id != nil || s.support_release != nil {
+                Divider().overlay(Theme.border)
+                if let sr = s.support_release {
+                    SupportReleaseRow(state: sr, busy: mac.busy, trialActive: mac.trialActive) { mac.setSupportRelease($0) }
+                }
+                Text(AppSettingsLayout.Line.supportReleaseRule)
+                    .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .alert(TrialDay.confirmTitle, isPresented: $confirmEndTrial) {
+            Button(TrialDay.startWaitButton, role: .destructive) { mac.endTrial() }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text(TrialDay.confirmMessage)
+        }
+    }
+}
+
+/// v0.8.18 Settings › Advanced: this Mac's Support ID, which filter is answering, and the
+/// security notices (were on Home).
+private struct MacDetailsSettings: View {
+    @EnvironmentObject var mac: MacProtectModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("This Mac's details").font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            if let id = mac.status?.support_id {
+                SupportIDRow(supportID: id)
+                Text(AppSettingsLayout.Line.supportID).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+            }
+            NoteRow(icon: "shield", text: FilterStatusText.line(mac.guardStatus?.dns))
+            // v0.8.18: which filter answers, and the backup's reason when it's on.
+            if let dns = mac.guardStatus?.dns, dns.filter_mode != nil {
+                DetailRow(label: "Filter", value: FilterModeText.label(dns.filter_mode))
+                if let line = FilterModeText.fallbackLine(dns) {
+                    Text(line).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            FamilyLayerSettings()
+            if let t = mac.guardStatus?.tamper, !t.recent.isEmpty {
+                Text("Security notices").font(Theme.body(13, weight: .semibold)).foregroundStyle(Theme.primaryText)
+                Text(AppSettingsLayout.Line.securityNotices).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                ForEach(Array(t.recent.suffix(5).reversed().enumerated()), id: \.offset) { _, e in
+                    NoteRow(icon: "exclamationmark.shield", text: HomeLayout.tamperNotice(kind: e.kind, at: e.ts))
+                }
+            }
+        }
+    }
+}
+
+/// v0.8.18 Settings › Advanced: "Extra family filter layer" (off by default). On is
+/// instant; off waits like a removal (partner first, then the turn-off wait), cancellable.
+private struct FamilyLayerSettings: View {
+    @EnvironmentObject var mac: MacProtectModel
+    @State private var confirmOff = false
+
+    var body: some View {
+        if let on = mac.familyLayer {
+            VStack(alignment: .leading, spacing: 8) {
+                if mac.familyLayerLocal == false {
+                    NoteRow(icon: "shield.lefthalf.filled",
+                            text: "\(AppSettingsLayout.familyLayerTitle): \(on ? "on" : "off"). "
+                                + "It's kept in your Pax account for this Mac.")
+                } else {
+                    ToggleRow(title: AppSettingsLayout.familyLayerTitle,
+                              detail: AppSettingsLayout.Line.familyLayer,
+                              isOn: Binding(get: { on && mac.familyLayerPending == nil },
+                                            set: { want in
+                                                if want { mac.setFamilyLayer(true) }
+                                                else if mac.familyLayerPending == nil { confirmOff = true }
+                                            }))
+                    .disabled(mac.busy)
+                    Text(AppSettingsLayout.Line.familyLayerRule)
+                        .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let p = mac.familyLayerPending {
+                        TimelineView(.periodic(from: .now, by: 60)) { ctx in
+                            let left = max(0, p.effective_at - Int(ctx.date.timeIntervalSince1970))
+                            Text(p.status == "notifying"
+                                 ? "Pax is telling your trusted person first. The wait starts once they're told."
+                                 : "Turns off in \(TurnOffWait.countdown(seconds: left)).")
+                                .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                        }
+                        Button("I've changed my mind") { mac.cancelFamilyLayerOff() }
+                            .buttonStyle(SecondaryButtonStyle())
+                            .disabled(mac.busy)
+                    }
+                }
+                if let n = mac.familyLayerNotice {
+                    NoteRow(icon: "checkmark.circle", text: n)
+                }
+            }
+            .alert("Turn off the extra family filter layer?", isPresented: $confirmOff) {
+                Button("Start my wait") { mac.setFamilyLayer(false) }
+                Button("Keep it on", role: .cancel) {}
+            } message: {
+                Text(AppSettingsLayout.Line.familyLayerRule)
+            }
+        }
     }
 }
 
@@ -313,5 +464,20 @@ private struct PartnerEmailSettings: View {
         }
         password = ""
         relayToken = ""
+    }
+}
+
+/// v0.8.18: one "label … value" line in Advanced (like the turn-off wait row).
+private struct DetailRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(label).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+            Spacer(minLength: 8)
+            Text(value).font(Theme.body(13, weight: .medium)).foregroundStyle(Theme.primaryText)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

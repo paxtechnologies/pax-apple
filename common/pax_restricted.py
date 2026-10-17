@@ -24,6 +24,10 @@ them:
   ios_fallback_sites              the iPhone web-filter fallback (make_profile.py)
   samples                         a few restricted sites for tests and hardware checks
   sources                         upstream list addresses whose names would read badly
+  lookup_rule                     (v0.8.18) the name rule applied to every lookup:
+                                  words, allow_words, exclude (LookupRule)
+  bypass_rule                     (v0.8.18) web proxies by name: contains, labels,
+                                  exclude (BypassNameRule; not restricted)
 
 "Restricted" here means: blocked for everyone, and never released by an
 exception. Media converters (pax-dns/lists/media-converters.txt) are treated the
@@ -58,21 +62,29 @@ BLOCK_PAGE_IPS = frozenset({"0.0.0.0", "::", "146.112.61.104", "146.112.61.105",
                             "146.112.61.107", "146.112.61.108", "146.112.61.110"})
 
 _DATA = """
-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
+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
+168HqsdkZfSzV5kiW9NwA33/+Q+nL6Ep5AwAAA==
 """
 
 
@@ -176,6 +188,91 @@ def name_rule() -> EdgeRule:
     return EdgeRule(keywords(), keyword_allow_words(), labels="first")
 
 
+# Second-level labels under which the site's own name sits one label further
+# left (example.co.uk, example.com.br). A small table instead of the full
+# public suffix list: it only decides which label the name rules read.
+_SECOND_LEVEL = frozenset({"co", "com", "net", "org", "gov", "ac", "edu", "ne", "or", "go", "gob",
+                           "nic", "ltd", "plc", "sch", "mil", "info", "biz", "nom", "gen", "firm",
+                           "web", "ind", "in"})
+
+
+def registrable_label(name: str) -> Optional[str]:
+    """The label a site is registered under: www.example.co.uk -> "example".
+    None for a single-label name."""
+    labels = name.strip(".").lower().split(".")
+    if len(labels) < 2 or not all(labels):
+        return None
+    if len(labels) >= 3 and labels[-2] in _SECOND_LEVEL and len(labels[-1]) == 2:
+        return labels[-3]
+    return labels[-2]
+
+
+def _excluded(name: str, exclude: frozenset) -> bool:
+    return any(s in exclude for s in suffixes(name))
+
+
+class LookupRule:
+    """v0.8.18: the restricted-content name rule applied to every lookup (not
+    only new registrations). It reads the registrable label only (so a
+    subdomain such as a CDN hash or a telemetry host is never judged by its
+    own labels), counts a word only at the start or end of the label or next
+    to "-" (not next to a digit, which random hashes hit), skips the allow
+    words, and never matches a name in or under `exclude`. Tuned on the
+    Tranco and Umbrella top 1M (2026-10-17): see docs/FILTER_LISTS.md."""
+
+    def __init__(self, words: Iterable[str], allow_words: Iterable[str] = (), exclude: Iterable[str] = ()):
+        words = [w for w in (x.strip().lower() for x in words) if w]
+        kw = "|".join(map(re.escape, words)) or "(?!)"
+        self._re = re.compile(rf"(?:^|-)(?:{kw})|(?:{kw})(?:$|-)")
+        allow = sorted((w.strip().lower() for w in allow_words if w.strip()), key=len, reverse=True)
+        self._allow = re.compile("|".join(map(re.escape, allow))) if allow else None
+        self._exclude = frozenset(e.strip(".").lower() for e in exclude if e.strip("."))
+
+    def label_hit(self, label: Optional[str]) -> bool:
+        if not label or label.startswith("xn--"):
+            return False
+        if self._allow:
+            label = self._allow.sub("~", label)
+        return bool(self._re.search(label))
+
+    def match(self, name: str) -> bool:
+        name = name.strip(".").lower()
+        if not name or _excluded(name, self._exclude):
+            return False
+        return self.label_hit(registrable_label(name))
+
+
+class BypassNameRule:
+    """v0.8.18: web proxies and proxy-list sites by name. A hit is a
+    registrable label that contains one of `contains` or equals one of
+    `labels`; names in or under `exclude` never match. Not restricted: an
+    exception can free a hit, like the rest of the bypass category."""
+
+    def __init__(self, contains: Iterable[str] = (), labels: Iterable[str] = (), exclude: Iterable[str] = ()):
+        self._contains = tuple(w.strip().lower() for w in contains if w.strip())
+        self._labels = frozenset(w.strip().lower() for w in labels if w.strip())
+        self._exclude = frozenset(e.strip(".").lower() for e in exclude if e.strip("."))
+
+    def match(self, name: str) -> bool:
+        name = name.strip(".").lower()
+        if not name or _excluded(name, self._exclude):
+            return False
+        label = registrable_label(name)
+        if not label or label.startswith("xn--"):
+            return False
+        return label in self._labels or any(w in label for w in self._contains)
+
+
+def lookup_rule() -> LookupRule:
+    d = data().get("lookup_rule") or {}
+    return LookupRule(d.get("words", ()), d.get("allow_words", ()), d.get("exclude", ()))
+
+
+def bypass_name_rule() -> BypassNameRule:
+    d = data().get("bypass_rule") or {}
+    return BypassNameRule(d.get("contains", ()), d.get("labels", ()), d.get("exclude", ()))
+
+
 def parse_rule_file(text: str) -> EdgeRule:
     """A media-converter rule file: one word per line, "=word" for a whole label."""
     words, exact = [], []
@@ -212,6 +309,7 @@ class RestrictedCheck:
         self._hand = frozenset(hand_list()) if use_builtin else frozenset()
         self._tlds = restricted_tlds() if use_builtin else frozenset()
         self._name_rule = name_rule() if use_builtin else None
+        self._lookup_rule = lookup_rule() if use_builtin else None
 
     def reason(self, name: str) -> Optional[str]:
         name = name.strip(".").lower()
@@ -225,6 +323,8 @@ class RestrictedCheck:
                 return "hand-list"
             if self._name_rule is not None and "." in s and self._name_rule.match(s):
                 return "name-rule"
+        if self._lookup_rule is not None and self._lookup_rule.match(name):
+            return "name-rule"
         for st in self.sets:
             m = getattr(st, "match", None)
             if m is not None:
@@ -293,7 +393,7 @@ def doh_lookup(url: str = CLEANBROWSING_FAMILY_DOH, timeout: float = 5.0) -> Cal
     def lookup(wire: bytes) -> bytes:
         req = urllib.request.Request(url, data=wire, method="POST", headers={
             "Content-Type": "application/dns-message", "Accept": "application/dns-message",
-            "User-Agent": "pax/0.8.17"})
+            "User-Agent": "pax/0.8.18"})
         with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed https URL)
             return r.read()
     return lookup

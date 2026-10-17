@@ -8,6 +8,8 @@ import Foundation
 /// then releases. There is no universal code. The app only passes the code on.
 public enum VerifiedSupportRelease {
     public static let title = "Allow verified support release"
+    /// v0.8.18: the set-up checkbox on the turn-off wait step (ticked by default).
+    public static let setUpCheckbox = "Allow verified support release (recommended)"
     /// The one calm line at set-up (the switch sits beside it, on by default).
     public static let setUpDetail = "If you ever face a genuine emergency, Pax support can check it and give you "
         + "a one-time code that removes Pax from this device only. Your trusted person is told first."
@@ -21,7 +23,8 @@ public enum VerifiedSupportRelease {
     public static let setUpDefault = true
 
     /// What the Details card says under the switch.
-    public static func detail(allowed: Bool, pendingOnAt: Int?, tellingPartner: Bool = false) -> String {
+    public static func detail(allowed: Bool, pendingOnAt: Int?, tellingPartner: Bool = false,
+                              trialActive: Bool = false) -> String {
         if allowed {
             return "On. Turning it off takes effect straight away."
         }
@@ -31,6 +34,11 @@ public enum VerifiedSupportRelease {
         }
         if tellingPartner {
             return "Telling your trusted person first. Your turn-off wait starts once they're told."
+        }
+        if trialActive {
+            // v0.8.18: during the trial day turning it on is instant (Pax can be turned off with no wait anyway).
+            return "Off: no support code works on this device. Turning it on is instant during your trial day; "
+                + "your trusted person is told."
         }
         return "Off: no support code works on this device. Turning it on takes your full wait, "
             + "and your trusted person is told."

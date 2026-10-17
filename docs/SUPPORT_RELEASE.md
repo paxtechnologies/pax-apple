@@ -14,14 +14,19 @@ There is **no universal code**. Every code:
 
 ## What the person sees
 
-* **Set-up** (Mac and iPhone/iPad, on the wait step): one line explains it, with the switch beside it, on by
-  default: "If you ever face a genuine emergency, Pax support can check it and give you a one-time code that
-  removes Pax from this device only. Your trusted person is told first."
-* **Device page › Details**: the Support ID (copy button) and the switch.
+* **Set-up** (Mac and iPhone/iPad, on the turn-off wait step): a checkbox, **ticked by default**, "Allow
+  verified support release (recommended)", with one line under it: "If you ever face a genuine emergency, Pax
+  support can check it and give you a one-time code that removes Pax from this device only. Your trusted
+  person is told first." Unticking it sets the device up with the switch off (v0.8.18; it was a switch).
+* **Afterwards** (v0.8.18): this Mac's switch is in **Settings › Turning Pax off** and its Support ID in
+  **Settings › Advanced**; an iPhone's or iPad's are under **Turn off › Device details** on its page.
   * Turning it **off** takes effect straight away.
   * Turning it **on** goes through the normal change path: it takes effect after the current wait, and the
-    partner is emailed first (fail closed, `PAX-ESCROW-010`), just like shortening the wait.
-* **Request a change › In an emergency › I have a support code**: paste or type the code (`PAXS-…`; case,
+    partner is emailed first (fail closed, `PAX-ESCROW-010`), just like shortening the wait. It loosens
+    protection, so it never skips the wait, **except during the trial day** (v0.8.18, docs/TRIAL_DAY.md):
+    Pax can be turned off with no wait then anyway, so turning this on is instant too, still with the
+    partner emailed first (no email, no change; nothing is queued).
+* **Home › Turn off › In an emergency › I have a support code**: paste or type the code (`PAXS-…`; case,
   spaces and dashes don't matter) and choose **Use support code**.
 
 Devices set up **before 0.8.15 start with the switch off**, because they never agreed to it. No migration

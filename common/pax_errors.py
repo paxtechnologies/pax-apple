@@ -260,6 +260,13 @@ CODES: list[PaxCode] = [
             "v0.8.13: PUT /v1/dns/settings (or a guard/config path) asked for x_media or bluesky_media false. "
             "Their media servers (guard_config.X_MEDIA_NAMES, BLUESKY_MEDIA_NAMES) are always blocked; the "
             "server refuses with HTTP 422 media_always_blocked before any request, wait or email."),
+    # v0.8.18: Pax's own filter failed a check; the family filter answers meanwhile.
+    PaxCode("PAX-DNS-017", "Pax's own filter failed its self-test, so a backup family filter is answering for now.",
+            "Nothing to do: you stay protected, and Pax switches back by itself once the self-test passes.",
+            "v0.8.18: dns_forwarder.Forwarder entered its fallback (lists missing, too small or failing their "
+            "checks; the decision code threw or took over DECIDE_SLOW; or the canary self-test failed). Every "
+            "lookup goes to the family-filter chain until Forwarder.canary passes; logged to the tamper log "
+            "(dns:fallback_on / dns:fallback_off) and shown as filter_mode \"fallback\" in the DNS status."),
     # ---------------------------------------------------------------- ESCROW
     PaxCode("PAX-ESCROW-001", "Pax needs to sign you in again.",
             "Try again: Pax will set up your account afresh.",

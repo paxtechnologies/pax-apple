@@ -197,11 +197,15 @@ struct WaitStep: View {
                     .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            NoteRow(icon: "heart", text: TurnOffWait.firstHour)
-            // v0.8.15: one calm line, on by default, switchable here and later on the device's page.
+            // v0.8.18: the trial day (replaces "For your first hour…") and a clear, ticked-by-default
+            // choice for verified support release (it was a switch). Changeable later in Settings.
+            NoteRow(icon: "sun.max", text: TrialDay.setUpLine)
             Card {
-                ToggleRow(title: VerifiedSupportRelease.title, detail: VerifiedSupportRelease.setUpDetail,
-                          isOn: $model.config.supportRelease)
+                CheckRow(isOn: $model.config.supportRelease, text: VerifiedSupportRelease.setUpCheckbox)
+                Text(VerifiedSupportRelease.setUpDetail)
+                    .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 22)
             }
             if let failure = model.failure {
                 ErrorCard(error: failure, retry: { model.retry() },

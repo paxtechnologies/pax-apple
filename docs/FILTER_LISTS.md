@@ -1,12 +1,12 @@
-# Filter lists (v0.8.1)
+# Filter lists (v0.8.1, name rules and checked additions since v0.8.18)
 
 Built by `lists/build.py` (standard library, reproducible gzip), bundled in `guard/filters/`, described by
 `guard/filters/filters.json`, loaded by `guard/filter_lists.py`.
 
 | List | Contents | Restricted | Floor |
 |---|---|---|---|
-| pax-block | Restricted content: HaGeZi and OISD restricted-content lists, the UT1 restricted-content category (blogspot.* dropped), Pax's hand list, pax-zones; minus pax-exclude and pax-allowlist; parent-collapsed | yes | ≥1,000,000 entries, max 10% drop |
-| pax-bypass | HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass, minus anything pax-block covers (v0.8.1: split out of pax-block) | no | ≥5,000, max 30% drop |
+| pax-block | Restricted content: HaGeZi and OISD restricted-content lists, the UT1 restricted-content category (blogspot.* dropped), (v0.8.18) checked names from the ShadowWhisperer restricted-content list, Pax's hand list, pax-zones; minus pax-exclude and pax-allowlist; parent-collapsed | yes | ≥1,000,000 entries, max 10% drop |
+| pax-bypass | HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass, plus (v0.8.18) checked web proxies from the UT1 "redirector" category, minus anything pax-block covers (v0.8.1: split out of pax-block) | no | ≥5,000, max 30% drop |
 | pax-nrd | Newly registered domains (WhoisDS, 14 days) whose first label matches the name rule at a label edge, minus its allow words | yes | optional, ≥100 |
 | pax-allow | tailscale.com, character.ai (beat every block list) | — | — |
 | safesearch | 385 exact-host rewrites | — | — |
@@ -24,6 +24,56 @@ The name-rule words, the single-label (whole top-level domain) entries, Pax's ha
 fallback sites and the restricted sources' addresses are kept encoded in `common/pax_restricted.py`
 (gzip + base64, decoded at load time) so the repo reads calmly; `python3 common/pax_restricted.py --dump`
 prints them.
+
+## Name rules on every lookup (v0.8.18)
+
+Lists only know names someone has already reported. Two name rules now run on **every** lookup, after the
+lists, in pax-guard's forwarder and in the DoH server (both use `FilterStore.load()`, so the Mac and the
+iPhone path get the same rules). Their words are kept encoded in `common/pax_restricted.py`
+(`lookup_rule`, `bypass_rule`); `--dump` prints them.
+
+| Rule | Reads | Counts a word when | Category |
+|---|---|---|---|
+| `lookup_rule` (restricted content) | the registrable label only (`www.example.co.uk` → `example`) | at the start or end of the label or next to `-` (not next to a digit); allow words skipped; names in or under `exclude` never match | restricted: an exception never frees it; an exception request is refused (PAX-DNS-010) |
+| `bypass_rule` (web proxies, proxy lists) | the registrable label only | the label contains one of `contains`, or equals one of `labels`; `exclude` never matches | bypass: an exception can free it, like the rest of pax-bypass |
+
+Why these limits:
+
+* **Registrable label only.** Subdomain labels are often machine-made (CDN hashes, telemetry hosts, test
+  hosts); judging them by their own labels produced the only false hits in testing.
+* **No digit edge.** The new-registration rule also counts a word next to a digit; on every lookup that
+  matched random hashes, so this rule doesn't.
+* **Allow words and exclusions** come from reviewing every hit in the Tranco top 1M (list of 2026-10-14) and the
+  Umbrella top 1M (2026-10-17) that no list already covered, with each homepage's title. Shop, place and
+  brand names that contain a word by accident (a town, a furniture chain, a stock index, a DJ program, a
+  tractor maker) are allow words; a few single sites are exclusions.
+* **Web proxies by name, not "proxy" alone.** The bare word appears in many work services (application
+  proxies, load balancers, developer tools, shareholder voting), so the rule only uses compound phrases
+  that name a public web proxy or proxy list, and a short list of whole labels.
+
+The Pax allowlist (`pax-allowlist.txt`) beats both rules, as it beats the lists. The rules ship with the code
+(a signed app update), not with the list manifest, so a list update can't weaken them.
+
+## Checked additions (v0.8.18)
+
+Two inputs in `lists/verified/` (gzipped; one name per line; header says where each came from):
+
+* `pax-block-extra.txt.gz`: names from the ShadowWhisperer restricted-content list (The Unlicense) that
+  were live and whose homepage, fetched on the build date, either carried the standard adults-only
+  self-label meta tag or showed restricted content in its title. Raw, that list also names mainstream
+  sites (podcast apps, a university, a magazine, retailers), so it is never used unchecked.
+* `pax-bypass-extra.txt.gz`: names from the UT1 "redirector" category (CC BY-SA 4.0) whose homepage, fetched
+  on the build date, was a working web proxy or a public proxy list (not parked, not for sale, not a paid
+  proxy network). Most of that category is dead or reused by unrelated sites, so it is never used unchecked.
+
+Both are refreshed by hand with the maintainer's checking tools (not in the repo, as they hold the
+matching words in plain text); `lists/build.py` fails if either file is missing.
+
+## Measuring against a reference resolver
+
+The filter is checked against a public family-filtering resolver used only as a benchmark: its answers
+are never copied into Pax's lists. Test sets are drawn from sources Pax does not use, so a list is never
+graded on itself. Results are kept with the release notes for the maintainer.
 
 ## Media converters (v0.8.1)
 

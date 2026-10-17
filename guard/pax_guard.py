@@ -83,7 +83,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.17"
+VERSION = "0.8.18"
 BASE = Path("/Library/PaxGuard")
 CONFIG_PATH = BASE / "config.json"
 STATE_DIR = BASE / "state"
@@ -465,6 +465,19 @@ class Guard:
         return bool(self.cfg.youtube_restricted_default)
 
     @property
+    def family_layer(self) -> bool:
+        """v0.8.18 Advanced: the extra family-filter layer after Pax's own filter.
+        Local escrow keeps it with the waited changes; server escrow reads the
+        account's category. Off by default."""
+        if self.cfg.local_escrow:
+            try:
+                return self.blocklist.family_layer()
+            except Exception:  # noqa: BLE001 - unreadable state: the stricter choice
+                return True
+        cats = self.remote.get("categories") or {}
+        return cats.get("family_layer") is True
+
+    @property
     def local_adblock(self) -> bool:
         """v0.8.7: "Ads and trackers" on local escrow: the Home switch once used
         (state/settings.json, so updates and restarts keep it), else the set-up choice."""
@@ -484,6 +497,11 @@ class Guard:
                 "adblock_local": local,
                 # v0.8.12: Pax Max after set-up (see handle_pax_max).
                 "pax_max": self.pax_max_view(),
+                # v0.8.18 Advanced: the extra family filter. family_layer_local false =
+                # the Pax server holds it (an account category with the same wait).
+                "family_layer": self.family_layer,
+                "family_layer_local": local,
+                "family_layer_pending": self.blocklist.family_layer_pending() if local else None,
                 "changed_at": st.get("changed_at") if isinstance(st, dict) else None}
 
     def _save_setting(self, key: str, value: bool) -> None:
@@ -716,11 +734,13 @@ class Guard:
     def desired_pf(self, root_only_upstream: bool = True) -> str:
         extra = gc.merge_doh_ips(self._load_json("doh-ips.json", []), base=[])
         if self.cfg.dns_mode == "local":
-            pinned = self.forwarder.pinned_ips() if self.forwarder is not None else []
+            fwd = self.forwarder
+            pinned = fwd.family_ips() if fwd is not None else []
+            primary = fwd.primary_ips() if fwd is not None else []
             allow = sorted(set(gc.CLEANBROWSING_FAMILY_IPS + gc.ADGUARD_FAMILY_IPS + pinned))
             return gc.pf_rules(allow_ips=allow, doh_ips=gc.PUBLIC_DOH_IPS, dns_only_ips=extra,
                                remote_desktop=self.remote_desktop_blocked, local_dns=True,
-                               root_only_upstream=root_only_upstream)
+                               root_only_upstream=root_only_upstream, primary_ips=primary)
         allow = sorted(set(gc.CLEANBROWSING_FAMILY_IPS + self.sys.resolve(self.cfg.resolver_host)))
         code, out = self.sys.run(["/usr/sbin/scutil", "--dns"], timeout=5)
         system_dns = gc.parse_scutil_dns(out) if code == 0 else []
@@ -808,7 +828,7 @@ class Guard:
         return dnsf.Policy(blocked=list(self.remote.get("blocked", [])), exceptions=exceptions,
                            categories=cats, restricted=self.restricted_sites(),
                            restricted_rules=[rule] if rule else [], never_except=pr.RestrictedCheck(),
-                           youtube_restricted=self.youtube_restricted)
+                           youtube_restricted=self.youtube_restricted, family_layer=self.family_layer)
 
     # ------------------------------------------- v0.8.1 restricted categories
     def restricted_sites(self) -> list[str]:
@@ -839,7 +859,15 @@ class Guard:
 
     def restricted_upstream_check(self, domain: str) -> None:
         """Raise pax_restricted.RestrictedSite when CleanBrowsing Family blocks
-        `domain` or can't be asked (fail closed)."""
+        `domain` or can't be asked (fail closed).
+
+        v0.8.18: Pax's own lists already ran (restricted_static). The outside
+        lookup is made only when the user turned on the extra family layer (its
+        lookups go through that filter) or when Pax's own filter can't answer right
+        now (lists not loaded or in the fallback); otherwise Pax's lists decide."""
+        fwd = self.forwarder
+        if fwd is not None and fwd.pax_filter_ok and not self.family_layer:
+            return
         lookup = None
         if self.forwarder is not None:
             cb = next((u for u in self.forwarder.upstreams if u.name.startswith("CleanBrowsing")), None)
@@ -890,6 +918,10 @@ class Guard:
         if r.get("action") == "pax_max_off":
             self.tamper_log.append("setting:pax_max", {"from": True, "to": False, "request_id": r.get("id")})
             log("Pax Max off (its hour is over)")
+        if r.get("action") == "family_layer_off":
+            self.tamper_log.append("setting:family_layer", {"from": True, "to": False, "request_id": r.get("id")})
+            log("extra family filter off (the wait is over)")
+            self.update_forwarder_policy()
 
     def handle_pax_max(self, cmd: str, req: dict, uid) -> dict:
         """paxmax.get / paxmax.on (instant) / paxmax.off (partner first, then a fixed
@@ -935,7 +967,7 @@ class Guard:
         if self.forwarder is None:
             return
         key = json.dumps([self.remote.get("blocked"), self.remote.get("allowed"),
-                          self.remote_desktop_blocked, self.youtube_restricted],
+                          self.remote_desktop_blocked, self.youtube_restricted, self.family_layer],
                          sort_keys=True)
         if key != getattr(self, "_policy_key", None):
             self._policy_key = key
@@ -1134,8 +1166,13 @@ class Guard:
                                                         Path(__file__).resolve().parent / "filters" / "plugins"],
                                            log=log)
         ups = dnsf.default_upstreams()
+        # v0.8.18: Pax's own filter, then the malware-only resolvers; the family
+        # chain when the user turned on the extra layer, or automatically when Pax's
+        # filter fails a check (canary), logged to the tamper log.
         self.forwarder = dnsf.Forwarder(ups, None, self.forwarder_policy(), log=log,
-                                        youtube_upstreams=dnsf.youtube_upstreams(ups))
+                                        youtube_upstreams=dnsf.youtube_upstreams(ups),
+                                        primary_upstreams=dnsf.primary_upstreams(),
+                                        on_fallback=self._dns_fallback_changed)
         self.updater = pu.Updater(self.sys, self.state_dir, VERSION, log=log, notify=self.notify,
                                   app_running=self.pax_app_running, runtime=self.runtime_manager())
         if dns and self.cfg.dns_mode == "local":
@@ -1157,6 +1194,10 @@ class Guard:
             except OSError as exc:
                 log(f"PAX-GUARD-012 the app socket couldn't start ({exc})")
 
+    def _dns_fallback_changed(self, entering: bool, reason: str) -> None:
+        """v0.8.18: Pax's filter failed (or passed again) its self-test."""
+        self.tamper_log.append("dns:fallback_on" if entering else "dns:fallback_off", {"reason": reason[:160]})
+
     def _load_filters(self) -> None:
         import filter_lists as fl
         try:
@@ -1167,7 +1208,7 @@ class Guard:
             try:
                 fs = self.filter_store.load()
             except Exception as exc2:  # noqa: BLE001
-                log(f"PAX-DNS-006 bundled lists failed too ({exc2}); upstream filtering only")
+                log(f"PAX-DNS-006 bundled lists failed too ({exc2}); the family filter answers every lookup")
                 fs = fl.empty_filterset()
         self.forwarder.set_filters(fs)
         log(f"local lists ready: {fs.entries} entries ({fs.info.get('version')})")
@@ -1388,6 +1429,9 @@ class Guard:
                     return {"ok": True, "device": self.escrow.emergency(str(req.get("reason", "")))}
                 if cmd == "escrow.set_wait":
                     return {"ok": True, "device": self.escrow.set_wait(req.get("seconds"))}
+                if cmd == "escrow.end_trial":
+                    # v0.8.18 "Start my wait now": ends the trial day early (stricter, instant).
+                    return {"ok": True, "device": self.escrow.end_trial()}
                 if cmd == "partner.get":
                     return {"ok": True, "partner": self.escrow.partner.public_view()}
                 if cmd == "partner.set":
@@ -1628,7 +1672,7 @@ class Guard:
         if any(req.get(k) is False for k in ("x_media", "bluesky_media")):
             return {"ok": False, "code": "PAX-DNS-016",
                     "error": "pictures and video on X and Bluesky are always off"}
-        keys = [k for k in ("youtube_restricted", "adblock") if k in req]
+        keys = [k for k in ("youtube_restricted", "adblock", "family_layer") if k in req]
         if not keys:
             return {"ok": False, "code": "PAX-GUARD-012", "error": "nothing to change"}
         for k in keys:
@@ -1640,12 +1684,50 @@ class Guard:
         if "adblock" in req and not self.cfg.local_escrow:
             return {"ok": False, "code": "PAX-ESCROW-009",
                     "error": "this Mac's ad setting is on the Pax server"}
+        if "family_layer" in req and not self.cfg.local_escrow:
+            return {"ok": False, "code": "PAX-ESCROW-009",
+                    "error": "this Mac's extra family filter is set in your Pax account"}
+        if "family_layer" in req and self.cfg.dns_mode != "local":
+            return {"ok": False, "code": "PAX-DNS-011",
+                    "error": "this Mac's filtering doesn't go through Pax, so it can't change this"}
         view = None
         if "youtube_restricted" in req:
             view = self.set_youtube_restricted(req["youtube_restricted"], uid)
         if "adblock" in req:
             view = self.set_adblock(req["adblock"], uid)
+        if "family_layer" in req:
+            out = self.set_family_layer(req["family_layer"], uid)
+            if not out.get("ok", True):
+                return out
+            view = out["settings"]
+            if out.get("request"):
+                return {"ok": True, "settings": view, "request": out["request"]}
         return {"ok": True, "settings": view}
+
+    def set_family_layer(self, on: bool, uid=None) -> dict:
+        """v0.8.18 Advanced. On (stricter) is immediate; off loosens the filter, so
+        it waits like a removal: the partner first (fail closed), then the user's
+        own turn-off wait. Both are written to the tamper log."""
+        import local_blocklist as lb
+        if self.blocklist.partner is None and self.escrow.exists():
+            self.blocklist.partner = self.escrow.partner
+        before = self.family_layer
+        if on:
+            if self.blocklist.family_layer_on() or not before:
+                self.tamper_log.append("setting:family_layer", {"from": before, "to": True, "uid": uid})
+                log(f"extra family filter on (uid {uid})")
+            self.update_forwarder_policy()
+            return {"ok": True, "settings": self.settings_view()}
+        if not before:
+            return {"ok": True, "settings": self.settings_view()}
+        had = self.blocklist.family_layer_pending()
+        try:
+            out = self.blocklist.request_family_layer_off()
+        except lb.BlocklistError as exc:
+            return {"ok": False, "code": exc.code, "error": exc.message}
+        if had is None:
+            self.tamper_log.append("setting:family_layer_off_requested", {"uid": uid})
+        return {"ok": True, "settings": self.settings_view(), "request": out["request"]}
 
     def _refresh_after_list_change(self) -> None:
         self.sync_remote()

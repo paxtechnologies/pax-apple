@@ -20,6 +20,17 @@ positive but never a restricted-content site:
                (start, end, or next to "-" or a digit), minus its allow words.
                Restricted. Separate list, updated daily, never required.
   pax-allow    pax-allowlist.txt (wins over every block list, suffix match).
+
+v0.8.18: two checked inputs, kept gzipped in lists/verified/ (each line was
+live and checked by its homepage on the date in the file's header):
+  pax-block-extra.txt.gz   ShadowWhisperer "Adult" names (Unlicense) whose
+                           homepage labels itself for adults or shows
+                           restricted content. Added to pax-block.
+  pax-bypass-extra.txt.gz  UT1 "redirector" names (CC BY-SA 4.0) whose
+                           homepage is a working web proxy or proxy list.
+                           Added to pax-bypass (an exception may free them).
+Pax's name rules (common/pax_restricted.py: lookup_rule, bypass_rule) are
+applied by pax-guard and the DoH server to every lookup, not built here.
   safesearch   safesearch_rules.csv (385 exact-host rewrites, YouTube Strict).
 
 The source addresses and the name-rule words are kept encoded in
@@ -72,6 +83,7 @@ SOURCES = {
 }
 RESTRICTED_SOURCES = ("list_a", "list_b")
 WHOISDS_URL = "https://www.whoisds.com/whois-database/newly-registered-domains/{b64}/nrd"
+VERIFIED = HERE / "verified"
 BLOGSPOT = re.compile(r"(^|\.)blogspot\.[a-z.]+$")
 LABEL_RE = re.compile(r"^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$")
 
@@ -136,6 +148,13 @@ def read_local_list(name: str) -> list[str]:
     return [n for n in (clean_name(l) for l in (HERE / name).read_text().splitlines()) if n]
 
 
+def read_verified(name: str) -> list[str]:
+    """A checked input in lists/verified/ (gzip, one name per line, # comments)."""
+    path = VERIFIED / name
+    text = gzip.decompress(path.read_bytes()).decode("utf-8", "ignore")
+    return [n for n in (clean_name(l) for l in text.splitlines()) if n]
+
+
 def hand_list() -> list[str]:
     """Pax's hand-kept restricted list (encoded in common/pax_restricted.py)."""
     return [n for n in (clean_name(l) for l in pr.hand_list()) if n]
@@ -185,12 +204,17 @@ def build_block(sources_dir: Path | None) -> tuple[list[str], list[str], dict]:
     stats["list_c"] = {"raw": raw_third, "without_blogspot": len(third)}
     union |= third
     hand, zones = hand_list(), read_local_list("pax-zones.txt")
-    union |= set(hand) | set(zones)
+    extra = read_verified("pax-block-extra.txt.gz")
+    stats["verified_block_extra"] = len(extra)
+    union |= set(hand) | set(zones) | set(extra)
     exclude, allow = set(read_local_list("pax-exclude.txt")), set(read_local_list("pax-allowlist.txt"))
     final = finalize(union, exclude, allow)
     restricted = set(final)
     bypass_raw = parse_names(source_text("hagezi_doh_vpn", sources_dir))
     stats["hagezi_doh_vpn"] = len(bypass_raw)
+    bypass_extra = read_verified("pax-bypass-extra.txt.gz")
+    stats["verified_bypass_extra"] = len(bypass_extra)
+    bypass_raw |= set(bypass_extra)
     bypass = [d for d in finalize(bypass_raw, exclude, allow)
               if d not in restricted and not covered_by_parent(d, restricted)]
     stats.update({"hand_list": len(hand), "pax_zones": len(zones), "union": len(union),
@@ -330,11 +354,13 @@ def main(argv: list[str] | None = None) -> int:
         a.out.mkdir(parents=True, exist_ok=True)
         final, bypass, stats = build_block(a.sources)
         header = ("# Pax restricted-content list (suffix match: each entry blocks itself and every subdomain).\n"
-                  "# HaGeZi and OISD (GPL-3.0), UT1 (CC BY-SA 4.0, Universite Toulouse Capitole) and\n"
-                  "# Pax's own hand list and zones; minus pax-exclude and pax-allowlist. Built by lists/build.py.\n")
+                  "# HaGeZi and OISD (GPL-3.0), UT1 (CC BY-SA 4.0, Universite Toulouse Capitole),\n"
+                  "# checked ShadowWhisperer names (Unlicense) and Pax's own hand list and zones;\n"
+                  "# minus pax-exclude and pax-allowlist. Built by lists/build.py.\n")
         write_gz(a.out / "pax-block.txt.gz", final, header)
         write_gz(a.out / "pax-bypass.txt.gz", bypass,
-                 "# Pax DoH/VPN/proxy bypass list: HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass (GPL-3.0),\n"
+                 "# Pax DoH/VPN/proxy bypass list: HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass (GPL-3.0)\n"
+                 "# and checked UT1 redirector web proxies (CC BY-SA 4.0, Universite Toulouse Capitole),\n"
                  "# minus anything pax-block covers. Suffix match. Built by lists/build.py.\n")
         (a.out / "block-stats.json").write_text(json.dumps(stats, indent=1) + "\n")
         log(json.dumps({k: v for k, v in stats.items() if k != "excluded"}))

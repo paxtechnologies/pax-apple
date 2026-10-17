@@ -133,6 +133,22 @@ public struct GuardClient: Sendable {
             public let active: String?
             public let ready: Bool?
             public let all_down: Bool?
+            /// v0.8.18: "pax" (Pax's own filter), "family-layer" (the extra family filter
+            /// is on), "fallback" (Pax's filter failed its self-check, the family filter
+            /// answers), "family" (no Pax filter configured). nil from an older pax-guard.
+            public let filter_mode: String?
+            /// v0.8.18: why the fallback is on, and since when (Unix seconds).
+            public let fallback_reason: String?
+            public let fallback_since: Double?
+            public init(active: String?, ready: Bool?, all_down: Bool?, filter_mode: String? = nil,
+                        fallback_reason: String? = nil, fallback_since: Double? = nil) {
+                self.active = active
+                self.ready = ready
+                self.all_down = all_down
+                self.filter_mode = filter_mode
+                self.fallback_reason = fallback_reason
+                self.fallback_since = fallback_since
+            }
         }
         public struct Tamper: Decodable, Sendable {
             public let intact: Bool
@@ -155,10 +171,20 @@ public struct GuardClient: Sendable {
         // always blocked (a 0.8.12 pax-guard's extra keys are ignored when decoding).
         /// v0.8.12: Pax Max after set-up. nil from a pax-guard older than 0.8.12.
         public let pax_max: PaxMaxView?
+        /// v0.8.18 Advanced: the extra family filter layer. nil from an older pax-guard.
+        public let family_layer: Bool?
+        /// v0.8.18: true when pax-guard holds it (local escrow); false: the Pax account does.
+        public let family_layer_local: Bool?
+        /// v0.8.18: a waiting request to turn it off (partner first, then the wait).
+        public let family_layer_pending: BlocklistRequest?
         public init(youtube_restricted: Bool, youtube_available: Bool? = true,
                     adblock: Bool? = nil, adblock_local: Bool? = nil,
-                    pax_max: PaxMaxView? = nil) {
+                    pax_max: PaxMaxView? = nil, family_layer: Bool? = nil,
+                    family_layer_local: Bool? = nil, family_layer_pending: BlocklistRequest? = nil) {
             self.pax_max = pax_max
+            self.family_layer = family_layer
+            self.family_layer_local = family_layer_local
+            self.family_layer_pending = family_layer_pending
             self.youtube_restricted = youtube_restricted
             self.youtube_available = youtube_available
             self.adblock = adblock
@@ -254,6 +280,19 @@ public struct GuardClient: Sendable {
     /// protection); pax-guard logs the change and keeps restricted names blocked.
     public func setAdblock(_ on: Bool) async throws -> Settings {
         try decode(Settings.self, try await call(["cmd": "settings.set", "adblock": on]), key: "settings")
+    }
+
+    /// v0.8.18 Advanced "Extra family filter layer" (local escrow). On is immediate
+    /// (stricter). Off loosens the filter, so it waits like a removal: your partner is
+    /// told first (if that fails, nothing starts), then your turn-off wait; the answer
+    /// carries the waiting request. Cancel it with cancelBlocklistRequest(_:).
+    public struct FamilyLayerResult: Decodable, Sendable, Equatable {
+        public let settings: Settings
+        public let request: BlocklistRequest?
+    }
+
+    public func setFamilyLayer(_ on: Bool) async throws -> FamilyLayerResult {
+        try decode(FamilyLayerResult.self, try await call(["cmd": "settings.set", "family_layer": on]))
     }
 
     // MARK: v0.8.7 Blocked apps (local escrow)
@@ -362,6 +401,11 @@ public struct GuardClient: Sendable {
                    key: "device")
     }
 
+    /// v0.8.18 "Start my wait now": ends this Mac's trial day early.
+    public func endTrial() async throws -> EscrowClient.DeviceStatus {
+        try decode(EscrowClient.DeviceStatus.self, try await call(["cmd": "escrow.end_trial"]), key: "device")
+    }
+
     /// v0.8.15 "Allow verified support release" on this Mac: off at once, on after the wait.
     public func setSupportRelease(_ allowed: Bool) async throws -> EscrowClient.DeviceStatus {
         try decode(EscrowClient.DeviceStatus.self, try await call(["cmd": "escrow.support_release", "allowed": allowed]),
@@ -443,11 +487,50 @@ extension GuardClient: BlocklistBackend {
 public enum FilterStatusText {
     public static func line(_ dns: GuardClient.Status.DNS?) -> String {
         guard let dns else { return "Checking the filter…" }
+        if dns.ready == false && dns.filter_mode == nil { return "Starting the filter…" }
+        // v0.8.18: Pax's own filter first; say plainly when the backup answers.
+        switch dns.filter_mode {
+        case "pax":
+            return "Filtering with Pax's own filter. It checks itself regularly."
+        case "family-layer":
+            return "Filtering with Pax's own filter, plus the extra family filter layer."
+        case "fallback":
+            if dns.all_down == true { return "No filter is reachable, so websites won't open for now." }
+            if dns.ready == false { return "Starting the filter…" }
+            return "Pax's own filter didn't pass its self-check, so the family filter is answering for now. "
+                + "Pax checks again every minute."
+        default:
+            break
+        }
         if dns.ready == false { return "Starting the filter…" }
         if dns.all_down == true || dns.active == nil {
             return "No filter is reachable, so websites won't open for now."
         }
         if dns.active == "CleanBrowsing Family" { return "Filtering through CleanBrowsing." }
         return "Filtering through \(dns.active ?? "the backup filter") (backup)."
+    }
+}
+
+/// v0.8.18 Settings › Advanced: the filter's mode in a few words, for the details row.
+public enum FilterModeText {
+    public static func label(_ mode: String?) -> String {
+        switch mode {
+        case "pax": return "Pax filter"
+        case "family-layer": return "Pax filter + extra family layer"
+        case "fallback": return "Backup (family filter)"
+        case "family": return "Family filter"
+        default: return "Unknown"
+        }
+    }
+
+    /// "Backup since 14:05: canary: …" or nil when the backup isn't on.
+    public static func fallbackLine(_ dns: GuardClient.Status.DNS?) -> String? {
+        guard let dns, dns.filter_mode == "fallback" else { return nil }
+        var out = "Backup on"
+        if let since = dns.fallback_since {
+            out += " since " + Date(timeIntervalSince1970: since).formatted(date: .omitted, time: .shortened)
+        }
+        if let r = dns.fallback_reason, !r.isEmpty { out += ": " + r }
+        return out + "."
     }
 }

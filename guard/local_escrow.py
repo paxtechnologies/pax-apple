@@ -51,6 +51,21 @@ lives here, in state.json, and nothing outside this Mac can change it: set-up
 chooses it (on by default), Macs set up before 0.8.15 start with it off (they
 never agreed to it), turning it off is immediate, and turning it on waits the
 full wait with the partner told first, like shortening the wait.
+
+Trial day (v0.8.18): on a genuinely new set-up, the first 24 hours are a trial
+day. Turning Pax off (and an emergency release) needs no wait in that day; the
+partner, if there is one, is still told first, fail closed as always. Turning
+on verified support release is also instant in the trial day. After 24 hours
+the chosen turn-off wait applies by itself. "Start my wait now" (end_trial)
+ends it early and closes any no-wait request. It replaces the 1-hour grace on
+the set-ups that get it; a set-up without it still gets the 1-hour grace.
+"Genuinely new" is anchored OUTSIDE the escrow folder, in a marker that
+removing Pax leaves behind (/private/var/db/PaxPeace/trial.json, root 0700/
+0600): the first set-up on a Mac writes it, every later set-up (or a re-set-up
+after an unfinished one) reads its start time, so reinstalling only ever gets
+the rest of the first day. pax-guard writes the marker for Macs set up before
+0.8.18 at its first heartbeat (start = their install time), so they never get
+one. An unreadable marker counts as "trial used" (fail closed).
 """
 from __future__ import annotations
 
@@ -70,6 +85,7 @@ DEFAULT_WAIT = 72 * HOUR
 MIN_WAIT = 24 * HOUR
 MAX_WAIT = 365 * DAY
 GRACE = 1 * HOUR   # first hour after set-up only (2026-10-16: a week was long enough to relapse)
+TRIAL = 24 * HOUR  # v0.8.18: trial day on a genuinely new set-up (turn off with no wait)
 REVEAL_WINDOW = 7 * DAY
 EMERGENCY_COOLOFF = 24 * HOUR
 EMERGENCY_MIN_INTERVAL = 90 * DAY
@@ -79,6 +95,8 @@ SECRET_NAMES = ("paxadmin", "recovery_key", "firmware")
 RELEASES = {"remove": ("paxadmin", "recovery_key", "firmware"),
             "locked_out": ("recovery_key", "firmware")}
 DEFAULT_DIR = Path("/Library/PaxGuard/escrow")
+# v0.8.18: outlives Pax's removal on purpose (the uninstallers only remove /Library/PaxGuard).
+TRIAL_MARKER = Path("/private/var/db/PaxPeace/trial.json")
 
 
 class EscrowError(Exception):
@@ -116,8 +134,13 @@ def _boot_time() -> int:
 class LocalEscrow:
     def __init__(self, base: Path = DEFAULT_DIR, *, clock=_now, mono=_mono, boot_time=_boot_time,
                  trusted_time=lambda: None, tamper_log=None, require_root: bool | None = None,
-                 senders=None, log=print):
+                 senders=None, log=print, trial_marker: Path | None = None):
         self.base = Path(base)
+        # The real escrow folder uses the system marker; any other folder (tests,
+        # a guard running from a temporary state dir) keeps its marker beside it.
+        if trial_marker is None:
+            trial_marker = TRIAL_MARKER if self.base == DEFAULT_DIR else self.base.parent / "trial-marker.json"
+        self.trial_marker = Path(trial_marker)
         self.clock = clock
         self.mono = mono
         self.boot_time = boot_time
@@ -212,7 +235,7 @@ class LocalEscrow:
 
     # ------------------------------------------------------------ deposit
     def deposit(self, name: str, secret: str, wait_seconds: int | None = None,
-                replace: bool = False, support_release: bool = False) -> str:
+                replace: bool = False, support_release: bool = False, trial: bool = False) -> str:
         """Store a secret. paxadmin can be stored only once (set-up); the recovery
         key and firmware password are replaced by pax-guard when it rotates them.
         Returns the SHA-256 of the stored value so the caller can confirm it."""
@@ -228,12 +251,14 @@ class LocalEscrow:
                 self._init_dir()
                 wait = validate_wait(wait_seconds if wait_seconds is not None else DEFAULT_WAIT)
                 now = int(self.clock())
+                trial_state = self._new_trial(now) if trial else None
                 self._write("secrets.json", {"paxadmin": secret})
                 self._write("state.json", {
                     "schema": 1, "installed_at": now, "wait_seconds": wait, "pending_wait": None,
                     "request": None, "released_at": None, "last_emergency_at": None,
                     "wall_last": now, "mono_last": self.mono(), "boot": self.boot_time(),
-                    "holds": {}, "support": _new_support(bool(support_release), "setup")})
+                    "holds": {}, "support": _new_support(bool(support_release), "setup"),
+                    "trial": trial_state})
             else:
                 sec = self._read("secrets.json")
                 if name in sec and not (replace and name != "paxadmin"):
@@ -257,6 +282,90 @@ class LocalEscrow:
             sec = self._read("secrets.json")
             if name != "paxadmin" and sec.pop(name, None) is not None:
                 self._write("secrets.json", sec)
+
+    # --------------------------------------------------- v0.8.18 trial day
+    def _marker_first_at(self) -> int | None:
+        """When this Mac's first Pax set-up started its trial day (None: never set
+        up). A marker that exists but can't be read counts as long ago (no trial)."""
+        p = self.trial_marker
+        try:
+            if p.is_symlink():
+                return 0
+            if not p.exists():
+                return None
+            first = int(json.loads(p.read_text())["first_at"])
+            return first if first > 0 else 0
+        except (OSError, ValueError, KeyError, TypeError):
+            return 0
+
+    def _write_marker(self, first_at: int) -> None:
+        """Record the first set-up on this Mac (never overwritten)."""
+        p = self.trial_marker
+        if p.exists() or p.is_symlink():
+            return
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            os.chmod(p.parent, 0o700)
+            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                os.write(fd, json.dumps({"schema": 1, "first_at": int(first_at)}).encode())
+            finally:
+                os.close(fd)
+            if self.require_root:
+                os.chown(p.parent, 0, 0)
+                os.chown(p, 0, 0)
+        except FileExistsError:
+            pass
+
+    def _new_trial(self, now: int) -> dict | None:
+        """A trial day for a set-up asking for one: only the rest of the day that
+        started at this Mac's first set-up. Marks the Mac either way."""
+        first = self._marker_first_at()
+        if first is None:
+            first = now
+        self._write_marker(first)
+        until = first + TRIAL
+        if until <= now:
+            return None
+        return {"started_at": first, "until": until, "ended_at": None}
+
+    @staticmethod
+    def _free_until(st: dict) -> int:
+        """Until when a removal needs no wait: the trial day (ended early or not),
+        else the first hour after set-up."""
+        tr = st.get("trial")
+        if isinstance(tr, dict) and tr.get("until"):
+            if tr.get("ended_at"):
+                return int(tr["ended_at"])
+            return max(int(tr["until"]), int(st["installed_at"]) + GRACE)
+        return int(st["installed_at"]) + GRACE
+
+    @staticmethod
+    def _in_trial(st: dict, now: float) -> bool:
+        tr = st.get("trial")
+        return (isinstance(tr, dict) and bool(tr.get("until")) and not tr.get("ended_at")
+                and now < tr["until"])
+
+    def _trial_view(self, st: dict, now: float) -> dict | None:
+        tr = st.get("trial")
+        if not isinstance(tr, dict) or not tr.get("until"):
+            return None
+        return {"active": self._in_trial(st, now), "until": int(tr["until"]),
+                "ended_at": tr.get("ended_at"), "started_at": tr.get("started_at")}
+
+    def end_trial(self) -> dict:
+        """"Start my wait now": the trial day ends at once, and a no-wait request
+        made in it lapses (a new one takes the full wait). Stricter, so no email
+        is needed; logged to the tamper log."""
+        with self._lock:
+            st = self._read("state.json")
+            now = int(self.clock())
+            if self._in_trial(st, now):
+                st["trial"]["ended_at"] = now
+                self._lapse_if_stale(st, now)
+                self._write("state.json", st)
+                self.tamper_log("trial_ended_early", {"left_seconds": int(st["trial"]["until"] - now)})
+        return self.status()
 
     # --------------------------------------------------------------- time
     def heartbeat(self) -> dict:
@@ -302,6 +411,12 @@ class LocalEscrow:
             # for "now >= unlock_at"; credited time already ignores the jump.
             st["wall_last"], st["mono_last"], st["boot"] = now, mono, boot
             self._write("state.json", st)
+            # v0.8.18: a Mac set up before the trial day existed is marked as having
+            # had its first set-up, so removing and setting up again gives no trial.
+            try:
+                self._write_marker(int(st["installed_at"]))
+            except OSError:
+                pass
         if self.apply_partner_change():
             seen["partner_changed"] = True
         return seen
@@ -311,7 +426,7 @@ class LocalEscrow:
         three clocks saying so is enough: the wall clock, the time credited
         since the request was made (immune to moving the clock back), and the
         network time when known."""
-        grace_until = st["installed_at"] + GRACE
+        grace_until = self._free_until(st)
         if now >= grace_until:
             return True
         if rr.get("status") == "pending" and rr["created_at"] + rr.get("credited", 0) >= grace_until:
@@ -338,7 +453,7 @@ class LocalEscrow:
         if not rr or rr["status"] not in ("pending", "notifying"):
             return False
         stale = False
-        if (rr["kind"] == "grace" or rr.get("grace_window")) and self._grace_over(st, rr, now):
+        if (rr["kind"] in ("grace", "trial") or rr.get("grace_window")) and self._grace_over(st, rr, now):
             stale = True
         elif rr["status"] == "pending" and self._reveal_window_over(rr):
             stale = True
@@ -373,7 +488,7 @@ class LocalEscrow:
         with self._lock:
             st = self._read("state.json")
             now = self.clock()
-            grace_until = st["installed_at"] + GRACE
+            grace_until = self._free_until(st)
             rr = st.get("request")
             view = None
             if rr:
@@ -401,6 +516,8 @@ class LocalEscrow:
                 "pending_wait": st.get("pending_wait"), "holds": self.holds(),
                 "last_emergency_at": st.get("last_emergency_at"),
                 "partner": self.partner.public_view(),
+                # v0.8.18: {"active", "until", "ended_at", "started_at"} or None (no trial day).
+                "trial": self._trial_view(st, now),
                 **self._support_view(st),
             }
 
@@ -416,18 +533,20 @@ class LocalEscrow:
             if rr and rr["status"] == "pending":
                 raise EscrowError("PAX-ESCROW-005", "a request is already open")
             now = int(self.clock())
-            in_grace = now < st["installed_at"] + GRACE
+            in_grace = now < self._free_until(st)
+            in_trial = self._in_trial(st, now)
             wait = 0 if in_grace else st["wait_seconds"]
             rid = _secrets.token_hex(8)
             partner = self.partner.partner()
-            st["request"] = {"id": rid, "kind": "grace" if in_grace else "standard",
+            st["request"] = {"id": rid, "kind": "trial" if in_trial else "grace" if in_grace else "standard",
                              "reason": reason, "status": "notifying" if partner else "pending",
                              "created_at": now, "unlock_at": now + wait, "wait": wait, "credited": 0}
             self._write("state.json", st)
             if partner:
                 what = "remove Pax from this Mac" if reason == "remove" else "get back into this Mac (locked out)"
                 # v0.8.16: plain words for the wait.
-                when = ("straight away (it's still the first hour after set-up)" if in_grace
+                when = ("straight away (it's still the trial day after set-up)" if in_trial
+                        else "straight away (it's still the first hour after set-up)" if in_grace
                         else f"in {_fmt(wait)}, when the turn-off wait ends")
                 ok = self.partner.notify(
                     "removal_requested", "Removal requested for this Mac",
@@ -521,7 +640,7 @@ class LocalEscrow:
             self._write("state.json", st)
             partner = self.partner.partner()
             if partner:
-                in_grace = now < st["installed_at"] + GRACE
+                in_grace = now < self._free_until(st)
                 cool = 0 if in_grace else EMERGENCY_COOLOFF
                 ok = self.partner.notify(
                     "emergency_requested", "Pax emergency release requested",
@@ -540,7 +659,7 @@ class LocalEscrow:
         if not st.get("pending_emergency"):
             return
         st["pending_emergency"] = None
-        in_grace = now < st["installed_at"] + GRACE
+        in_grace = now < self._free_until(st)
         cool = 0 if in_grace else EMERGENCY_COOLOFF
         rr = st.get("request")
         if rr and rr["status"] in ("pending", "notifying"):
@@ -680,6 +799,22 @@ class LocalEscrow:
                 return self.status()
             if sup.get("allowed") or sup.get("pending_on") or sup.get("notifying_on"):
                 self._write("state.json", st)
+                return self.status()
+            if self._in_trial(st, now):
+                # v0.8.18: in the trial day Pax can be turned off with no wait, so turning
+                # this on is instant too. The partner is still told first (no email, no change).
+                ok = self.partner.notify(
+                    "support_release_on", "Verified support release turned on",
+                    "You turned on verified support release on this Mac (it's still your trial day).",
+                    "Your Pax partner turned on verified support release on their Mac: in a genuine "
+                    "emergency that Pax support has checked, a one-time code could remove Pax from that Mac "
+                    "without the wait. You'd be emailed first.", queue=False)
+                if not ok:
+                    raise EscrowError("PAX-ESCROW-010", "We couldn't tell your partner just now, so nothing "
+                                      "changed. Try again in a few minutes.")
+                sup.update({"allowed": True, "pending_on": None, "notifying_on": False})
+                self._write("state.json", st)
+                self.tamper_log("support_release_setting", {"allowed": True, "trial_day": True})
                 return self.status()
             wait = st["wait_seconds"]
             if self.partner.partner():
@@ -838,6 +973,8 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--name", default="paxadmin", choices=["paxadmin"])
     d.add_argument("--support-release", choices=["on", "off"], default="off",
                    help="v0.8.15: allow verified support release (the app sends its set-up choice, on by default)")
+    d.add_argument("--trial", choices=["on", "off"], default="off",
+                   help="v0.8.18: a new set-up asks for a trial day (granted only on this Mac's first day)")
     d.add_argument("--reset", action="store_true",
                    help="set-up only: discard an escrow left by an earlier, unfinished set-up")
     sub.add_parser("status").add_argument("--dir", default=str(DEFAULT_DIR))
@@ -858,8 +995,12 @@ def main(argv: list[str] | None = None) -> int:
             except OSError:
                 pass
             digest = esc.deposit(a.name, secret, wait_seconds=a.wait_seconds,
-                                 support_release=a.support_release == "on")
-            print(json.dumps({"stored": a.name, "sha256": digest}))
+                                 support_release=a.support_release == "on", trial=a.trial == "on")
+            receipt = {"stored": a.name, "sha256": digest}
+            if a.trial == "on":
+                trial = esc.status().get("trial")
+                receipt["trial_until"] = trial["until"] if trial and trial["active"] else None
+            print(json.dumps(receipt))
         else:
             print(json.dumps({k: v for k, v in esc.status().items()}))
     except EscrowError as exc:

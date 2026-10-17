@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.17
+# Pax Peace (Apple), v0.8.18
 
 **Less scrolling. More living.**
 
@@ -27,8 +27,10 @@ It needs no MDM server and no staff in the loop:
 3. That password is generated at random, sent straight to the **escrow server**, and never shown.
 4. To remove Pax you start a removal request. The **turn-off wait** runs (default 3 days, choose
    24 hours to 365 days). When it ends you confirm, and the password is released. Your optional
-   **accountability partner** is emailed. For your **first hour after set-up**, you can change your
-   mind instantly (no wait). There's a
+   **accountability partner** is emailed. On a genuinely new set-up the **first 24 hours are a trial
+   day** (v0.8.18): Pax can be turned off any time with no wait (the partner is still told first), and
+   "Start my wait now" ends it early. Setting up again never restarts it (docs/TRIAL_DAY.md). A set-up
+   without a trial day still gets the old **first hour** with no wait. There's a
    rate-limited **emergency release** with a short cooling-off and crisis-line auto-reply.
 5. **Verified support release** (v0.8.15): in a genuine emergency that Pax support has checked, support
    can issue a one-time code that removes Pax from **one device** straight away. There is no universal
@@ -134,6 +136,7 @@ restoring their device in Finder (which erases it).
 | `PAX_DEFAULT_WAIT_SECONDS` | 259200 (72 h) | wait for new accounts |
 | `PAX_MIN_WAIT_SECONDS` / `PAX_MAX_WAIT_SECONDS` | 24 h / 365 d | allowed range (v0.8.9: the same as a Mac's own key; was 3 d) |
 | `PAX_GRACE_SECONDS` | 1 h | no-wait window after a device is registered; a request made in it lapses when it ends |
+| `PAX_TRIAL_SECONDS` | 24 h | v0.8.18 trial day for a genuinely new set-up (counted from the account's / hardware's first one); 0 turns it off |
 | `PAX_REVEAL_WINDOW_SECONDS` | 7 d | how long after the wait ends you can still confirm; after that the request lapses |
 | `PAX_EMERGENCY_COOLOFF_SECONDS` | 24 h | emergency release cooling-off |
 | `PAX_EMERGENCY_MIN_INTERVAL_SECONDS` | 90 d | one emergency release per account per interval |
@@ -347,6 +350,16 @@ email → back-up reminder (backup, Find My **off**) → connect and detect the 
 optional partner → set-up method and filter → prepare (Keep my data: checks, backup, restore,
 on-phone steps, confirmed; or Clean: back up, erase, supervise) → confirm supervision, generate
 profile, escrow password, install and verify → done (turn Find My back on).
+
+**Home and Settings** (v0.8.18, "1, 2, 3, not option overwhelm"; docs/HOME_AND_SETTINGS.md): Home is
+three cards: **1 Status** (one big line, "Protected" or "Pax turns off in 12 h 19 min · Cancel", the
+trial-day countdown, and at most one "1 thing to know" line that opens to notices), **2 What's blocked**
+(sites and apps, a count and one *Add* each) and **3 Turn off** (one button, *In an emergency* inside).
+This Mac's switches and details are in **Settings**: *Blocking* (ads and trackers, sync, YouTube
+Restricted Mode, the X/Bluesky line), *Pax Max*, *Turning Pax off* (turn-off wait, trial day, verified
+support release), *Accountability partner email*, *Updates*, *About*, and *Advanced* (Support ID, filter and
+its backup state, the *Extra family filter layer* switch, security notices, where the key is kept, server,
+testers).
 
 **Blocked sites** (v0.3): once you have an account on this Mac (the token is kept in the Keychain),
 the sidebar shows *Blocked sites* (also *Pax › Blocked Sites*, ⇧⌘B, and a card on Home). v0.7.0 adds
@@ -853,11 +866,13 @@ Moved to [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md).
 
 | Action | Effect |
 |---|---|
-| Request removal | Starts your current turn-off wait (none in the first hour). Your partner is emailed first: if that email can't be sent, nothing starts (`PAX-ESCROW-010`). You get a copy when the daily email budget allows. |
+| Request removal | Starts your current turn-off wait (none in the trial day or, without one, the first hour). Your partner is emailed first: if that email can't be sent, nothing starts (`PAX-ESCROW-010`). You get a copy when the daily email budget allows. |
 | Cancel | Ends the request. Your partner is emailed. |
 | Confirm (after the timer) | You must send `confirm: true`. The password is released and the device is marked released. Your partner is emailed. Asking again within the reveal window returns the same password. |
 | Don't confirm within 7 days | The request lapses, and a new one starts the full wait again. |
 | Don't confirm a grace-period request within the first hour | It lapses when the hour ends (v0.8.5); a new request takes the full wait. |
+| Trial day (v0.8.18) | New set-ups only: 24 h in which a removal or emergency needs no wait (partner still emailed first) and turning on verified support release is instant. A request made in it lapses when the day ends. |
+| Start my wait now (v0.8.18) | Ends the trial day at once; a no-wait request made in it lapses. Instant, no email (it's stricter). |
 | Lengthen the turn-off wait | Takes effect immediately. |
 | Shorten the turn-off wait | Takes effect only after your *current* wait has passed. Your partner is emailed. Requests already open keep the wait they started with. |
 | Add first partner | Takes effect immediately (more accountability is never delayed). |
@@ -865,7 +880,7 @@ Moved to [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md).
 | Emergency release | Needs a reason. It's logged, unlocks after 24 h (configurable), and you can use it once every 90 days. The auto-reply includes Samaritans **116 123** (UK & Ireland) and **988** (US). Your partner is emailed. |
 | Verified support code (v0.8.15) | Only when Pax support has checked a genuine emergency. The code names one device (its Support ID), works once and expires within 24 hours. The device must have **Allow verified support release** on. Your partner is emailed first; if that fails, nothing is released (`PAX-ESCROW-018`). Then the password is released at once. |
 | Allow verified support release: off | Takes effect immediately. Every code is refused (`PAX-ESCROW-017`). |
-| Allow verified support release: on | Takes effect after your current wait. Your partner is emailed first (`PAX-ESCROW-010` if they can't be). |
+| Allow verified support release: on | Takes effect after your current wait (instantly during the trial day). Your partner is emailed first (`PAX-ESCROW-010` if they can't be). |
 
 Nothing needs a human at Pax to approve it. Removing the profile itself happens on the phone:
 Settings › General › VPN & Device Management › Pax › Remove Profile, then enter the password.

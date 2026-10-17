@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     pending_partner_effective INTEGER,
     last_emergency_at      INTEGER,
     adblock                INTEGER NOT NULL DEFAULT 1,  -- v0.4: Mac ad/tracker blocking
-    block_remote_desktop   INTEGER NOT NULL DEFAULT 1   -- v0.5: remote-desktop category
+    block_remote_desktop   INTEGER NOT NULL DEFAULT 1,  -- v0.5: remote-desktop category
+    trial_started_at       INTEGER                      -- v0.8.18: when this account's trial day began
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -35,13 +36,15 @@ CREATE TABLE IF NOT EXISTS devices (
     released_at        INTEGER,
     support_id         TEXT,                        -- v0.8.15: shown in the app (Details › Support ID)
     support_release    INTEGER NOT NULL DEFAULT 0,  -- v0.8.15: "Allow verified support release"
-    support_pending_on INTEGER                      -- v0.8.15: when a requested "on" takes effect
+    support_pending_on INTEGER,                     -- v0.8.15: when a requested "on" takes effect
+    trial_until        INTEGER,                     -- v0.8.18: end of the trial day (NULL: none)
+    trial_ended_at     INTEGER                      -- v0.8.18: "Start my wait now"
 );
 
 CREATE TABLE IF NOT EXISTS removal_requests (
     id           TEXT PRIMARY KEY,
     device_id    TEXT NOT NULL REFERENCES devices(id),
-    kind         TEXT NOT NULL,            -- 'standard' | 'grace' | 'emergency'
+    kind         TEXT NOT NULL,            -- 'standard' | 'grace' | 'trial' | 'emergency' | 'support'
     status       TEXT NOT NULL,            -- 'pending' | 'cancelled' | 'revealed' | 'lapsed'
     reason       TEXT,
     created_at   INTEGER NOT NULL,
@@ -168,6 +171,13 @@ CREATE TABLE IF NOT EXISTS support_nonces (
     key_id      TEXT
 );
 
+-- v0.8.18: hardware that has had a trial day (SHA-256 of the app's hashed ID), kept
+-- for good so a new account on the same phone or Mac never gets a second one.
+CREATE TABLE IF NOT EXISTS trial_hardware (
+    hw_hash     TEXT PRIMARY KEY,
+    first_at    INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id  TEXT NOT NULL,
@@ -200,6 +210,11 @@ class Database:
         if "block_remote_desktop" not in cols:
             self._conn.execute(
                 "ALTER TABLE accounts ADD COLUMN block_remote_desktop INTEGER NOT NULL DEFAULT 1")
+        # v0.8.18: the extra family-filter layer (Advanced). Off by default: Pax's own
+        # filter decides, then a malware-only resolver answers.
+        if "dns_family_layer" not in cols:
+            self._conn.execute(
+                "ALTER TABLE accounts ADD COLUMN dns_family_layer INTEGER NOT NULL DEFAULT 0")
         # v0.8.8: Pax DNS settings for iPhones/iPads on Pax's own filter.
         for col in ("dns_x_media", "dns_bluesky_media", "dns_youtube_restricted"):
             if col not in cols:
@@ -214,6 +229,13 @@ class Database:
             self._conn.execute("ALTER TABLE devices ADD COLUMN support_release INTEGER NOT NULL DEFAULT 0")
         if "support_pending_on" not in dcols:
             self._conn.execute("ALTER TABLE devices ADD COLUMN support_pending_on INTEGER")
+        # v0.8.18 trial day. Existing devices and accounts arrive with none (NULL):
+        # they set up before trial days existed, so they never get one.
+        for col in ("trial_until", "trial_ended_at"):
+            if col not in dcols:
+                self._conn.execute(f"ALTER TABLE devices ADD COLUMN {col} INTEGER")
+        if "trial_started_at" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN trial_started_at INTEGER")
         # v0.8.13 (project decision): pictures and video on X and Bluesky are always
         # blocked. Force every account back on and close any waiting request to turn
         # them off. Runs at every start; a no-op once done.

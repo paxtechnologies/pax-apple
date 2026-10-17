@@ -59,7 +59,7 @@ def test_turning_remote_desktop_off_waits_and_notifies_partner(tmp_path):
     e.clock.advance(72 * HOUR)
     assert _cat(e, h, "remote_desktop")["enabled"] is False
     assert e.client.get("/v1/guard/config", headers=gh).json()["categories"] == {
-        "bypass": True, "remote_desktop": False}
+        "bypass": True, "remote_desktop": False, "family_layer": False}
 
 
 def test_cancel_and_turn_back_on_is_immediate(tmp_path):
@@ -94,7 +94,7 @@ def test_dns_feed_carries_remote_desktop(tmp_path):
     h = make_account(e)
     e.client.get("/v1/dns", headers=h)
     feed = e.client.get("/internal/v1/dns/changes?since=0", headers={"X-Pax-Internal-Key": "k" * 32})
-    assert feed.json()["accounts"][0]["categories"] == {"remote_desktop": True}
+    assert feed.json()["accounts"][0]["categories"] == {"remote_desktop": True, "family_layer": False}
 
 
 def test_old_database_gets_remote_desktop_column(tmp_path):
@@ -111,3 +111,19 @@ def test_old_database_gets_remote_desktop_column(tmp_path):
     db = Database(str(path))
     row = db.one("SELECT adblock, block_remote_desktop FROM accounts WHERE id='a'")
     assert row["adblock"] == 1 and row["block_remote_desktop"] == 1
+
+
+def test_v0818_family_layer_off_by_default_on_instant_off_waits(tmp_path):
+    e = _env(tmp_path, blocklist_delay_seconds=72 * HOUR)
+    h = make_account(e)
+    gh = _guard(e, h)
+    assert _cat(e, h, "family_layer")["enabled"] is False
+    r = e.client.put("/v1/categories/family_layer", headers=h, json={"enabled": True})
+    assert r.status_code == 200, r.text
+    assert _cat(e, h, "family_layer")["enabled"] is True
+    assert e.client.get("/v1/guard/config", headers=gh).json()["categories"]["family_layer"] is True
+    r = e.client.put("/v1/categories/family_layer", headers=h, json={"enabled": False})
+    assert r.status_code == 202 and r.json()["request"]["action"] == "family_layer_off"
+    assert _cat(e, h, "family_layer")["enabled"] is True
+    e.clock.advance(72 * HOUR)
+    assert _cat(e, h, "family_layer")["enabled"] is False

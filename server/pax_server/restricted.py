@@ -10,6 +10,13 @@ parent is restricted content (common/pax_restricted.py), a media converter
 servers (v0.8.13), or blocked by
 CleanBrowsing Family itself. That last check is a DoH lookup to
 `Settings.restricted_probe_url`; a lookup that fails refuses (fail closed).
+
+v0.8.18: Pax's own filter is the default resolver path, so the check uses Pax's
+own lists first (`lists_check`, the DoH resolver's loaded lists and name rules).
+The outside lookup is only made when the account turned on the extra family
+layer (Advanced; its lookups go through that filter, so its verdict should count
+too) or when Pax's own lists can't answer (not loaded, or the filter is in its
+fallback): then, as before, a failed lookup refuses.
 """
 from __future__ import annotations
 
@@ -65,7 +72,21 @@ def is_restricted(domain: str) -> bool:
     return static_check()(domain)
 
 
-def check(domain: str, probe_url: str) -> None:
-    """Raise pax_restricted.RestrictedSite when `domain` can't be excepted."""
+def check(domain: str, probe_url: str, lists_check: Optional[Callable[[str], Optional[bool]]] = None,
+          family_layer: bool = False) -> None:
+    """Raise pax_restricted.RestrictedSite when `domain` can't be excepted.
+    `lists_check(domain)`: True = Pax's lists block it, False = they don't,
+    None = Pax's filter can't answer right now (v0.8.18)."""
+    verdict = None
+    if lists_check is not None:
+        try:
+            verdict = lists_check(domain)
+        except Exception:  # noqa: BLE001 - can't answer: the outside lookup decides
+            verdict = None
+    if verdict is True:
+        raise pr.RestrictedSite(domain, "pax lists")
+    if verdict is False and not family_layer:
+        pr.check_exception(domain, static=static_check(), lookup=None)
+        return
     lookup = LOOKUP_OVERRIDE or pr.doh_lookup(probe_url)
     pr.check_exception(domain, static=static_check(), lookup=lookup)

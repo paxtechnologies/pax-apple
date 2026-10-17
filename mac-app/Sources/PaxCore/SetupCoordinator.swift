@@ -296,7 +296,10 @@ public final class SetupCoordinator: @unchecked Sendable {
         _ = try await escrow.registerDevice(name: device.name, platform: "ios",
                                             profileIdentifier: profile.profileIdentifier,
                                             removalPassword: profile.removalPassword,
-                                            supportRelease: config.supportRelease)
+                                            supportRelease: config.supportRelease,
+                                            // v0.8.18: a trial day, counted from this phone's first one.
+                                            trial: TrialDay.setUpDefault,
+                                            hardwareID: TrialDay.hardwareID(device.ecid))
         progress(.finished("Password escrowed. You will not see it."))
 
         progress(.started("Installing protection on \(device.name)"))

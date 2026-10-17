@@ -23,8 +23,14 @@ For each query, in this order (guard/dns_forwarder.py `Forwarder.decide`):
   5. Pax's categories: cloud PCs / proxies, X and Bluesky media (unless the
      user chose otherwise), remote desktop (unless switched off after the wait)
   6. overridable lists (DoH / VPN / proxy names)
-  7. upstream: CleanBrowsing Family DoH, then AdGuard Family DoH, else
-     SERVFAIL. Never plain or unfiltered DNS (fail closed).
+  7. upstream (v0.8.18): Quad9 over DNS-over-TLS, then Cloudflare's security
+     resolver (both filter malware only; every content decision is Pax's), then
+     the family-filter chain, else SERVFAIL. The family-filter chain takes every
+     lookup when the account turned on the extra family layer (Advanced), and
+     for everyone, at once, when Pax's own filter fails a check: lists missing or
+     failing their checks, the decision code throwing or slow, or the canary
+     self-test failing (Forwarder.canary, run on start, after each list update and
+     every few minutes). Never plain or unfiltered DNS (fail closed).
 Reddit's and Imgur's media hosts are in pax-block (step 3), as on the Mac.
 
 Roles: "all" (the primary, api.paxpeace.com) reads the account database
@@ -187,10 +193,11 @@ class Policies:
     def _build(self, acct: dict) -> "dnsf.Policy":
         s = _settings_of(acct)
         rd = (acct.get("categories") or {}).get("remote_desktop", True) is not False
+        fam = (acct.get("categories") or {}).get("family_layer") is True      # v0.8.18
         allow = [d for d in acct.get("allow", []) if isinstance(d, str)]
         block = [d for d in acct.get("block", []) if isinstance(d, str)]
         p = dnsf.Policy(blocked=block, exceptions=allow, youtube_restricted=s["youtube_restricted"],
-                        never_except=self._never_except,
+                        never_except=self._never_except, family_layer=fam,
                         restricted_rules=[self._rule] if self._rule else [])
         # The big sets are shared between users (they only differ by switches).
         key = ("r",)
@@ -328,7 +335,7 @@ class DohService:
         ups = dnsf.default_upstreams(timeout=2.5)
         return dnsf.Forwarder(ups, filters=None, log=lambda m: log.warning(m),
                               youtube_upstreams=dnsf.youtube_upstreams(ups, timeout=2.5),
-                              cache_size=50_000)
+                              cache_size=50_000, primary_upstreams=dnsf.primary_upstreams(timeout=2.5))
 
     # ------------------------------------------------------------ lists
     def load_lists(self) -> None:
@@ -448,6 +455,17 @@ class DohService:
         ttl = dnsf.cache_ttl(resp)
         return 200, resp, {"Content-Type": DOH_CT, "Cache-Control": f"max-age={max(0, min(ttl, 300))}"}
 
+    def lists_restricted(self, domain: str) -> Optional[bool]:
+        """v0.8.18, for the exception check: True when Pax's restricted lists or
+        name rules block `domain` (or a parent), False when they don't, None when
+        Pax's own filter can't answer (lists not loaded, or in its fallback)."""
+        fwd = self.forwarder
+        fs = fwd.filters
+        if fs is None or not fwd.pax_filter_ok:
+            return None
+        d = domain.strip(".").lower()
+        return bool(not fs.allowed(d) and fs.restricted_by(d))
+
     def status(self) -> dict:
         fs = self.forwarder.filters
         st = self.forwarder.status()
@@ -459,6 +477,10 @@ class DohService:
             "lists_version": (fs.info.get("version") if fs is not None else None),
             "upstream": st.get("active"),
             "all_upstreams_down": st.get("all_down"),
+            # v0.8.18: "pax" | "fallback" (Pax's filter failed a check) | "family"
+            "filter_mode": st.get("filter_mode"),
+            "fallback_reason": st.get("fallback_reason"),
+            "canary": st.get("canary"),
             "accounts": len(self.policies),
             "last_sync_age_seconds": (None if self.last_sync is None
                                       else round(self.clock() - self.last_sync, 1)),

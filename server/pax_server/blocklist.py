@@ -31,7 +31,7 @@ import re
 import secrets
 import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from .crypto import hash_token
 from .domains import DomainError, display_domain, normalise_domain
@@ -103,12 +103,31 @@ CATEGORIES = {
                "can_turn_off": False},
     "remote_desktop": {"title": "Remote desktop and work virtual desktops",
                        "can_turn_off": True},
+    # v0.8.18 (Advanced): after Pax's own filter, send lookups through a public
+    # family filter too, instead of the malware-only resolver. Off by default; on is
+    # immediate, off waits like a removal (it loosens the filter).
+    "family_layer": {"title": "Extra family filter (Advanced)",
+                     "can_turn_off": True},
 }
+# v0.8.18: the extra family layer, on until a 'family_layer_off' request's wait ends.
+FAMILY_LAYER_SQL = """
+SELECT CASE WHEN a.dns_family_layer = 0 THEN 0
+            WHEN EXISTS (SELECT 1 FROM blocklist_requests r
+                         WHERE r.account_id = a.id AND r.action = 'family_layer_off'
+                           AND r.status = 'pending' AND r.effective_at <= :now) THEN 0
+            ELSE 1 END
+FROM accounts a WHERE a.id = :acct
+"""
+CATEGORY_OFF = {"remote_desktop": ("remote_desktop_off", "block_remote_desktop"),
+                "family_layer": ("family_layer_off", "dns_family_layer")}
 
 
 @dataclass
 class Blocklist:
     escrow: Escrow
+    # v0.8.18: Pax's own lists for the exception check (DohService.lists_restricted);
+    # None = no in-process resolver, so the outside lookup decides as before.
+    lists_check: Optional[Callable[[str], Optional[bool]]] = None
 
     @property
     def db(self):
@@ -225,6 +244,9 @@ class Blocklist:
                 elif r["action"] == "remote_desktop_off":
                     self.db.execute("UPDATE accounts SET block_remote_desktop=0 WHERE id=?",
                                     (r["account_id"],))
+                elif r["action"] == "family_layer_off":
+                    self.db.execute("UPDATE accounts SET dns_family_layer=0 WHERE id=?",
+                                    (r["account_id"],))
                 elif r["action"] in LEGACY_MEDIA_OFF_ACTIONS:
                     # v0.8.13: never applied (db.py refuses these at start-up too).
                     self.db.execute("UPDATE blocklist_requests SET status='refused', closed_at=? WHERE id=?",
@@ -244,6 +266,7 @@ class Blocklist:
                     "allow": f"{display_domain(r['domain'])} is now allowed past the filter",
                     "rotate_token": "your old Pax DNS address has stopped working",
                     "remote_desktop_off": "remote desktop services are no longer blocked",
+                    "family_layer_off": "the extra family filter is off (Pax's own filter still applies)",
                 }[r["action"]]
                 # The partner was told when it was requested; this is news only.
                 self._notify(acct, f"blocklist_{r['action']}_applied", "Pax: change now in effect",
@@ -352,7 +375,8 @@ class Blocklist:
         if self._entry(aid, "allow", domain):
             raise Conflict(f"{display_domain(domain)} is already allowed")
         try:
-            restricted.check(domain, self.settings.restricted_probe_url)
+            restricted.check(domain, self.settings.restricted_probe_url, lists_check=self.lists_check,
+                             family_layer=self.family_layer(aid))
         except restricted.pr.RestrictedSite:
             raise Restricted(restricted.RESTRICTED_MESSAGE, domain=domain) from None
         existing = self._pending(aid, "allow", domain)
@@ -414,6 +438,7 @@ class Blocklist:
             "allow": f"allow {shown} past the filter",
             "rotate_token": "change your Pax DNS address",
             "remote_desktop_off": "stop blocking remote desktop services",
+            "family_layer_off": "turn off the extra family filter",
         }[action]
         what_partner = {
             "unblock": f"unblock {shown}",
@@ -422,6 +447,7 @@ class Blocklist:
                             "lose their custom blocks)",
             "remote_desktop_off": "stop blocking remote desktop and remote-access services "
                                   "(another computer isn't filtered by Pax)",
+            "family_layer_off": "turn off the extra family filter (Pax's own filter stays on)",
         }[action]
         self._notify(
             acct, f"blocklist_{action}_requested", "Pax: change requested",
@@ -451,7 +477,8 @@ class Blocklist:
         self.escrow._log(acct["id"], f"blocklist_{r['action']}_cancelled", detail=r["domain"])
         shown = (display_domain(r["domain"]) if r["domain"] else
                  {"rotate_token": "the DNS address change",
-                  "remote_desktop_off": "turning off remote desktop blocking"}.get(
+                  "remote_desktop_off": "turning off remote desktop blocking",
+                  "family_layer_off": "turning off the extra family filter"}.get(
                      r["action"], r["action"]))
         self._notify(acct, f"blocklist_{r['action']}_cancelled", "Pax: change cancelled",
                      f"You cancelled the pending change for {shown}. Well done.",
@@ -464,17 +491,32 @@ class Blocklist:
         row = self.db.one(REMOTE_DESKTOP_SQL, {"acct": account_id, "now": self.now()})
         return True if row is None else bool(row[0])
 
+    def family_layer(self, account_id: str) -> bool:
+        """v0.8.18: is the extra family-filter layer on?"""
+        row = self.db.one(FAMILY_LAYER_SQL, {"acct": account_id, "now": self.now()})
+        return False if row is None else bool(row[0])
+
+    def category_enabled(self, account_id: str, category: str) -> bool:
+        if category == "family_layer":
+            return self.family_layer(account_id)
+        if category == "remote_desktop":
+            return self.remote_desktop_blocked(account_id)
+        return True
+
     def categories(self, acct) -> dict:
         aid = acct["id"]
         self.apply_due(aid)
         pending = self._pending(aid, "remote_desktop_off", None)
         rd = self.remote_desktop_blocked(aid)
+        fpending = self._pending(aid, "family_layer_off", None)
         return {
             "now": self.now(),
             "categories": [
                 {"id": "bypass", **CATEGORIES["bypass"], "enabled": True, "pending": None},
                 {"id": "remote_desktop", **CATEGORIES["remote_desktop"], "enabled": rd,
                  "pending": self._request_view(pending) if pending else None},
+                {"id": "family_layer", **CATEGORIES["family_layer"], "enabled": self.family_layer(aid),
+                 "pending": self._request_view(fpending) if fpending else None},
             ],
             "delay_seconds": self.delay(acct),
         }
@@ -490,25 +532,26 @@ class Blocklist:
             raise Conflict("this category can't be turned off")
         aid = acct["id"]
         self.apply_due(aid)
-        pending = self._pending(aid, "remote_desktop_off", None)
+        action, column = CATEGORY_OFF[category]
+        pending = self._pending(aid, action, None)
         if enabled:
             now = self.now()
             with self.db.transaction():
                 if pending:
                     self.db.execute("UPDATE blocklist_requests SET status='cancelled', "
                                     "closed_at=? WHERE id=?", (now, pending["id"]))
-                self.db.execute("UPDATE accounts SET block_remote_desktop=1 WHERE id=?", (aid,))
+                self.db.execute(f"UPDATE accounts SET {column}=1 WHERE id=?", (aid,))
                 self._changed(aid)
-            self.escrow._log(aid, "remote_desktop_on")
+            self.escrow._log(aid, f"{category}_on")
             return 200, self.categories(acct)
-        if not self.remote_desktop_blocked(aid):
+        if not self.category_enabled(aid, category):
             return 200, self.categories(acct)
         if pending:
             raise Conflict("turning this off is already waiting",
                            request=self._request_view(pending))
-        out = self._new_request(acct, "remote_desktop_off", None)
-        # A remote-desktop change is invisible to pax-dns until the wait ends;
-        # bump the feed anyway so devices refresh their view of the request.
+        out = self._new_request(acct, action, None)
+        # A category change is invisible to DNS until the wait ends; bump the
+        # feed anyway so devices refresh their view of the request.
         self._changed(aid)
         return 202, {"request": out["request"], **self.categories(acct)}
 
@@ -625,7 +668,8 @@ class Blocklist:
                 "tokens": [{"hash": t["token_hash"], "retire_at": t["retire_at"]} for t in tokens],
                 "block": block,
                 "allow": allow,
-                "categories": {"remote_desktop": self.remote_desktop_blocked(aid)},
+                "categories": {"remote_desktop": self.remote_desktop_blocked(aid),
+                               "family_layer": self.family_layer(aid)},     # v0.8.18
                 "settings": self.dns_settings_values(aid),   # v0.8.8
             })
         return {"seq": seq, "now": now, "full": since <= 0, "accounts": accounts}

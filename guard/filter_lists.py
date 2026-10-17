@@ -49,7 +49,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# pax_restricted.py ships next to this file; in the repo it lives in common/.
+sys.path.append(str(Path(__file__).resolve().parent.parent / "common"))
 import pax_signing  # noqa: E402
+import pax_restricted as pr  # noqa: E402
 from domain_matcher import SmallSuffixSet, SuffixMatcher  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -201,16 +204,24 @@ class FilterSet:
 
     `block` holds the lists an exception may free (pax-bypass, plug-ins marked
     "restricted": false); `restricted` the ones it never frees (pax-block,
-    pax-nrd, other plug-ins), with `keyword_rules` (restricted too)."""
+    pax-nrd, other plug-ins), with `keyword_rules` (restricted too).
+
+    v0.8.18: `name_rules` (restricted) and `bypass_rules` (an exception may
+    free them) are name rules applied to every lookup, after the lists:
+    FilterStore.load() adds pax_restricted.lookup_rule() and
+    bypass_name_rule()."""
 
     def __init__(self, block: list, allow: SmallSuffixSet, safesearch: dict[str, str],
                  keyword_rules: list[KeywordRule] | None = None, info: dict | None = None,
-                 restricted: list | None = None):
+                 restricted: list | None = None, name_rules: list | None = None,
+                 bypass_rules: list | None = None):
         self.block = block                  # SuffixMatcher / SmallSuffixSet objects
         self.restricted = restricted or []
         self.allow = allow
         self.safesearch = safesearch
         self.keyword_rules = keyword_rules or []
+        self.name_rules = name_rules or []
+        self.bypass_rules = bypass_rules or []
         self.info = info or {}
 
     def safesearch_target(self, name: str) -> str | None:
@@ -228,6 +239,9 @@ class FilterSet:
         for r in self.keyword_rules:
             if r.match(name):
                 return "keyword"
+        for r in self.name_rules:
+            if r.match(name):
+                return "name-rule"
         return None
 
     def overridable_by(self, name: str) -> str | None:
@@ -236,6 +250,9 @@ class FilterSet:
             hit = m.match(name)
             if hit:
                 return hit
+        for r in self.bypass_rules:
+            if r.match(name):
+                return "bypass-name-rule"
         return None
 
     def blocked_by(self, name: str) -> str | None:
@@ -371,7 +388,11 @@ class FilterStore:
         cur = self.current_manifest()
         info["version"] = (cur or man).get("version")
         info["bundled_version"] = man.get("version")
-        return FilterSet(block, SmallSuffixSet(allow_names), safesearch, kw_rules, info, restricted=restricted)
+        # v0.8.18: the built-in name rules ship with the code (a signed app
+        # update), not with the list manifest.
+        info["name_rules"] = True
+        return FilterSet(block, SmallSuffixSet(allow_names), safesearch, kw_rules, info, restricted=restricted,
+                         name_rules=[pr.lookup_rule()], bypass_rules=[pr.bypass_name_rule()])
 
     def plugins(self) -> list[tuple[Path, dict]]:
         out = []

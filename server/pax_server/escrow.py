@@ -31,6 +31,15 @@ Rules (see README "How removal works"):
     device: on by default for new set-ups (the app sends the choice), off for
     devices registered before 0.8.15 (never turned on by a migration), off at
     once, on only after the account's wait with the partner told first.
+  * Trial day (v0.8.18): a genuinely new set-up (the app asks for it and sends a
+    hashed hardware ID) gets trial_seconds (24 h) in which turning Pax off needs no
+    wait; the partner is still emailed first (fail closed). It replaces the 1-hour
+    grace for that device. The day is counted from the FIRST trial start of the
+    account and of the hardware (trial_hardware, kept for good), so setting up
+    again, a new account on the same phone or reinstalling only ever gets what is
+    left of that first day. Turning on verified support release is instant in the
+    trial day (partner first). "Start my wait now" ends it early and lapses any
+    no-wait request. Devices registered before 0.8.18 never have one.
 """
 from __future__ import annotations
 
@@ -442,7 +451,8 @@ class Escrow:
 
     # ---------------------------------------------------------------- devices
     def register_device(self, acct, name: str, platform: str, profile_identifier: str,
-                        removal_password: str, support_release: bool = False) -> dict:
+                        removal_password: str, support_release: bool = False,
+                        trial: bool = False, hardware_id: Optional[str] = None) -> dict:
         # "mac" (v0.4) = a self-locked Mac: the escrowed secret is the hidden
         # paxadmin account's password, not a profile removal password.
         if platform not in ("ios", "ipados", "macos", "mac"):
@@ -452,13 +462,17 @@ class Escrow:
         device_id = _id()
         now = self.clock.now()
         ct = self.box.encrypt(removal_password, aad=device_id)
+        trial_until = self._trial_for_new_device(acct, now, hardware_id) if trial else None
         self.db.execute(
             "INSERT INTO devices(id, account_id, name, platform, profile_identifier, "
-            "password_ct, installed_at, support_id, support_release) VALUES (?,?,?,?,?,?,?,?,?)",
+            "password_ct, installed_at, support_id, support_release, trial_until) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (device_id, acct["id"], name, platform, profile_identifier, ct, now,
-             self._new_support_id(), 1 if support_release else 0),
+             self._new_support_id(), 1 if support_release else 0, trial_until),
         )
         self._log(acct["id"], "device_registered", device_id, name)
+        if trial:
+            self._log(acct["id"], "trial_day", device_id,
+                      f"until {trial_until}" if trial_until else "none (already had one)")
         self._log(acct["id"], "support_release_setting", device_id,
                   f"setup {'on' if support_release else 'off'}")
         return self.device_status(acct, device_id)
@@ -469,6 +483,70 @@ class Escrow:
         if not row:
             raise NotFound("device not found")
         return self._support_materialize(acct, row)
+
+    # ------------------------------------------------------ v0.8.18 trial day
+    def _trial_for_new_device(self, acct, now: int, hardware_id: Optional[str]) -> Optional[int]:
+        """The end of a new device's trial day, or None. Counted from the earliest
+        of: this account's first trial start, this account's first device (an
+        account from before 0.8.18 has long had its day) and this hardware's first
+        trial start. Needs the hashed hardware ID, so a crafted or older client
+        never gets one. Records both starts either way."""
+        import hashlib
+        if self.settings.trial_seconds <= 0:
+            return None
+        hw = (hardware_id or "").strip().lower()
+        if not (16 <= len(hw) <= 128) or not all(c in "0123456789abcdef" for c in hw):
+            return None
+        starts = [now]
+        if acct["trial_started_at"] is not None:
+            starts.append(acct["trial_started_at"])
+        first_dev = self.db.one("SELECT MIN(installed_at) AS t FROM devices WHERE account_id=?", (acct["id"],))
+        if first_dev and first_dev["t"] is not None:
+            starts.append(first_dev["t"])
+        hw_hash = hashlib.sha256(("pax-trial-hw:" + hw).encode()).hexdigest()
+        row = self.db.one("SELECT first_at FROM trial_hardware WHERE hw_hash=?", (hw_hash,))
+        if row:
+            starts.append(row["first_at"])
+        else:
+            self.db.execute("INSERT OR IGNORE INTO trial_hardware(hw_hash, first_at) VALUES (?,?)", (hw_hash, now))
+        start = min(starts)
+        if acct["trial_started_at"] is None:
+            self.db.execute("UPDATE accounts SET trial_started_at=? WHERE id=? AND trial_started_at IS NULL",
+                            (start, acct["id"]))
+        until = start + self.settings.trial_seconds
+        return until if until > now else None
+
+    def _free_until(self, d) -> int:
+        """Until when a removal on this device needs no wait: its trial day (or when
+        it was ended early), else the first hour after registration."""
+        grace_until = d["installed_at"] + self.settings.grace_seconds
+        if d["trial_until"]:
+            if d["trial_ended_at"]:
+                return d["trial_ended_at"]
+            return max(d["trial_until"], grace_until)
+        return grace_until
+
+    def _in_trial(self, d, now: int) -> bool:
+        return bool(d["trial_until"]) and not d["trial_ended_at"] and now < d["trial_until"]
+
+    def _trial_view(self, d, now: int) -> Optional[dict]:
+        if not d["trial_until"]:
+            return None
+        return {"active": self._in_trial(d, now), "until": d["trial_until"], "ended_at": d["trial_ended_at"]}
+
+    def end_trial(self, acct, device_id: str) -> dict:
+        """"Start my wait now": the trial day ends at once and a no-wait request made
+        in it lapses. Stricter, so it never waits on email."""
+        d = self._device(acct, device_id)
+        now = self.clock.now()
+        if self._in_trial(d, now):
+            self.db.execute("UPDATE devices SET trial_ended_at=? WHERE id=?", (now, d["id"]))
+            rows = self.db.all("SELECT * FROM removal_requests WHERE device_id=? AND status='pending' "
+                               "AND (kind IN ('trial','grace') OR expires_at<=?)", (d["id"], d["trial_until"]))
+            for r in rows:
+                self._lapse(r, acct["id"], now)
+            self._log(acct["id"], "trial_ended_early", d["id"], f"{d['trial_until'] - now}s left")
+        return self.device_status(acct, device_id)
 
     # ------------------------------------------------ v0.8.15 support release
     @staticmethod
@@ -500,6 +578,19 @@ class Escrow:
             self._log(acct["id"], "support_release_setting", d["id"], "off")
             return self.device_status(acct, device_id)
         if d["support_release"] or d["support_pending_on"] is not None:
+            return self.device_status(acct, device_id)
+        if self._in_trial(d, self.clock.now()):
+            # v0.8.18: in the trial day Pax can be turned off with no wait, so this is
+            # instant too. The partner is still told first (no email, no change).
+            self._notify(
+                acct, "support_release_on", f"Verified support release turned on for {d['name']}",
+                f"You turned on verified support release on {d['name']} (it's still your trial day).",
+                f"{acct['email']} turned on verified support release on {d['name']}: in a genuine "
+                "emergency that Pax support has checked, a one-time code could remove Pax from that device "
+                "without the wait. You'd be emailed first.",
+            )
+            self.db.execute("UPDATE devices SET support_release=1, support_pending_on=NULL WHERE id=?", (d["id"],))
+            self._log(acct["id"], "support_release_setting", d["id"], "on (trial day, instant)")
             return self.device_status(acct, device_id)
         wait = acct["wait_seconds"]
         self._notify(
@@ -586,6 +677,8 @@ class Escrow:
         covers requests made under an older, longer grace period too."""
         if now > rr["expires_at"]:
             return True
+        if rr["status"] == "pending" and rr["kind"] == "trial":
+            return now >= rr["expires_at"]          # expires_at is the end of the trial day
         return (rr["status"] == "pending" and rr["kind"] == "grace"
                 and now >= installed_at + self.settings.grace_seconds)
 
@@ -617,7 +710,7 @@ class Escrow:
         rows = self.db.all(
             "SELECT rr.*, d.installed_at AS device_installed_at, d.account_id AS account_id "
             "FROM removal_requests rr JOIN devices d ON d.id=rr.device_id "
-            "WHERE rr.status='pending' AND (rr.expires_at<? OR (rr.kind='grace' AND d.installed_at+?<=?))",
+            "WHERE rr.status='pending' AND (rr.expires_at<=? OR (rr.kind='grace' AND d.installed_at+?<=?))",
             (now, self.settings.grace_seconds, now))
         n = 0
         for r in rows:
@@ -644,7 +737,7 @@ class Escrow:
     def device_status(self, acct, device_id: str) -> dict:
         d = self._device(acct, device_id)
         now = self.clock.now()
-        grace_until = d["installed_at"] + self.settings.grace_seconds
+        grace_until = self._free_until(d)
         return {
             "device_id": d["id"],
             "name": d["name"],
@@ -661,6 +754,8 @@ class Escrow:
                                 "pending_on_at": d["support_pending_on"]},
             # v0.8.16: the account's turn-off wait, for the app's "Turn-off wait: 7 days" row.
             "wait_seconds": acct["wait_seconds"],
+            # v0.8.18: {"active", "until", "ended_at"}, or None (no trial day).
+            "trial": self._trial_view(d, now),
         }
 
     def list_devices(self, acct) -> list[dict]:
@@ -678,15 +773,17 @@ class Escrow:
             raise Conflict("a removal request is already open",
                            removal_request=self._request_view(existing))
         now = self.clock.now()
-        grace_until = d["installed_at"] + self.settings.grace_seconds
+        grace_until = self._free_until(d)
         in_grace = now < grace_until
+        in_trial = self._in_trial(d, now)
         wait = 0 if in_grace else acct["wait_seconds"]
-        kind = "grace" if in_grace else "standard"
+        kind = "trial" if in_trial else "grace" if in_grace else "standard"
         unlock_at = now + wait
         # A grace request can only be confirmed while the grace period lasts.
         expires_at = grace_until if in_grace else unlock_at + self.settings.reveal_window_seconds
         # v0.8.16: plain words for the wait (new users found "the wait" confusing).
-        when = ("straight away (it's still the first hour after set-up)" if in_grace
+        when = ("straight away (it's still the trial day after set-up)" if in_trial
+                else "straight away (it's still the first hour after set-up)" if in_grace
                 else f"in {fmt_duration(wait)}, when the turn-off wait ends")
         # Partner first (fail closed): if they can't be told, no countdown starts.
         self._notify(
@@ -770,7 +867,7 @@ class Escrow:
                 f"emergency release was used recently; next available in "
                 f"{fmt_duration(next_ok - now)}. A normal removal request still works.",
                 crisis_lines=CRISIS_LINES)
-        grace_until = d["installed_at"] + self.settings.grace_seconds
+        grace_until = self._free_until(d)
         in_grace = now < grace_until
         cooloff = 0 if in_grace else self.settings.emergency_cooloff_seconds
         target_unlock = now + cooloff

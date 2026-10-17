@@ -46,6 +46,7 @@ MAX_APPS = 200          # v0.8.7 (guard_config.MAX_BLOCKED_APPS)
 SITE_ACTIONS = ("unblock", "allow")
 PAX_MAX_KEY = "pax-max"           # v0.8.12: the "domain" of a pax_max_off request
 PAX_MAX_OFF_SECONDS = 3600        # v0.8.12: turning Pax Max off waits a fixed hour
+FAMILY_LAYER_KEY = "family-layer"  # v0.8.18: the "domain" of a family_layer_off request
 _DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z][a-z0-9-]{1,62}$")
 
 
@@ -143,6 +144,11 @@ class LocalBlocklist:
                     elif r["action"] == "pax_max_off":
                         data["pax_max"] = False
                         done.append("turn off Pax Max")
+                        applied.append(r)
+                        continue
+                    elif r["action"] == "family_layer_off":
+                        data["family_layer"] = False
+                        done.append("turn off the extra family filter")
                         applied.append(r)
                         continue
                     elif r["action"] == "allow":
@@ -278,6 +284,43 @@ class LocalBlocklist:
                 self._save(data)
         return {"domain": d, "created": created, "list": self.view()}
 
+    # ------------------------------------------ v0.8.18 extra family layer
+    def family_layer(self) -> bool:
+        """The extra family-filter layer (Advanced): off unless switched on here."""
+        self.apply_due()
+        return self._load().get("family_layer") is True
+
+    def family_layer_pending(self) -> dict | None:
+        self.apply_due()
+        now = int(self.clock())
+        for r in self._load()["pending"]:
+            if r["action"] == "family_layer_off" and r["status"] in ("pending", "notifying"):
+                return self._req_view(r, now)
+        return None
+
+    def family_layer_on(self) -> bool:
+        """Instant (stricter); cancels a waiting request to turn it off. True if it was off."""
+        with self._lock:
+            data = self._load()
+            was = data.get("family_layer") is True
+            data["family_layer"] = True
+            gates = []
+            for r in data["pending"]:
+                if r["action"] == "family_layer_off" and r["status"] in ("pending", "notifying"):
+                    if r["status"] == "notifying":
+                        gates.append(r["id"])
+                    r["status"] = "cancelled"
+            self._save(data)
+        for rid in gates:
+            if self.partner:
+                self.partner.drop_gate({"type": "blocklist", "id": rid})
+        return not was
+
+    def request_family_layer_off(self) -> dict:
+        """A loosening: the partner first (fail closed), then the user's own wait."""
+        out = self._request("family_layer_off", FAMILY_LAYER_KEY, label="the extra family filter")
+        return {"request": out["request"]}
+
     # ---------------------------------------------------- v0.8.12 Pax Max
     def pax_max(self, default: bool) -> bool:
         """Pax Max in effect: the last switch here, else the set-up choice."""
@@ -338,7 +381,8 @@ class LocalBlocklist:
             self._save(data)
         if has_partner:
             what = {"unblock": f"unblock {d}", "unblock_app": f"unblock the app {label or d}",
-                    "pax_max_off": "turn off Pax Max (the image blur)"}.get(
+                    "pax_max_off": "turn off Pax Max (the image blur)",
+                    "family_layer_off": "turn off the extra family filter (Pax's own filter stays on)"}.get(
                 action, f"allow {d} (a site Pax blocks)")
             when_you = "in 1 hour" if action == "pax_max_off" else "after your turn-off wait"
             when_they = "in 1 hour" if action == "pax_max_off" else "after their turn-off wait"

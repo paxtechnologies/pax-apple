@@ -199,6 +199,16 @@ From v0.8.0 the Mac app **ships** compiled lists (`guard/filters/pax-block.txt.g
   parent-collapsed); it is shared under the same terms and credited here.
 * **WhoisDS** newly registered domains (filtered by Pax's name rule, `pax-nrd.txt.gz`), <https://www.whoisds.com>.
 
+v0.8.18 adds two checked inputs (`lists/verified/`, see docs/FILTER_LISTS.md):
+
+* **ShadowWhisperer BlockLists**, restricted-content list (`Lists/Adult`),
+  <https://github.com/ShadowWhisperer/BlockLists>, released into the public domain (The Unlicense). Only names
+  that were live and whose homepage was checked on the build date are used (`pax-block-extra.txt.gz`).
+* **UT1 blacklists**, "redirector" category, Université Toulouse Capitole, <https://dsi.ut-capitole.fr/blacklists/>,
+  CC BY-SA 4.0. Only names whose homepage was a working web proxy or proxy list on the build date are used
+  (`pax-bypass-extra.txt.gz`, part of `pax-bypass.txt.gz`). The selection is an adaptation; it is shared under the
+  same terms and credited here.
+
 The exact list names and download addresses are in `licenses/upstream-notices.txt.gz` and, encoded, in
 `common/pax_restricted.py` (`sources`).
 

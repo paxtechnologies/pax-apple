@@ -10,6 +10,7 @@ can reach it; nothing on it can weaken Pax faster than the wait allows:
   escrow.status / escrow.request {reason: remove|locked_out} / escrow.cancel /
   escrow.reveal (only after the wait) / escrow.emergency {reason} /
   escrow.set_wait {seconds} (longer now, shorter after the current wait)
+  escrow.end_trial (v0.8.18: "Start my wait now", ends the trial day early)
   blocklist.get / blocklist.add {domain} / blocklist.unblock {domain} (waits) /
   blocklist.allow {domain} (waits) / blocklist.remove_allow {domain} /
   blocklist.cancel {request_id}
@@ -20,6 +21,8 @@ can reach it; nothing on it can weaken Pax faster than the wait allows:
   apps.cancel {request_id}                                (v0.8.7, local escrow)
   settings.get / settings.set {youtube_restricted: bool}   (v0.8.6)
                             / {adblock: bool}               (v0.8.7, local escrow)
+                            / {family_layer: bool}          (v0.8.18, local escrow:
+                              on at once; off waits like a removal)
   X and Bluesky media are always blocked (v0.8.13): settings.set refuses
   x_media / bluesky_media false with PAX-DNS-016
   paxmax.get / paxmax.on (instant) / paxmax.off (partner first, then a fixed

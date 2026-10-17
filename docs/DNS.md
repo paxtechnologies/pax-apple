@@ -1,10 +1,67 @@
-# DNS on the Mac (v0.8.0)
+# DNS on the Mac (v0.8.0; resolver path v0.8.18)
 
 (v0.8.9: blocked sites are shared between the Mac and iPhones by default; see [SYNC.md](SYNC.md).)
 
 v0.8.0 replaces the v0.7 CleanBrowsing DoH profile payload on the Mac with **pax-guard's local forwarder**
 on `127.0.0.1:53` (`guard/dns_forwarder.py`, standard library only). The iPhone/iPad is unchanged: its
 profile sends DNS straight to CleanBrowsing Family over DoH.
+
+## v0.8.18: Pax's own filter first, the family filter as a backup
+
+Since 0.8.18 Pax's own lists, name rules and SafeSearch rewrites make every content decision, on the Mac
+(pax-guard's forwarder) and on the iPhone/iPad path (pax-server's DoH resolver, the same engine). An
+allowed lookup then goes to a resolver that filters malware and phishing only:
+
+| Order | Upstream | Transport |
+|---|---|---|
+| 1 | Quad9 (`dns.quad9.net`, 9.9.9.9 / 149.112.112.112) | DNS-over-TLS, port 853 |
+| 2 | Cloudflare security (`security.cloudflare-dns.com`, 1.1.1.2 / 1.0.0.2) | DoH |
+| 3 | the family-filter chain (the two family DoH resolvers below) | DoH |
+| — | nothing answered | SERVFAIL (never plain, unfiltered DNS) |
+
+Quad9's DoH only speaks HTTP/2 (it answers HTTP/1.1 with 505, checked 2026-10-17) and the forwarder is
+standard-library Python, so Quad9 is reached over DNS-over-TLS. In a 2026-10-17 test of a few hundred
+lookups from a cloud host (not a home connection), the new path answered in a median 6.5 ms (p95 187 ms)
+against 83 ms (p95 255 ms) for the family-filter path.
+
+**Automatic fallback.** The family-filter chain takes every lookup, at once, when Pax's own filter can't be
+trusted:
+
+* the lists are missing, empty, below `CANARY_MIN_ENTRIES` or failed their signed checks (the bundled copy
+  failing too leaves an empty set, which fails the canary);
+* the decision code throws, or one decision takes longer than `DECIDE_SLOW` (0.5 s);
+* the **canary self-test** fails. It runs on start, after every list change and every 3 minutes (every
+  minute while in the fallback): the known restricted test names in `common/pax_restricted.py` (encoded)
+  must be in the restricted lists and be blocked by the decision code, a made-up name only the name rule
+  knows must be blocked, five everyday names (example.com, wikipedia.org, apple.com, gov.uk, bbc.co.uk)
+  must be allowed, and the whole test must finish within 2 s.
+
+Entering or leaving the fallback is logged (`PAX-DNS-017`), written to the tamper log on the Mac
+(`dns:fallback_on` / `dns:fallback_off` with the reason) and shown in the DNS status as `filter_mode`
+(`pax`, `family-layer`, `fallback`), `fallback_reason` and `canary`. Pax switches back only after the canary
+passes again. While in the fallback, Pax's own blocks still apply wherever its decision code still runs;
+the family filter answers the rest. Cache entries are kept apart per route and flushed on every switch, so
+an answer from the malware-only path is never served during the fallback.
+
+**Extra family layer (Advanced).** A user can send every allowed lookup through the family filter too
+(settings key `family_layer`; server accounts: the `family_layer` category). Turning it on is immediate;
+turning it off loosens the filter, so it waits like a removal (partner told first, then the user's own
+turn-off wait). Off by default.
+
+**pf.** The malware-only resolvers are reachable by root only (the forwarder), on 443 and 853; everyone
+else is blocked from them. When pf can't match by user, they're blocked for everyone and the forwarder
+uses the family chain.
+
+**Exception requests.** Pax's own lists decide whether a site may get an exception. The family filter is
+asked as well only when the user has the extra family layer on, or when Pax's own filter can't answer
+(lists not loaded, or in the fallback); a lookup that fails then refuses, as before.
+
+**What the second layer used to add.** Measured on Pax's test sets with cached answers: the family filter
+blocks some mixed-content platforms by policy that Pax deliberately leaves open (for example a few social
+networks, an internet archive and dynamic-DNS services), and catches some restricted and proxy names the
+lists don't know yet. The numbers are kept with the release notes for the maintainer.
+
+The text below describes 0.8.0-0.8.17, where the family-filter chain was the only upstream.
 
 Per query, in order:
 

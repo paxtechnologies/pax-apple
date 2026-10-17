@@ -274,6 +274,7 @@ public enum MacLockdownCommands {
     /// without it (`swift run` from the repo) uses /usr/bin/python3 as before.
     public static func localEscrowDeposit(guardSource: String, secretFile: String, waitSeconds: Int,
                                           supportRelease: Bool = VerifiedSupportRelease.setUpDefault,
+                                          trial: Bool = TrialDay.setUpDefault,
                                           isExecutable: (String) -> Bool = {
                                               FileManager.default.isExecutableFile(atPath: $0) }) -> (String, [String]) {
         let bundled = URL(fileURLWithPath: guardSource).deletingLastPathComponent()
@@ -282,6 +283,8 @@ public enum MacLockdownCommands {
         return (python, flags + [guardSource + "/local_escrow.py", "deposit", "--secret-file", secretFile,
                                  // v0.8.15: the set-up choice for verified support release.
                                  "--support-release", supportRelease ? "on" : "off",
+                                 // v0.8.18: ask for a trial day (pax-guard grants it only on this Mac's first day).
+                                 "--trial", trial ? "on" : "off",
                                  "--wait-seconds", String(waitSeconds), "--reset"])
     }
 
@@ -400,6 +403,8 @@ public actor MacLockdown {
     let rotateRecoveryKey: Bool
     /// v0.8.15: the set-up choice "Allow verified support release" (on by default).
     let supportRelease: Bool
+    /// v0.8.18: a new set-up asks for a trial day (whoever holds the key decides).
+    let trialDay: Bool
 
     /// Steps already done, newest first, so rollback can undo them in order.
     private var completed: [MacLockdownStep] = []
@@ -414,8 +419,10 @@ public actor MacLockdown {
                 },
                 verifyRetryDelayNanos: UInt64 = 1_500_000_000,
                 escrowMode: MacEscrowMode = .server, localWaitSeconds: Int = 72 * 3600,
-                rotateRecoveryKey: Bool = true, supportRelease: Bool = VerifiedSupportRelease.setUpDefault) {
+                rotateRecoveryKey: Bool = true, supportRelease: Bool = VerifiedSupportRelease.setUpDefault,
+                trialDay: Bool = TrialDay.setUpDefault) {
         self.supportRelease = supportRelease
+        self.trialDay = trialDay
         self.escrowMode = escrowMode
         self.localWaitSeconds = localWaitSeconds
         self.rotateRecoveryKey = rotateRecoveryKey
@@ -658,7 +665,8 @@ public actor MacLockdown {
                 let deposit = MacLockdownCommands.localEscrowDeposit(guardSource: paths.guardSource.path,
                                                                      secretFile: secretURL.path,
                                                                      waitSeconds: localWaitSeconds,
-                                                                     supportRelease: supportRelease)
+                                                                     supportRelease: supportRelease,
+                                                                     trial: trialDay)
                 let stored = try await asRoot(deposit)
                 completed.append(.escrow)       // rollback empties the safe from here on
                 guard stored.exitCode == 0, LocalEscrowReceipt.matches(stored.combined, password: adminPassword) else {
@@ -675,7 +683,9 @@ public actor MacLockdown {
                     device = try await escrow.registerDevice(name: deviceName, platform: "mac",
                                                              profileIdentifier: profileIdentifier,
                                                              removalPassword: adminPassword,
-                                                             supportRelease: supportRelease)
+                                                             supportRelease: supportRelease,
+                                                             trial: trialDay,
+                                                             hardwareID: trialDay ? TrialDay.thisMacHardwareID() : nil)
                 } catch {
                     throw MacLockdownError.escrowFailed(error.localizedDescription)
                 }
@@ -938,6 +948,22 @@ extension EscrowClient {
         /// v0.8.16: the device's turn-off wait in seconds, for "Turn-off wait: 7 days"
         /// (pax-guard has always sent it; the server from 0.8.16; nil from older ones).
         public let wait_seconds: Int?
+        /// v0.8.18: the trial day (nil: none, or an older server or pax-guard).
+        public let trial: TrialState?
+
+        /// v0.8.18: {"active", "until", "ended_at"}. `active` is as of when it was read;
+        /// the app also checks `until` against the clock for its countdown.
+        public struct TrialState: Decodable, Sendable, Equatable {
+            public let active: Bool
+            public let until: Int
+            public let ended_at: Int?
+
+            public init(active: Bool, until: Int, ended_at: Int? = nil) {
+                self.active = active
+                self.until = until
+                self.ended_at = ended_at
+            }
+        }
 
         public struct SupportReleaseState: Decodable, Sendable {
             public let allowed: Bool
@@ -994,6 +1020,11 @@ extension EscrowClient {
 
     public func accountSummary() async throws -> AccountSummary {
         try await send("GET", "v1/accounts/me")
+    }
+
+    /// v0.8.18 "Start my wait now": ends the device's trial day early.
+    public func endTrial(deviceID: String) async throws -> DeviceStatus {
+        try await send("POST", "v1/devices/\(deviceID)/trial/end")
     }
 
     /// v0.8.15 "Allow verified support release": off at once; on after the wait, partner told first.

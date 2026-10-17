@@ -606,9 +606,9 @@ private struct PhoneDoneStep: View {
         VStack(alignment: .leading, spacing: 22) {
             StepHeader(eyebrow: "", title: "You're protected",
                        subtitle: model.config.mode == .keepData
-                           ? "Everything on your iPhone is where you left it. " + TurnOffWait.firstHour
+                           ? "Everything on your iPhone is where you left it. " + TrialDay.doneLine
                            : "Finish the setup screens on the phone and sign back in to iCloud. "
-                               + TurnOffWait.firstHour)
+                               + TrialDay.doneLine)
             Card {
                 Label("Turn Find My back on", systemImage: "location.circle")
                     .font(Theme.body(15, weight: .semibold)).foregroundStyle(Theme.primaryText)

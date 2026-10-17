@@ -157,50 +157,33 @@ struct IPhoneAppPickerSheet: View {
     }
 }
 
-/// This Mac's page: Blocked apps (pax-guard keeps and enforces them).
-struct MacBlockedAppsCard: View {
+/// This Mac's blocked apps, one row each (v0.8.18: opened from Home › What's blocked ›
+/// Apps; Home shows the count and "Add"). pax-guard keeps and enforces them.
+struct MacBlockedAppRows: View {
     @EnvironmentObject var mac: MacProtectModel
-    @State private var showPicker = false
 
     var body: some View {
-        Card {
-            HStack {
-                Text("Blocked apps").font(Theme.heading(20)).foregroundStyle(Theme.primaryText)
-                Spacer()
-                if mac.canBlockApps {
-                    Button("Add app…") { showPicker = true }.buttonStyle(SecondaryButtonStyle())
-                }
-            }
-            if !mac.canBlockApps {
-                NoteRow(icon: "info.circle", text: "Blocked apps work when this Mac keeps its own key "
-                        + "(Settings › Advanced).")
-            } else if let view = mac.blockedApps, !view.apps.isEmpty {
-                ForEach(view.apps) { app in
-                    HStack {
-                        Text(app.name).font(Theme.body(14)).foregroundStyle(Theme.primaryText)
-                        Spacer()
-                        if let r = app.pending_removal {
-                            Text(r.status == "notifying" ? "Telling your partner first"
-                                 : "Unblocks in \(Self.duration(r.seconds_remaining))")
-                                .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                            Button("Cancel") { mac.cancelAppRequest(r.request_id) }.buttonStyle(.link)
-                        } else {
-                            Button("Unblock…") { mac.unblockApp(app.bundle_id) }.buttonStyle(.link)
-                        }
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(mac.blockedApps?.apps ?? []) { app in
+                HStack {
+                    Text(app.name).font(Theme.body(14)).foregroundStyle(Theme.primaryText)
+                    Spacer()
+                    if let r = app.pending_removal {
+                        Text(r.status == "notifying" ? "Telling your partner first"
+                             : "Unblocks in \(Self.duration(r.seconds_remaining))")
+                            .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                        Button("Cancel") { mac.cancelAppRequest(r.request_id) }.buttonStyle(.link)
+                    } else {
+                        Button("Unblock…") { mac.unblockApp(app.bundle_id) }.buttonStyle(.link)
                     }
                 }
-                Text("Blocking is instant. Unblocking takes your turn-off wait, and your partner is told first.")
-                    .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-            } else {
-                Text("No apps yet. A blocked app is closed and put away, even if it's renamed or copied.")
-                    .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
             }
+            Text("A blocked app is closed and put away, even if it's renamed or copied. Unblocking takes your "
+                 + "turn-off wait, and your partner is told first.")
+                .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .sheet(isPresented: $showPicker) {
-            MacAppPickerSheet(already: Set(mac.blockedApps?.apps.map(\.bundle_id) ?? [])) { path in
-                mac.blockApp(path: path)
-            }
-        }
+        .padding(.leading, 34)
     }
 
     static func duration(_ seconds: Int) -> String {

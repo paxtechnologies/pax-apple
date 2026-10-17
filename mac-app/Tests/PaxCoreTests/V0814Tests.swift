@@ -5,9 +5,12 @@ import XCTest
 /// v0.8.14: one Settings screen; a device's details live on its page.
 final class V0814Tests: XCTestCase {
     func testSettingsSectionsInOrderWithAdvancedLast() {
+        // v0.8.18: Blocking (this Mac's switches) and Turning Pax off joined from Home.
         XCTAssertEqual(AppSettingsLayout.sections,
-                       ["Pax Max", "Accountability partner email", "Updates", "About", "Advanced"])
-        XCTAssertEqual(AppSettingsLayout.advancedItems,
+                       ["Blocking", "Pax Max", "Turning Pax off", "Accountability partner email", "Updates", "About",
+                        "Advanced"])
+        XCTAssertEqual(AppSettingsLayout.sections.last, AppSettingsLayout.advanced)
+        XCTAssertEqual(Array(AppSettingsLayout.advancedItems.suffix(3)),
                        ["Where this Mac keeps its key", "Pax server", "For testers"])
     }
 

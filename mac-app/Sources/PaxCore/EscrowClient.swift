@@ -67,13 +67,21 @@ public struct EscrowClient: Sendable {
 
     /// v0.8.15: `supportRelease` is the set-up choice "Allow verified support release".
     /// Left out (an older app), the server keeps it off.
+    /// v0.8.18: `trial` asks for a trial day and `hardwareID` (TrialDay.hardwareID) lets the
+    /// server count it from this hardware's first one; without it the server grants none.
     public func registerDevice(name: String, platform: String, profileIdentifier: String,
-                               removalPassword: String, supportRelease: Bool = false) async throws -> Device {
-        try await send("POST", "v1/devices", body: [
+                               removalPassword: String, supportRelease: Bool = false,
+                               trial: Bool = false, hardwareID: String? = nil) async throws -> Device {
+        var body: [String: Any?] = [
             "name": name, "platform": platform,
             "profile_identifier": profileIdentifier, "removal_password": removalPassword,
             "support_release": supportRelease,
-        ])
+        ]
+        if trial, let hw = hardwareID {
+            body["trial"] = true
+            body["hardware_id"] = hw
+        }
+        return try await send("POST", "v1/devices", body: body)
     }
 }
 

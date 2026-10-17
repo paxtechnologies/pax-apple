@@ -38,6 +38,15 @@ final class MacProtectModel: ObservableObject {
     /// v0.8.6: YouTube Restricted Mode (pax-guard's switch; on by default).
     @Published var youtubeRestricted = true
     @Published var youtubeAvailable = true
+    /// v0.8.18 Advanced: the extra family filter layer as pax-guard reports it
+    /// (nil: an older pax-guard, or not reported).
+    @Published var familyLayer: Bool?
+    /// v0.8.18: true when pax-guard holds the switch (local escrow).
+    @Published var familyLayerLocal: Bool?
+    /// v0.8.18: the waiting request to turn it off, if any.
+    @Published var familyLayerPending: BlocklistRequest?
+    /// v0.8.18: the confirmation after a change (shown under the switch).
+    @Published var familyLayerNotice: String?
     // v0.8.13: pictures and video on X and Bluesky are always blocked (no state to keep;
     // Home shows AlwaysBlockedMedia.notice).
     /// v0.6 "Pax Max": force-install Pax Image Blur. Off by default (it blurs a
@@ -369,6 +378,7 @@ final class MacProtectModel: ObservableObject {
                 youtubeRestricted = s.youtube_restricted
                 youtubeAvailable = s.youtube_available ?? true
                 applyPaxMax(s.pax_max)
+                applyFamilyLayer(s)
             }
             // v0.8.7: on local escrow the ads setting lives in pax-guard.
             adblockSwitch = AdblockSwitch.mode(localEscrow: localKey, settings: guardStatus?.settings)
@@ -495,6 +505,22 @@ final class MacProtectModel: ObservableObject {
         }
     }
 
+    /// v0.8.18 "Start my wait now": ends this Mac's trial day early (stricter, instant).
+    func endTrial() {
+        guard let id = deviceID else { return }
+        perform { [self] in
+            if localKey {
+                status = try await guardClient.endTrial()
+            } else {
+                status = try await escrow.endTrial(deviceID: id)
+            }
+            statusFetchedAt = Date()
+        }
+    }
+
+    /// v0.8.18: is this Mac in its trial day right now?
+    var trialActive: Bool { TrialDay.isActive(status?.trial) }
+
     func reveal() {
         guard let id = deviceID else { return }
         perform { [self] in
@@ -555,6 +581,35 @@ final class MacProtectModel: ObservableObject {
             let s = try await guardClient.setYouTubeRestricted(on)
             youtubeRestricted = s.youtube_restricted
             youtubeAvailable = s.youtube_available ?? true
+        }
+    }
+
+    // MARK: v0.8.18 Extra family filter layer (Settings › Advanced)
+
+    private func applyFamilyLayer(_ s: GuardClient.Settings) {
+        familyLayer = s.family_layer
+        familyLayerLocal = s.family_layer_local
+        familyLayerPending = s.family_layer_pending
+    }
+
+    /// On is immediate. Off waits like a removal (partner first, then the turn-off wait).
+    func setFamilyLayer(_ on: Bool) {
+        perform { [self] in
+            let r = try await guardClient.setFamilyLayer(on)
+            applyFamilyLayer(r.settings)
+            if let p = r.request ?? r.settings.family_layer_pending { familyLayerPending = p }
+            familyLayerNotice = on ? "The extra family filter layer is on."
+                : "Your turn-off wait has started. The extra layer stays on until it ends."
+            guardStatus = try? await guardClient.status()
+        }
+    }
+
+    func cancelFamilyLayerOff() {
+        guard let id = familyLayerPending?.request_id else { return }
+        perform { [self] in
+            _ = try await guardClient.cancelBlocklistRequest(id)
+            if let s = try? await guardClient.settings() { applyFamilyLayer(s) }
+            familyLayerNotice = "The extra family filter layer stays on."
         }
     }
 

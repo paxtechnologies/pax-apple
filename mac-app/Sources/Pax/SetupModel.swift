@@ -741,6 +741,15 @@ final class SetupModel: ObservableObject {
         }
     }
 
+    /// v0.8.18 "Start my wait now": ends this iPhone's or iPad's trial day early.
+    func endPhoneTrial(_ rec: PaxDeviceRecord) {
+        guard let id = rec.escrowID else { return }
+        run { [self] in
+            phoneStatus[rec.id] = try await coordinator.escrow.endTrial(deviceID: id)
+            phoneStatusFetchedAt = Date()
+        }
+    }
+
     func phoneRemaining(_ rec: PaxDeviceRecord, at now: Date) -> Int {
         guard let rr = phoneStatus[rec.id]?.removal_request else { return 0 }
         return max(0, rr.seconds_remaining - Int(now.timeIntervalSince(phoneStatusFetchedAt)))
