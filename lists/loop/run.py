@@ -340,7 +340,8 @@ def run(args) -> int:
                                  skip=set(top10k), top=top)
         result["discovery"] = {k: len(v) for k, v in found.items()}
         todo_p, seen_p = [], set()
-        for n in (found["links"] + found["project_sites"] + found["new_registrations"] + found["ranked"]
+        # Ranked names (sites people actually visit) before new registrations (round 3).
+        for n in (found["links"] + found["project_sites"] + found["ranked"] + found["new_registrations"]
                   + found["certificates"] + found["lookalikes"] + cbypass):
             if n not in seen_p and n not in known_bypass and fresh(n) and not last.blocked(n):
                 seen_p.add(n)

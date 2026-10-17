@@ -138,6 +138,10 @@ judged wrongly. So round 2 widens discovery and tightens the judgement:
   that read like a proxy or VPN, never on the held-out lists.
 - The benchmark keeps labelling its fresh held-out sample with the unchanged
   `homepage.verdict`, so what counts as a working proxy there does not move.
+- Round 3: the READMEs of the most recently updated of those repositories (up to 80
+  a night) are read for the sites they link to (unblocker READMEs list their
+  official mirrors), and ranked names are checked before new registrations, since
+  they are sites people actually visit.
 
 ## Running it by hand
 

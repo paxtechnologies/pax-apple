@@ -110,21 +110,48 @@ NOT_SITES = re.compile(r"(^|\.)(github\.com|discord\.(gg|com)|youtube\.com|youtu
                        r"docs\.[a-z0-9.-]+|pypi\.org|crates\.io|wikipedia\.org)$")
 
 
-def github_candidates(token: str | None = None, pages: int = 2, fetch=None, pause: float = 2.5) -> list[str]:
+GITHUB_README = "https://api.github.com/repos/{full}/readme"
+_URL_HOST = re.compile(r"https?://([a-z0-9][a-z0-9.-]*[a-z0-9])", re.I)
+README_MAX_HOSTS = 60
+
+
+def readme_hosts(text: str) -> list[str]:
+    """Hosts a README links to (unblocker READMEs list their official mirrors)."""
+    out: dict = {}
+    for m in _URL_HOST.finditer(text or ""):
+        out[m.group(1).lower()] = None
+        if len(out) >= README_MAX_HOSTS:
+            break
+    return list(out)
+
+
+def github_candidates(token: str | None = None, pages: int = 2, fetch=None, pause: float = 2.5,
+                      readmes: int = 80) -> list[str]:
     """Published sites of open-source web-proxy / unblocker repositories (homepage
-    field and <user>.github.io repositories). Flaky or rate-limited searches just
-    give fewer names tonight."""
+    field and <user>.github.io repositories), then the sites the READMEs of the
+    most recently updated `readmes` of them link to. Flaky or rate-limited
+    searches just give fewer names tonight."""
     import time
     import urllib.request
 
     def default_fetch(url):
-        headers = {"Accept": "application/vnd.github+json", "User-Agent": lu.UA}
+        raw = url.endswith("/readme")
+        headers = {"Accept": "application/vnd.github.raw" if raw else "application/vnd.github+json",
+                   "User-Agent": lu.UA}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:  # noqa: S310
             return r.read()
     fetch = fetch or default_fetch
     out: dict = {}
+    repos: dict = {}
+
+    def keep(h):
+        h = h.lower().strip(".")
+        if h.startswith("www."):
+            h = h[4:]
+        if "." in h and not re.fullmatch(r"[0-9.:]+", h) and not NOT_SITES.search(h):
+            out[h] = None
     for q in GITHUB_QUERIES:
         for page in range(1, pages + 1):
             try:
@@ -133,6 +160,8 @@ def github_candidates(token: str | None = None, pages: int = 2, fetch=None, paus
                 log(f"github search {q.split(':')[0]}: skipped ({type(exc).__name__})")
                 break
             for it in items:
+                if it.get("full_name"):
+                    repos.setdefault(it["full_name"], it.get("updated_at") or "")
                 hosts = []
                 hp = (it.get("homepage") or "").strip()
                 if hp:
@@ -143,17 +172,20 @@ def github_candidates(token: str | None = None, pages: int = 2, fetch=None, paus
                 if name.endswith(".github.io") and name.count(".") == 2:
                     hosts.append(name)
                 for h in hosts:
-                    h = h.lower().strip(".")
-                    if h.startswith("www."):
-                        h = h[4:]
-                    if "." in h and not re.fullmatch(r"[0-9.:]+", h) and not NOT_SITES.search(h):
-                        out[h] = None
+                    keep(h)
             if len(items) < 100:
                 break
             if pause:
                 time.sleep(pause)
         if pause:
             time.sleep(pause)
+    for full in sorted(repos, key=lambda f: repos[f], reverse=True)[:readmes]:
+        try:
+            text = fetch(GITHUB_README.format(full=full)).decode("utf-8", "ignore")
+        except Exception:  # noqa: BLE001 - no README, or rate-limited
+            continue
+        for h in readme_hosts(text):
+            keep(h)
     return list(out)
 
 

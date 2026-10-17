@@ -492,3 +492,13 @@ def test_tranco_and_github_candidates():
     def boom(url):
         raise OSError("rate limited")
     assert proxy.github_candidates(fetch=boom, pages=1, pause=0) == []
+
+
+def test_github_candidates_read_readme_links():
+    search = json.dumps({"items": [{"full_name": "a/uv", "name": "uv", "homepage": "", "updated_at": "2026-10-17"}]}).encode()
+    readme = b"Official links: https://mirror-one.example/ and [two](https://www.mirror-two.example/x) https://github.com/a/uv"
+
+    def fake(url):
+        return readme if url.endswith("/readme") else search
+    assert proxy.github_candidates(fetch=fake, pages=1, pause=0) == ["mirror-one.example", "mirror-two.example"]
+    assert proxy.readme_hosts("see http://a.example and https://b.example/path") == ["a.example", "b.example"]
