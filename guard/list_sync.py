@@ -45,6 +45,9 @@ import local_blocklist as lb
 
 SYNC_INTERVAL = 15          # seconds between pulls (plus an immediate push after a local add)
 TOKEN_PREFIX = "pxs_"
+# v0.8.24: this Mac's Pax version, sent as X-Pax-Version so the server can count
+# how many Macs run each version (it keeps the version and the day, nothing else).
+APP_VERSION = ""
 UNREACHABLE = ("PAX-DNS-013", "Pax couldn't reach your Pax account, so nothing changed and the site stays "
                                "blocked. Try again when you're online.")
 
@@ -235,7 +238,10 @@ class ListSync:
 
     # ------------------------------------------------------------- sync
     def _headers(self, d: dict) -> dict:
-        return {"X-Pax-Sync-Token": d["token"]}
+        h = {"X-Pax-Sync-Token": d["token"]}
+        if APP_VERSION:
+            h["X-Pax-Version"] = APP_VERSION
+        return h
 
     def sync_once(self) -> dict:
         """Push the queue, pull the account's list, apply it under the rules

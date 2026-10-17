@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.23
+# Pax Peace (Apple), v0.8.24
 
 **Less scrolling. More living.**
 
@@ -1112,6 +1112,14 @@ until Apple stops honouring manual profiles. Plan for a small DDM/MDM component 
   whoever runs it could. Self-hosters control this; a public Pax service needs a clear policy.
 * **The token is visible to anyone who can read the profile** (Settings shows the DNS server URL).
   With it someone could probe which domains you block. It can't change your list. Rotate it if needed.
+
+## Usage numbers (v0.8.24)
+
+Pax's server keeps totals only: accounts, devices, how many were active each day, which version
+Macs run, and how many DNS lookups were answered. Per device it keeps just its kind, the last day it
+was active and its Pax version; never an IP address, a time of day, a name or a site. Only the
+operator can read them (`/v1/stats` with a key; 404 for everyone else). Details:
+[docs/USAGE_STATS.md](docs/USAGE_STATS.md).
 
 ## Licence
 

@@ -102,14 +102,16 @@ def hash_token(token: str) -> str:
 
 
 class DropDnsQueryLogs(logging.Filter):
-    """Drop uvicorn access-log records for DoH paths (token + query name)."""
+    """Drop uvicorn access-log records for DoH paths (token + query name), the
+    replica feed and /v1/stats (its key can be in the URL)."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
             text = record.getMessage()
         except Exception:  # noqa: BLE001
             return False
-        return "dns-query" not in text and "/v1/replica/" not in text
+        # v0.8.24: /v1/stats may carry its key in the query string.
+        return "dns-query" not in text and "/v1/replica/" not in text and "/v1/stats" not in text
 
 
 def install_log_filter() -> None:

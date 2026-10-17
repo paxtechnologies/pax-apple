@@ -28,6 +28,7 @@ from .db import Database
 from .escrow import Clock, Escrow, EscrowError, NotFound, RateLimited
 from .limits import client_ip
 from . import replica as replica_mod
+from . import stats as stats_mod
 from .notify import CRISIS_LINES, EmailSender, LoggingEmailSender, SmtpEmailSender
 
 
@@ -122,6 +123,14 @@ class SyncIn(BaseModel):
     partner_email: Optional[str] = Field(None, max_length=254)
 
 
+class ReplicaActivityIn(BaseModel):          # v0.8.24
+    server: str = Field("replica", max_length=64)
+    token_hashes: list[str] = Field(default_factory=list, max_length=100_000)
+    queries: int = Field(0, ge=0)
+    since_restart: int = Field(0, ge=0)
+    started_at: Optional[int] = Field(None, ge=0)
+
+
 class SigninStartIn(BaseModel):
     email: EmailStr
 
@@ -144,7 +153,7 @@ class DnsSettingsIn(BaseModel):
 log = logging.getLogger("pax.server")
 
 
-def _add_doh_routes(app: FastAPI, doh, settings: Settings) -> None:
+def _add_doh_routes(app: FastAPI, doh, settings: Settings, stats=None) -> None:
     """v0.8.8 DoH endpoints: /u/<token>/dns-query (the dns.paxpeace.com site)
     and /v1/doh/u/<token>/dns-query (the same through api.paxpeace.com)."""
     import anyio
@@ -167,10 +176,42 @@ def _add_doh_routes(app: FastAPI, doh, settings: Settings) -> None:
                        request.headers.get("x-forwarded-for"))
         status, out, headers = await anyio.to_thread.run_sync(doh.answer, wire, token, ip,
                                                               limiter=limiter)
+        if stats is not None and status == 200:
+            stats.saw_dns(doh_mod.hash_token(token))   # v0.8.24: "used today", no name kept
         return Response(out, status_code=status, headers=headers)
 
     for path in ("/u/{token}/dns-query", "/v1/doh/u/{token}/dns-query"):
         app.add_api_route(path, answer, methods=["GET", "POST"], include_in_schema=False)
+
+
+class _WallClock:
+    def now(self) -> int:
+        import time
+        return int(time.time())
+
+
+def _add_stats_route(app: FastAPI, stats, settings: Settings) -> None:
+    """v0.8.24 GET /v1/stats: aggregate usage numbers, operator key only (else 404)."""
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/v1/stats", include_in_schema=False)
+    def usage_stats(request: Request, key: Optional[str] = Query(None, max_length=256),
+                    days: int = Query(30, ge=0, le=stats_mod.MAX_HISTORY_DAYS),
+                    format: Optional[str] = Query(None, max_length=8),
+                    x_pax_stats_key: Optional[str] = Header(None),
+                    authorization: Optional[str] = Header(None)):
+        bearer = authorization[7:].strip() if authorization and authorization.lower().startswith("bearer ") else None
+        given = x_pax_stats_key or bearer or key
+        if not stats_mod.key_allowed(given, settings.stats_key_sha256):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        v = stats.view(days=days, version=__version__)
+        headers = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer",
+                   "X-Robots-Tag": "noindex"}
+        wants_html = format == "html" or (format != "json" and
+                                          "text/html" in request.headers.get("accept", ""))
+        if wants_html:
+            return HTMLResponse(stats_mod.render_html(v), headers=headers)
+        return JSONResponse(v, headers=headers)
 
 
 def _make_doh(settings: Settings, blocklist=None):
@@ -192,6 +233,15 @@ def create_dns_app(settings: Settings, doh=None) -> FastAPI:
     """v0.8.8 role "dns": a second server that answers DoH only. No accounts,
     no escrow, no email; nothing here writes user state."""
     doh = doh if doh is not None else _make_doh(settings)
+    from . import doh as _doh_mod
+    _doh_mod.install_log_filter()
+    import socket
+    stats = stats_mod.Stats(None, _WallClock(), doh, role="dns", server=socket.gethostname()[:40])
+    reporter = None
+    if settings.replica_key and settings.doh_enabled:
+        # v0.8.24: tell the primary which DNS addresses were used, so its counts are whole.
+        reporter = stats_mod.ReplicaReporter(settings.replica_primary_url, settings.replica_key, stats,
+                                             server=socket.gethostname()[:40])
     caddy = None
     if settings.caddy_acme_forward and settings.doh_enabled:
         # v0.8.17: hand the primary's ACME challenges on (see caddy_sync.py).
@@ -204,17 +254,23 @@ def create_dns_app(settings: Settings, doh=None) -> FastAPI:
         doh.start()
         if caddy is not None:
             caddy.start()
+        if reporter is not None:
+            reporter.start()
         try:
             yield
         finally:
             doh.stop()
             if caddy is not None:
                 caddy.stop()
+            if reporter is not None:
+                reporter.stop()
 
     app = FastAPI(title="Pax DNS", version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.doh = doh
     app.state.caddy = caddy
+    app.state.stats = stats
+    app.state.stats_reporter = reporter
 
     @app.get("/v1/health")
     def health():
@@ -223,7 +279,8 @@ def create_dns_app(settings: Settings, doh=None) -> FastAPI:
             out["dns_site"] = caddy.state     # v0.8.17 (informational)
         return out
 
-    _add_doh_routes(app, doh, settings)
+    _add_doh_routes(app, doh, settings, stats)
+    _add_stats_route(app, stats, settings)
     return app
 
 
@@ -244,6 +301,9 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         doh = _make_doh(settings, blocklist)
     if doh is not None and hasattr(doh, "lists_restricted"):
         blocklist.lists_check = doh.lists_restricted      # v0.8.18: Pax's lists first
+    from . import doh as _doh_mod
+    _doh_mod.install_log_filter()     # also drops /v1/stats lines (the key can be in the URL)
+    stats = stats_mod.Stats(escrow.db, escrow.clock, doh, role="all", server=settings.api_host)
     caddy = None
     if settings.caddy_sync and settings.doh_enabled:
         from .caddy_sync import CaddySync
@@ -271,6 +331,10 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
                         await asyncio.to_thread(escrow.lapse_due)
                     except Exception:  # noqa: BLE001
                         log.exception("removal lapse sweep failed")
+                    try:
+                        await asyncio.to_thread(stats.tick)     # v0.8.24 counts (self-limited)
+                    except Exception:  # noqa: BLE001
+                        log.exception("stats tick failed")
                     await asyncio.sleep(settings.blocklist_sweep_seconds)
             task = asyncio.create_task(sweep())
         try:
@@ -290,6 +354,13 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     app.state.list_sync = list_sync
     app.state.doh = doh
     app.state.caddy = caddy
+    app.state.stats = stats
+
+    def _mark(fn, *a, **kw):
+        try:
+            fn(*a, **kw)
+        except Exception:  # noqa: BLE001 - counting never breaks a request
+            log.exception("stats mark failed")
 
     @app.exception_handler(EscrowError)
     async def _escrow_error(_req: Request, exc: EscrowError):
@@ -370,10 +441,14 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
 
     @app.post("/v1/devices", status_code=201)
     def register_device(body: DeviceIn, acct=Depends(current_account)):
-        return escrow.register_device(acct, body.name, body.platform,
-                                      body.profile_identifier, body.removal_password,
-                                      support_release=body.support_release,
-                                      trial=body.trial, hardware_id=body.hardware_id)
+        out = escrow.register_device(acct, body.name, body.platform,
+                                     body.profile_identifier, body.removal_password,
+                                     support_release=body.support_release,
+                                     trial=body.trial, hardware_id=body.hardware_id)
+        did = out.get("id") or out.get("device_id") if isinstance(out, dict) else None
+        if did:
+            _mark(stats.mark_device, escrow.db.one("SELECT id, platform FROM devices WHERE id=?", (did,)))
+        return out
 
     @app.get("/v1/devices")
     def list_devices(acct=Depends(current_account)):
@@ -385,11 +460,13 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         return {"guard_token": escrow.issue_guard_token(acct, device_id)}
 
     @app.get("/v1/guard/config")
-    def guard_config(x_pax_guard_token: Optional[str] = Header(None)):
+    def guard_config(x_pax_guard_token: Optional[str] = Header(None),
+                     x_pax_version: Optional[str] = Header(None, max_length=32)):
         """What pax-guard enforces: the account's effective blocklist (a removal
         still waiting counts as blocked), its exceptions, ad blocking, and whether
         this Mac's password has been released (then pax-guard stops re-asserting)."""
         acct, d = escrow.guard_device(x_pax_guard_token)
+        _mark(stats.mark_device, d, x_pax_version)          # v0.8.24: active today (+ version)
         blocklist.apply_due(acct["id"])
         block, allow = blocklist.effective(acct["id"])
         return {
@@ -477,8 +554,11 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         return blocklist.cancel_request(acct, request_id)
 
     # ------------------------------------------------ v0.8.9 list sync
-    def sync_link(x_pax_sync_token: Optional[str] = Header(None)):
-        return list_sync.authenticate(x_pax_sync_token)
+    def sync_link(x_pax_sync_token: Optional[str] = Header(None),
+                  x_pax_version: Optional[str] = Header(None, max_length=32)):
+        acct, ln = list_sync.authenticate(x_pax_sync_token)
+        _mark(stats.mark_link, ln, x_pax_version)           # v0.8.24: active today (+ version)
+        return acct, ln
 
     @app.post("/v1/sync/links", status_code=201)
     def create_sync_link(body: SyncLinkIn, acct=Depends(current_account)):
@@ -562,8 +642,20 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
             raise NotFound("not found")
         return blocklist.changes(since)
 
+    # ------------------------------------------------ v0.8.24 usage numbers
+    @app.post("/v1/replica/activity", include_in_schema=False)
+    def replica_activity(body: ReplicaActivityIn, x_pax_replica_key: Optional[str] = Header(None)):
+        """A DoH-only server reports which DNS addresses (token hashes) were used
+        and how many lookups it answered. Same key as the replica feed."""
+        if not replica_mod.key_allowed(x_pax_replica_key, settings.replica_key_sha256):
+            raise NotFound("not found")
+        return stats.replica_report(body.server, body.token_hashes, body.queries,
+                                    body.since_restart, body.started_at)
+
+    _add_stats_route(app, stats, settings)
+
     if doh is not None:
-        _add_doh_routes(app, doh, settings)
+        _add_doh_routes(app, doh, settings, stats)
 
     # ------------------------------------------------ internal (pax-dns)
     def internal_auth(x_pax_internal_key: Optional[str] = Header(None)):

@@ -97,6 +97,9 @@ class Settings:
     # role "all": SHA-256 of keys allowed to read the replica feed. The hashes of
     # Pax's own second server ship in the code (replica.py); more via env.
     replica_key_sha256: tuple = ()
+    # v0.8.24 /v1/stats (pax_server/stats.py): SHA-256 of extra keys allowed to read
+    # the aggregate usage numbers (the operator's own hash ships in stats.py).
+    stats_key_sha256: tuple = ()
     # v0.8.8 primary only: add the DoH site to the local Caddy (caddy_sync.py).
     caddy_sync: bool = False
     # v0.8.17 role "dns" only: put the ACME challenge forwarder (to the primary)
@@ -133,6 +136,8 @@ class Settings:
             replica_key=os.environ.get("PAX_REPLICA_KEY", ""),
             replica_key_sha256=tuple(h.strip().lower() for h in
                                      os.environ.get("PAX_REPLICA_KEY_SHA256", "").split(",") if h.strip()),
+            stats_key_sha256=tuple(h.strip().lower() for h in
+                                   os.environ.get("PAX_STATS_KEY_SHA256", "").split(",") if h.strip()),
             # On by default for a real primary (role all), off in tests (Settings()).
             caddy_sync=(role == "all" and os.environ.get("PAX_CADDY_SYNC", "1").strip() not in ("0", "false", "off")),
             caddy_acme_forward=(role == "dns" and os.environ.get("PAX_CADDY_ACME_FORWARD", "1").strip()

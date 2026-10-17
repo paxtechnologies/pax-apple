@@ -288,7 +288,7 @@ Use a test device and a test support key only (never redeem on a device you rely
    (under *How Pax sends the email*) the Pax server / own email choice. Changing or removing them still shows
    "Changing to … on …" (after the turn-off wait), on the card and in the sheet. With the relay down after a
    removal request, the card says "1 email waiting to send. Pax keeps trying."
-6. Updates: "Version 0.8.23 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
+6. Updates: "Version 0.8.24 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
    licence and site link.
 7. Security notices: after a pax-guard update (a short backup episode in `{"cmd":"tamper.list"}` as
    `dns:fallback_on` / `dns:fallback_off`), Settings › Advanced and Home show no notice for it. Stop the filter

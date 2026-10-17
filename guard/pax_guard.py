@@ -83,7 +83,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.23"
+VERSION = "0.8.24"
 
 
 # v0.8.23: a short backup-filter episode (pax-guard restarting after an update starts on
@@ -360,6 +360,7 @@ class Guard:
                                            on_applied=self._waited_change_applied)
         # v0.8.9: "Sync blocked sites across devices" (local escrow; on by default).
         import list_sync as lsync
+        lsync.APP_VERSION = VERSION      # v0.8.24: sent with each sync, for the server's version count
         self.list_sync = lsync.ListSync(state_dir / "sync.json", self.blocklist, clock=self.sys.now,
                                         wait_seconds=self._wait_seconds_or_none,
                                         partner_email=self._partner_email,
@@ -406,7 +407,8 @@ class Guard:
             return cached
         url = self.cfg.server_url.rstrip("/") + "/v1/guard/config"
         try:
-            data = json.loads(self.sys.fetch(url, {"X-Pax-Guard-Token": self.cfg.guard_token}))
+            data = json.loads(self.sys.fetch(url, {"X-Pax-Guard-Token": self.cfg.guard_token,
+                                                   "X-Pax-Version": VERSION}))  # v0.8.24: version count only
             if isinstance(data, dict) and isinstance(data.get("blocked"), list):
                 self._save_json("remote.json", data)
                 self.remote = data

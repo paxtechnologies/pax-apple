@@ -191,6 +191,8 @@ asks Caddy to reload the same configuration at most every 20 minutes so a fresh 
 **Privacy**: no query logging. Caddy has no access log; the primary drops uvicorn access-log lines for any
 `dns-query` or replica path in-process, and the second server runs uvicorn with `--no-access-log`. Nothing
 stores names or client addresses; the per-address rate-limit counters live in memory only.
+Since 0.8.24 the server also notes, per account, the last day (UTC) its DNS address was used, so it can
+count active iPhones and iPads; it never notes what was looked up (docs/USAGE_STATS.md).
 
 **Abuse limits and sizing (cx23: 2 vCPU, 4 GB)**: 25 queries/s per client address with a burst of 400
 (`PAX_DOH_RATE_PER_IP`, `PAX_DOH_BURST_PER_IP`; over it: HTTP 429), messages up to 4 KB, at most 48

@@ -59,7 +59,7 @@ Order (PaxCore `AppSettingsLayout.sections`):
   one button, *Add…* / *Change…*. The sheet holds the rule, the partner and your own email, and under *How Pax
   sends the email* the Pax server / own email account choice with its fields. Rules unchanged (told first,
   fail closed; changing or removing them waits; pax-guard enforces both).
-* **Updates**: "Version 0.8.23 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
+* **Updates**: "Version 0.8.24 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
   line, wordmark, tagline, principles, licence and site link (About was its own card before).
 * **Pax Max** (folded like Advanced, closed by default, just above it; off by default for everyone): the row
   shows *On* / *Off* / *Turning off* and "Blurs pictures and video in Firefox. Other browsers aren't covered
