@@ -32,7 +32,9 @@ names that read like a proxy or VPN, never on the held-out lists. The benchmark
 keeps labelling its fresh held-out sample with `verdict`, so what counts as a
 working proxy there does not move with these changes. Round 4: a handful of proxy
 words in the body (fewer than 10) with no proxy word in the title is no longer
-enough on its own."""
+enough on its own. Round 5: "unblock" alone in the title (no proxy code, fewer
+than 3 proxy words, no proxy or VPN word) is not enough either, and drain and
+plumbing services and organisations' own remote-access pages are not proxies."""
 from __future__ import annotations
 
 import re
@@ -68,12 +70,14 @@ NOT_PROXY = re.compile(r"debug|developer|reverse proxy|load balanc|api gateway|i
                        r"nginx|envoy|traefik|e-?mail|nospam|spam filter|card maker|proxy cards?|\bmtg\b|"
                        r"magic: the gathering|free ?fire|\bob\d\d\b|apk|game server|minecraft|velocity|"
                        r"bungeecord|proxy (?:vote|voting|statement|advisor)|shareholder|agentic|"
-                       r"detection api|ip lookup|whois|\bproxy (?:check|test)er\b|handle proxy|\bdoi\b", re.I)
+                       r"detection api|ip lookup|whois|\bproxy (?:check|test)er\b|handle proxy|\bdoi\b|"
+                       r"drains?\b|sewer|plumb|toilet|government vpn|remote access|staff vpn|employee", re.I)
 # "Unblocked games" sites: browser games re-hosted to get past school filters, not
 # proxies (unless the page also carries proxy code or says it is a proxy).
 GAMES = re.compile(r"\bgames?\b|\bplay\b|clicker|\b\d+x\b", re.I)
 PROXY_WORD = re.compile(r"prox|vpn|bypass|anonym|hide (?:my|your) ip|mirror", re.I)
 WEAK_OK = re.compile(r"unblock|hid(?:e|ing) (?:my|your)|glype|censor|pirate ?bay|\btpb\b", re.I)
+UNBLOCK_ONLY = re.compile(r"unblock", re.I)
 # A bot check or loading screen says nothing about the site behind it.
 CHALLENGE = re.compile(r"^\s*(?:loading\.*|just a moment\.*|attention required.*|security check.*|"
                        r"checking your browser.*|ddos-guard|安全检查.*|one moment, please\.*)\s*$", re.I)
@@ -181,6 +185,13 @@ def candidate_verdict(rec: dict) -> str:
         own = _without_own_name(title, rec.get("host", ""))
         if (not rec.get("frame") and rec.get("pxy", 0) < 3 and GAMES.search(title)
                 and not PROXY_WORD.search(own)):
+            return "other"
+        # Round 5: "unblock" as the only evidence (a drain service, a WordPress plugin,
+        # one re-hosted game "X Unblocked", a news tracker) is not a proxy without
+        # proxy code or proxy words.
+        if (not rec.get("frame") and rec.get("pxy", 0) < 3 and not PROXY_WORD.search(own)
+                and not VPN_WORD.search(own) and not PTITLE2.search(title)
+                and UNBLOCK_ONLY.search(title)):
             return "other"
         # A few proxy words in the body alone (an IP checker, a fingerprint test, a list
         # of hosting sites) is not enough: the title has to say so too (round 4).

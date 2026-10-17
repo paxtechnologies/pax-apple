@@ -540,3 +540,59 @@ def test_recheck_bypass_drops_only_pages_that_are_now_something_else(tmp_path):
     assert dropped == ["repurposed.example"]
     assert st.add_bypass == {"still.example", "gone.example"}
     assert st.checked["repurposed.example"][0] == "other"
+
+
+# ------------------------------------------- round 5: curated lists, Chrome top sites
+def test_curated_lists_parse_every_format_and_survive_errors():
+    plain = "# header\nfast-proxy.example\n0.0.0.0 hosts-style.example\n||adblock-style.example^\n" \
+            "www.web-vpn.example # note\ndns.resolver.example\n10.0.0.1\n*.wild.example\n"
+    assert proxy.parse_curated(plain, "domains") == ["fast-proxy.example", "hosts-style.example",
+                                                     "adblock-style.example", "web-vpn.example", "wild.example"]
+    links = json.dumps({"links": ["https://a.mirror.example/", "b.mirror.example", 7]})
+    assert proxy.parse_curated(links, "json-links") == ["a.mirror.example", "b.mirror.example"]
+    assert proxy.parse_curated("not json", "json-links") == []
+    src = (("one", "https://x.example/1", "domains", "CC0-1.0"), ("two", "https://x.example/2", "domains", "CC0-1.0"))
+
+    def fetch(url):
+        if url.endswith("2"):
+            raise OSError("down")
+        return b"proxy-one.example\n"
+    assert proxy.curated_candidates(fetch, src) == {"one": ["proxy-one.example"], "two": []}
+    # every curated source has an id, a url, a known format and an open licence
+    for sid, url, fmt, lic in proxy.curated():
+        assert url.startswith("https://") and fmt in ("domains", "json-links")
+        assert lic in ("Unlicense", "CC0-1.0", "Apache-2.0", "MIT", "GPL-3.0", "CC-BY-4.0", "CC-BY-SA-4.0")
+    # a curated list never comes from the held-out lists
+    held = {proxy.data()["heldout_proxy_a_url"], proxy.data()["heldout_proxy_b_url"]}
+    owners = {u.split("/")[3].lower() for u in held if "githubusercontent" in u or "github.com" in u}
+    for _sid, url, _f, _l in proxy.curated():
+        assert url not in held and url.split("/")[3].lower() not in owners
+
+
+def test_chrome_top_sites_candidates():
+    import datetime as _dt
+    import gzip as _gz
+    assert proxy.crux_months(_dt.date(2026, 10, 17)) == ["202609", "202608", "202607"]
+    assert proxy.crux_months(_dt.date(2026, 1, 3), back=2) == ["202512", "202511"]
+    csv = "origin,rank\nhttps://www.fastproxy.example,1000\nhttps://news.example,1000\n" \
+          "https://lk.somevpn.example,5000\nhttp://10.0.0.1,5000\n"
+
+    def fetch(url, timeout=None):
+        if "/global/202609" in url or "/country/gb/202608" in url:
+            return _gz.compress(csv.encode())
+        raise OSError("404")
+    got = proxy.crux_candidates(fetch, countries=("gb", "us"), today=_dt.date(2026, 10, 17))
+    assert got == ["fastproxy.example", "lk.somevpn.example"]
+
+
+def test_candidate_verdict_round5_unblock_alone_is_not_a_proxy():
+    cv = homepage.candidate_verdict
+    assert cv({"st": 200, "title": "Drain Services | Unblock Cumbria", "host": "unblockc.example"}) == "other"
+    assert cv({"st": 200, "title": "Blocks Without Boundaries for WordPress | Unblock", "host": "uwp.example"}) == "other"
+    assert cv({"st": 200, "title": "Speed Stars Unblocked", "host": "ss.example"}) == "other"
+    assert cv({"st": 200, "title": "Government VPN Access - Secure Network", "host": "vpn.gov.example"}) == "other"
+    # proxy words, proxy code or many proxy words still count
+    assert cv({"st": 200, "title": "Unblockit - Proxies to access blocked sites", "host": "u.example"}) == "proxy"
+    assert cv({"st": 200, "title": "Unblock", "host": "u2.example", "frame": True}) == "proxy"
+    assert cv({"st": 200, "title": "Unblock any website free", "host": "u3.example"}) == "proxy"
+    assert cv({"st": 200, "title": "SpotVPN - fast VPN", "host": "spotvpn.example"}) == "proxy"

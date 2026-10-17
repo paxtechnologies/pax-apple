@@ -32,7 +32,8 @@ State (the `filter-loop` branch, committed by the workflow so history is visible
   no longer resolve are recorded as "gone" and skipped for 90 days; round 2 adds
   Tranco names that read like a proxy or VPN, the published sites of open-source
   proxy projects on GitHub, and judges new candidates with
-  homepage.candidate_verdict, which also counts consumer VPN services)
+  homepage.candidate_verdict, which also counts consumer VPN services; round 5:
+  curated openly licensed circumvention lists and the Chrome top-sites lists)
   state/held-back.json.gz      list entries held back {entry: yyyymmdd}
   state/sampled/<day>.json.gz  hashes of names already used as held-out samples
   state/packs.json             the packs published (version + file names)
@@ -276,7 +277,7 @@ def build_lists(src: Path, state: State, held: set, last_files: dict, work: Path
 
 def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
                      nrd_days: int = 14, qps: float = 8.0, crawl: int = CRAWL_PER_NIGHT,
-                     skip=frozenset(), top=(), github=None) -> dict:
+                     skip=frozenset(), top=(), github=None, curated=None, chrome_top=None) -> dict:
     """v0.8.21 loop: proxy candidates beyond the redirector list (proxy.py): links
     on confirmed proxy pages (and last night's unchecked links), new registrations,
     certificate transparency and lookalikes of confirmed brands."""
@@ -307,7 +308,15 @@ def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
         f"{len(ct)} certificate names, {len(look)} lookalikes of {len(brands)} brands")
     vpn = [n for n in proxy.ut1_vpn(fetch) if n not in skip]
     log(f"proxy discovery: {len(vpn)} names in the vpn category")
-    return {"links": links, "project_sites": gh, "new_registrations": nrd, "ranked": ranked, "vpn_category": vpn,
+    # Round 5: curated circumvention lists (open licences) and the Chrome top-sites lists.
+    cur = proxy.curated_candidates(fetch) if curated is None else curated
+    curated_names = [n for ns in cur.values() for n in ns if n not in skip]
+    chrome = proxy.crux_candidates(fetch) if chrome_top is None else chrome_top
+    chrome = [n for n in chrome if n not in skip]
+    log(f"proxy discovery: {len(curated_names)} names in {sum(1 for v in cur.values() if v)} curated lists, "
+        f"{len(chrome)} chrome top-site names")
+    return {"links": links, "project_sites": gh, "curated": curated_names, "chrome_ranked": chrome,
+            "new_registrations": nrd, "ranked": ranked, "vpn_category": vpn,
             "certificates": ct, "lookalikes": look[:3000]}
 
 
@@ -363,7 +372,9 @@ def run(args) -> int:
         result["discovery"] = {k: len(v) for k, v in found.items()}
         todo_p, seen_p = [], set()
         # Ranked names (sites people actually visit) before new registrations (round 3).
-        for n in (found["links"] + found["project_sites"] + found["ranked"] + found["vpn_category"]
+        # Round 5: curated lists and Chrome top sites right after the links and projects.
+        for n in (found["links"] + found["project_sites"] + found["curated"] + found["chrome_ranked"]
+                  + found["ranked"] + found["vpn_category"]
                   + found["new_registrations"]
                   + found["certificates"] + found["lookalikes"] + cbypass):
             if n not in seen_p and n not in known_bypass and fresh(n) and not last.blocked(n):

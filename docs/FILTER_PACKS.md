@@ -151,6 +151,27 @@ judged wrongly. So round 2 widens discovery and tightens the judgement:
   earlier are re-judged, longest-unchecked first: one that is now plainly something
   else ("other") leaves the list; one that is down stays. The proxy gate still
   refuses a pack that loses more benchmark proxies than it gains.
+- Round 5 (new sources): the remaining misses were in no source the loop read, so
+  two kinds of source were added, both candidates only (DNS check, homepage
+  verdict and every gate still apply, and nothing is copied into a list unchecked):
+  - Chrome top sites: the Chrome UX Report top-sites lists (Google, CC BY 4.0;
+    monthly CSV snapshots of the public data), worldwide and for 20 countries.
+    Names whose registrable label reads like a proxy or VPN are checked right
+    after the links and project sites, before the Tranco names. These lists rank
+    sites by real visits, so they reach busy proxies and VPN services that never
+    make Tranco.
+  - Curated lists other maintainers publish under open licences (Unlicense,
+    CC0-1.0, Apache-2.0): VPN / proxy categories of public DNS blocklists, a
+    per-engine list of web-proxy mirrors, and per-family lists of unblocker
+    mirrors. Their addresses are kept encoded in lists/loop/proxy.py, like the
+    held-out lists, and a test checks that none of them is, or comes from the same
+    owner as, a held-out list.
+  The candidate verdict also stops taking "unblock" alone in a title as evidence
+  (drain services, a WordPress plugin, single re-hosted games, a news tracker) when
+  there is no proxy code, fewer than 3 proxy words and no proxy or VPN word, and
+  drain / plumbing services and organisations' own remote-access pages are not
+  proxies. The loop's own bypass list already includes the encrypted-DNS / VPN /
+  proxy bypass list it is built from, so that list is not a candidate source.
 
 ## Running it by hand
 
