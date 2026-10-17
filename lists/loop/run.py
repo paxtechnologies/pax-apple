@@ -27,9 +27,13 @@ State (the `filter-loop` branch, committed by the workflow so history is visible
   state/checked/<day>.json.gz  homepage verdicts {name: [verdict, yyyymmdd]}, one file a night
   state/verified-block.txt.gz  names this workflow confirmed restricted (added to pax-block)
   state/verified-bypass.txt.gz names it confirmed as web proxies (added to pax-bypass)
+  (v0.8.21 loop: proxy candidates also come from new registrations, certificate
+  transparency and lookalikes of confirmed brands, lists/loop/proxy.py; names that
+  no longer resolve are recorded as "gone" and skipped for 90 days)
   state/held-back.json.gz      list entries held back {entry: yyyymmdd}
   state/sampled/<day>.json.gz  hashes of names already used as held-out samples
   state/packs.json             the packs published (version + file names)
+  state/proxy-frontier.json.gz names linked from confirmed proxy pages, not checked yet
   scoreboard/history.csv, scoreboard/latest.md, scoreboard/latest.json
 Names in the scoreboard are encoded (loop_util.encode_names), never plain text.
 """
@@ -56,11 +60,16 @@ import decider as dec  # noqa: E402
 import filter_lists as fl  # noqa: E402
 import homepage  # noqa: E402
 import pack  # noqa: E402
+import proxy  # noqa: E402
 import pax_restricted as pr  # noqa: E402
 
 TRANCO_URL = "https://tranco-list.eu/top-1m.csv.zip"
 RECHECK_DAYS = 30           # a confirming verdict (restricted / proxy) is reused this long
-RECHECK_OTHER_DAYS = 90     # an "other" / "down" verdict: check the site again after this
+RECHECK_OTHER_DAYS = 90     # an "other" / "down" / "gone" verdict: check the site again after this
+PROXY_SHARE = 0.5           # v0.8.21 loop: share of the night's homepage checks spent on proxy candidates
+CT_BRANDS_PER_NIGHT = 12
+CRAWL_PER_NIGHT = 300       # confirmed proxy pages re-read a night for their links
+FRONTIER_MAX = 20_000
 HOLD_DAYS = 30
 MAX_NEW_TOP10K = 300
 MAX_HELD_PER_RUN = 50
@@ -89,6 +98,7 @@ class State:
             self.sampled += lu.load_json(p, [])
         self.new_sampled: list = []
         self.packs: list = lu.load_json(s / "packs.json", [])
+        self.frontier: list = lu.load_json(s / "proxy-frontier.json.gz", [])
 
     @staticmethod
     def _names(p: Path) -> list[str]:
@@ -137,6 +147,7 @@ class State:
         self.held = {k: v for k, v in self.held.items() if lu.days_since(v) < HOLD_DAYS}
         lu.save_json(s / "held-back.json.gz", self.held)
         lu.save_json(s / "packs.json", self.packs[-10:])
+        lu.save_json(s / "proxy-frontier.json.gz", list(dict.fromkeys(self.frontier))[:FRONTIER_MAX])
 
 
 # ---------------------------------------------------------------- sources
@@ -258,6 +269,36 @@ def build_lists(src: Path, state: State, held: set, last_files: dict, work: Path
     return lists, stats
 
 
+def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
+                     nrd_days: int = 14, qps: float = 8.0, crawl: int = CRAWL_PER_NIGHT,
+                     skip=frozenset()) -> dict:
+    """v0.8.21 loop: proxy candidates beyond the redirector list (proxy.py): links
+    on confirmed proxy pages (and last night's unchecked links), new registrations,
+    certificate transparency and lookalikes of confirmed brands."""
+    today = dt.datetime.now(dt.timezone.utc).date()
+    raw = work / "nrd_raw"
+    for i in range(1, nrd_days + 1):
+        build.nrd_day(today - dt.timedelta(days=i), raw)        # cached for the pax-nrd build
+    nrd = proxy.nrd_candidates(raw, nrd_days, today)
+    confirmed = set(build.read_verified("pax-bypass-extra.txt.gz")) | state.add_bypass
+    confirmed |= {n for n, v in state.checked.items() if v[0] == "proxy"}
+    seeds = sorted(confirmed)
+    random.Random(lu.today()).shuffle(seeds)
+    linked: dict = {}
+    if crawl and seeds:
+        homepage.check(seeds[:crawl], qps=qps, links_out=linked)
+    links = [h for hs in linked.values() for h in hs]
+    links = list(dict.fromkeys(state.frontier + links))
+    links = [h for h in links if h not in skip]
+    brands = proxy.brands(confirmed)
+    ct = proxy.ct_candidates(brands, CT_BRANDS_PER_NIGHT, lu.today(), fetch)
+    look = proxy.lookalikes(brands, frozenset(known))
+    rng.shuffle(look)
+    log(f"proxy discovery: {len(links)} linked names, {len(nrd)} new registrations, "
+        f"{len(ct)} certificate names, {len(look)} lookalikes of {len(brands)} brands")
+    return {"links": links, "new_registrations": nrd, "certificates": ct, "lookalikes": look[:3000]}
+
+
 def run(args) -> int:
     work, out = Path(args.work), Path(args.out)
     work.mkdir(parents=True, exist_ok=True)
@@ -286,21 +327,49 @@ def run(args) -> int:
         known_bypass = set(build.read_verified("pax-bypass-extra.txt.gz")) | state.add_bypass | never
         fresh = lambda n: state.recent_verdict(n) is None  # noqa: E731
         todo_b = [n for n in cblock if n not in known_block and fresh(n) and not last.blocked(n)]
-        todo_p = [n for n in cbypass if n not in known_bypass and fresh(n) and not last.blocked(n)]
+        found = discover_proxies(work, state, known_bypass, rng, qps=args.qps, crawl=args.crawl_max,
+                                 skip=set(top10k))
+        result["discovery"] = {k: len(v) for k, v in found.items()}
+        todo_p, seen_p = [], set()
+        for n in found["links"] + found["new_registrations"] + found["certificates"] + found["lookalikes"] + cbypass:
+            if n not in seen_p and n not in known_bypass and fresh(n) and not last.blocked(n):
+                seen_p.add(n)
+                todo_p.append(n)
         n_todo_b, n_todo_p = len(todo_b), len(todo_p)
         rng.shuffle(todo_b)
-        rng.shuffle(todo_p)
-        nb = int(args.verify_max * 0.75)
-        todo_b, todo_p = todo_b[:nb], todo_p[:args.verify_max - nb]
-        verdicts = homepage.check(todo_b + todo_p, qps=args.qps)
+        # Discovery first, then the redirector names that read like a proxy, then the rest.
+        redirector = set(cbypass)
+        disc = [n for n in todo_p if n not in redirector]
+        rest = [n for n in todo_p if n in redirector]
+        rng.shuffle(rest)
+        todo_p = disc + proxy.priority(rest)
+        np_ = int(args.verify_max * PROXY_SHARE)
+        # A cheap DNS check first: most old proxy names no longer exist.
+        probe = todo_p[:args.dns_max]
+        alive = proxy.dns_alive(probe)
+        gone = [n for n in probe if not alive.get(n)]
+        for n in gone:
+            state.record(n, "gone")
+        todo_p = [n for n in probe if alive.get(n)][:np_]
+        todo_b = todo_b[:args.verify_max - len(todo_p)]
+        linked: dict = {}
+        verdicts = homepage.check(todo_b + todo_p, qps=args.qps, links_out=linked)
         added_b = [n for n in todo_b if verdicts.get(n) == "adult"]
         added_p = [n for n in todo_p if verdicts.get(n) == "proxy"]
         for n, v in verdicts.items():
             state.record(n, v)
         state.add_block |= set(added_b)
         state.add_bypass |= set(added_p)
+        # Links found tonight and links not reached tonight wait for the next night.
+        top_set = set(top10k)
+        new_links = [h for n in added_p for h in linked.get(n, [])]
+        tried = set(todo_p)
+        state.frontier = [h for h in dict.fromkeys(new_links + [n for n in found["links"] if n not in tried])
+                          if h not in top_set and state.recent_verdict(h) is None and h not in known_bypass
+                          and h not in state.add_bypass]
         result["verification"] = {"checked": len(verdicts), "added_restricted": len(added_b),
-                                  "added_proxy": len(added_p),
+                                  "added_proxy": len(added_p), "proxy_checked": len(todo_p),
+                                  "proxy_gone": len(gone),
                                   "waiting": {"restricted": max(0, n_todo_b - len(todo_b)),
                                               "proxy": max(0, n_todo_p - len(todo_p))}}
 
@@ -348,8 +417,8 @@ def run(args) -> int:
             seen = set(state.sampled)
             b = bench.run(new.blocked, last.blocked, top, seen, seed=int(rng.random() * 1e9),
                           qps=args.qps, budget=args.ref_budget, adult_n=args.adult_n,
-                          benign_n=args.benign_n, proxy_n=args.proxy_n)
-            result["bench"] = {"scores": b["scores"], "queries": b["queries"]}
+                          benign_n=args.benign_n, proxy_n=args.proxy_n, proxy_fresh_n=args.proxy_fresh_n)
+            result["bench"] = {"scores": b["scores"], "queries": b["queries"], "proxy_fresh": b.get("proxy_fresh")}
             state.sample(lu.name_hash(d) for d in b["sampled"])
             if b["error"]:
                 result["failures"].append(b["error"])
@@ -360,7 +429,7 @@ def run(args) -> int:
                     "gates": {"uk57_blocked": 0, "known_good_blocked": 0,
                               "top10k_new": result["top10k"]["new_blocks"],
                               "top10k_held_back": result["top10k"]["held_back"],
-                              "bench": {k: {x: v[x] for x in ("n", "ref", "new", "last")}
+                              "bench": {k: {x: v[x] for x in ("n", "ref", "new", "last", "losses", "gains")}
                                         for k, v in result["bench"]["scores"].items()}}}
             payload = pack.assemble(out, new_lists, version, meta)
             keep = [i["object"] for i in payload["lists"].values()]
@@ -389,7 +458,8 @@ HISTORY_FIELDS = ["version", "result", "last_version", "pax_block", "pax_bypass"
                   "added_restricted", "added_proxy", "uk57_blocked", "known_good_blocked",
                   "top10k_new", "top10k_held_back", "adult_n", "adult_ref", "adult_new", "adult_last",
                   "proxy_n", "proxy_ref", "proxy_new", "proxy_last", "benign_n", "benign_new_fp",
-                  "benign_last_fp", "ref_queries", "reason"]
+                  "benign_last_fp", "ref_queries", "reason",
+                  "proxy_fresh_n", "proxy_fresh_ref", "proxy_fresh_new", "proxy_fresh_last"]
 
 
 def write_scoreboard(root: Path, r: dict) -> None:
@@ -409,12 +479,21 @@ def write_scoreboard(root: Path, r: dict) -> None:
            "top10k_held_back": (r.get("top10k") or {}).get("held_back"),
            "ref_queries": ((r.get("bench") or {}).get("queries") or {}).get("reference"),
            "reason": "; ".join(r.get("failures") or [])[:300]}
-    for k in ("adult", "proxy"):
+    for k in ("adult", "proxy", "proxy_fresh"):
         for f in ("n", "ref", "new", "last"):
             row[f"{k}_{f}"] = (s.get(k) or {}).get(f)
     for f, src in (("benign_n", "n"), ("benign_new_fp", "new_fp"), ("benign_last_fp", "last_fp")):
         row[f] = (s.get("benign") or {}).get(src)
     hist = sb / "history.csv"
+    if hist.exists():       # a column was added (v0.8.21 loop): rewrite under the new header
+        with hist.open(newline="") as fh:
+            rd = csv.DictReader(fh)
+            if rd.fieldnames != HISTORY_FIELDS:
+                old = list(rd)
+                with hist.open("w", newline="") as out:
+                    w = csv.DictWriter(out, fieldnames=HISTORY_FIELDS, extrasaction="ignore")
+                    w.writeheader()
+                    w.writerows(old)
     new_file = not hist.exists()
     with hist.open("a", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=HISTORY_FIELDS)
@@ -430,7 +509,8 @@ def write_scoreboard(root: Path, r: dict) -> None:
     if r.get("failures"):
         lines += ["Not published because:", ""] + [f"- {f}" for f in r["failures"]] + [""]
     lines += ["| set | n | reference blocks | this pack | last pack |", "|---|---|---|---|---|"]
-    for k, label in (("adult", "held-out restricted"), ("proxy", "web proxies")):
+    for k, label in (("adult", "held-out restricted"), ("proxy", "web proxies (hand-kept set, live names)"),
+                     ("proxy_fresh", "web proxies (fresh held-out sample)")):
         x = s.get(k) or {}
         lines.append(f"| {label} | {x.get('n', '-')} | {pct(x.get('ref'), x.get('n'))} | "
                      f"{pct(x.get('new'), x.get('n'))} | {pct(x.get('last'), x.get('n'))} |")
@@ -441,7 +521,9 @@ def write_scoreboard(root: Path, r: dict) -> None:
               f"{row['known_good_blocked']}. New blocks in the Tranco top 10k: {row['top10k_new']} "
               f"(held back: {row['top10k_held_back']}).",
               f"Homepage-checked additions tonight: {row['added_restricted']} restricted, "
-              f"{row['added_proxy']} proxies.", "",
+              f"{row['added_proxy']} proxies.",
+              "Proxy discovery tonight: " + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in
+                                                      (r.get("discovery") or {}).items()) + ".", "",
               "Site names in latest.json are encoded (gzip + base64 JSON), never plain text.", ""]
     (sb / "latest.md").write_text("\n".join(lines))
 
@@ -491,10 +573,13 @@ def main(argv=None) -> int:
     r.add_argument("--code", default=None, help="the commit the pack was built from")
     r.add_argument("--qps", type=float, default=8.0)
     r.add_argument("--ref-budget", type=int, default=1000)
-    r.add_argument("--verify-max", type=int, default=1000)
+    r.add_argument("--verify-max", type=int, default=1500)
     r.add_argument("--adult-n", type=int, default=400)
     r.add_argument("--benign-n", type=int, default=250)
     r.add_argument("--proxy-n", type=int, default=0, help="0 = the whole hand-kept proxy set")
+    r.add_argument("--proxy-fresh-n", type=int, default=150, help="fresh held-out proxies scored a night")
+    r.add_argument("--dns-max", type=int, default=6000, help="proxy candidates DNS-checked a night")
+    r.add_argument("--crawl-max", type=int, default=CRAWL_PER_NIGHT, help="confirmed proxy pages read for links")
     s = sub.add_parser("sign")
     s.add_argument("--out", required=True)
     p = sub.add_parser("published")
@@ -510,6 +595,8 @@ def main(argv=None) -> int:
     if a.cmd == "run":
         if a.ref_budget > 1000:
             raise SystemExit("--ref-budget above 1,000 is not allowed")
+        if a.verify_max > 5000 or a.dns_max > 40000:
+            raise SystemExit("--verify-max above 5,000 or --dns-max above 40,000 is not allowed")
         return run(a)
     return {"sign": cmd_sign, "public-key": cmd_public_key, "published": cmd_published, "check-published": cmd_check_published}[a.cmd](a)
 

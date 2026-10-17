@@ -308,3 +308,145 @@ def test_repo_text_keeps_the_reference_unnamed():
         low = f.read_text().lower()
         for word in ("cleanbrowsing", "nextdns", "covenant", "hardstop", "sage mobile"):
             assert word not in low, (f.name, word)
+
+
+# ------------------------------------------------- v0.8.21 loop: web proxies
+import proxy  # noqa: E402
+
+
+def test_homepage_proxy_signals():
+    v = homepage.verdict
+    # parked pages recognised from the page itself (no title)
+    assert v({"st": 200, "title": "", "park": True, "pxy": 5}) == "down"
+    # a gambling page on an old proxy name is not a proxy
+    assert v({"st": 200, "title": "Casino bonus - web proxy", "pxy": 9}) == "other"
+    # the site's own name in the title is not evidence
+    assert v({"st": 200, "title": "unblockweb.biz", "host": "unblockweb.biz"}) == "other"
+    assert v({"st": 200, "title": "Unblock any site - unblockweb.biz", "host": "unblockweb.biz"}) == "proxy"
+    # proxy engines, web VPN and mirror pages
+    assert v({"st": 200, "title": "Home", "frame": 1}) == "proxy"
+    assert v({"st": 200, "title": "Free Web VPN"}) == "proxy"
+    assert v({"st": 200, "title": "Proxy mirrors for every site"}) == "proxy"
+    assert v({"st": 200, "title": "Residential proxies - buy proxy plans", "frame": 0}) == "other"
+    assert homepage.FRAME.search('<script src="/uv/uv.bundle.js"></script>')
+    assert homepage.PARK_BODY.search('<script>window.onload=function(){window.location.href="/lander"}</script>')
+    assert not homepage.FRAME.search("<p>Corrosion of metal pipes</p>")
+
+
+def test_proxy_priority_brands_and_lookalikes():
+    names = ["bakery.example", "freeproxyhub.example", "garden.co.uk", "unblock-now.example"]
+    assert proxy.priority(names) == ["freeproxyhub.example", "unblock-now.example", "bakery.example", "garden.co.uk"]
+    b = proxy.brands(["megaproxy.com", "megaproxy.net", "otherproxy.org", "bakery.com", "px.io"])
+    assert b == ["megaproxy", "otherproxy"]
+    look = proxy.lookalikes(["megaproxy"], known={"megaproxy.com"})
+    assert "megaproxy.com" not in look and "megaproxy.net" in look and "megaproxy.co.uk" in look
+
+
+def test_proxy_nrd_and_certificate_candidates(tmp_path):
+    import datetime as dt
+    today = dt.date(2026, 10, 18)
+    (tmp_path / "2026-10-17.txt").write_text("fastproxy99.com\nbakery.com\nmy-unblocker.net\n")
+    assert proxy.nrd_candidates(tmp_path, 3, today) == ["fastproxy99.com", "my-unblocker.net"]
+    rows = json.dumps([{"name_value": "megaproxy.com\n*.megaproxy.net"}, {"name_value": "megaproxy.io"}]).encode()
+    assert proxy.ct_names("megaproxy", fetch=lambda u, timeout=60: rows) == ["megaproxy.com", "megaproxy.io", "megaproxy.net"]
+
+    def boom(u, timeout=60):
+        raise OSError("down")
+    assert proxy.ct_names("megaproxy", fetch=boom) == []
+    assert proxy.ct_candidates(["a1proxy", "b1proxy"], 2, "20261018", fetch=lambda u, timeout=60: b"[]") == []
+
+
+def test_proxy_dns_alive_uses_the_resolver():
+    out = proxy.dns_alive(["a.example", "b.example"], resolver=lambda n: n == "a.example")
+    assert out == {"a.example": True, "b.example": False}
+
+
+def test_heldout_pool_parses_both_lists():
+    import csv as _csv
+    import io as _io
+    import zipfile as _zip
+    d = proxy.data()
+    buf = _io.BytesIO()
+    with _zip.ZipFile(buf, "w") as z:
+        s = _io.StringIO()
+        w = _csv.writer(s)
+        w.writerow(["url", "category_code"])
+        w.writerow(["https://www.heldproxy.example/", d["heldout_proxy_a_category"]])
+        w.writerow(["https://news.example/", "NEWS"])
+        w.writerow(["http://1.2.3.4/", d["heldout_proxy_a_category"]])
+        z.writestr("repo/lists/global.csv", s.getvalue())
+
+    def fetch(u, timeout=180):
+        return buf.getvalue() if u == d["heldout_proxy_a_url"] else b"# x\nmirror-two.example\n"
+    assert proxy.heldout_pool(fetch) == ["heldproxy.example", "mirror-two.example"]
+
+
+def test_proxy_gate_allows_no_net_loss():
+    ref = {f"p{i}": True for i in range(100)}
+    last = lambda d: int(d[1:]) < 90          # noqa: E731
+    one_lost = bench.paired(list(ref), ref, lambda d: int(d[1:]) < 89, last)
+    assert one_lost["losses"] == 1
+    assert bench.regressions({"proxy": one_lost}) and bench.regressions({"proxy_fresh": one_lost})
+    traded = bench.paired(list(ref), ref, lambda d: (int(d[1:]) < 89) or d == "p95", last)
+    assert bench.regressions({"proxy_fresh": traded}) == []
+    assert bench.regressions({"adult": one_lost}) == []        # adult keeps its noise allowance
+
+
+def test_benchmark_fresh_proxies_and_dead_hand_names(monkeypatch):
+    src = "\n".join(f"0.0.0.0 h{i}.example" for i in range(50)).encode()
+    hand = lu.gate_names("proxy-heldout.txt")
+    dead = set(hand[:3])
+    pool = [f"fresh{i}.example" for i in range(30)]
+    monkeypatch.setattr(proxy, "heldout_pool", lambda fetch=None: pool + hand[:2])
+
+    def neutral(wire):
+        q = wire[12:]
+        labels, pos = [], 0
+        while q[pos]:
+            labels.append(q[pos + 1:pos + 1 + q[pos]].decode())
+            pos += 1 + q[pos]
+        return pr_answer(wire, nx=".".join(labels) in dead)
+    labeller = lambda names: {n: ("proxy" if int(n[5:].split(".")[0]) % 2 == 0 else "other") for n in names}  # noqa: E731
+    tranco = [f"t{i}.example" for i in range(20_000)]
+    out = bench.run(lambda d: d.startswith("fresh"), lambda d: False, tranco, set(), seed=3, budget=1000,
+                    adult_n=10, benign_n=5, proxy_fresh_n=8, fetch=lambda u: src,
+                    ref_lookup=lambda w: pr_answer(w, nx=True), neutral_lookup=neutral, labeller=labeller)
+    s = out["scores"]
+    assert s["proxy"]["n"] == len(hand) - 3                       # names that no longer exist are left out
+    assert s["proxy_fresh"]["n"] == 8 and s["proxy_fresh"]["new"] == 8 and s["proxy_fresh"]["gains"] == 8
+    assert out["proxy_fresh"]["working_proxies"] == 8
+    assert not any(r.startswith("proxy_fresh") for r in out["regressions"])
+
+
+def test_scoreboard_migrates_history_header(tmp_path):
+    sb = tmp_path / "scoreboard"
+    sb.mkdir()
+    (sb / "history.csv").write_text("version,result,proxy_n\n2026.1017.1537,published,77\n")
+    r = {"version": "2026.1018.300", "ok": True, "failures": [], "discovery": {"lookalikes": 4},
+         "bench": {"scores": {"proxy_fresh": {"n": 10, "ref": 9, "new": 9, "last": 8}}}}
+    loop.write_scoreboard(tmp_path, r)
+    rows = (sb / "history.csv").read_text().splitlines()
+    assert rows[0] == ",".join(loop.HISTORY_FIELDS) and len(rows) == 3
+    assert rows[1].startswith("2026.1017.1537,published,")
+    assert "fresh held-out sample" in (sb / "latest.md").read_text()
+
+
+def test_cli_limits_for_discovery():
+    with pytest.raises(SystemExit):
+        loop.main(["run", "--work", "w", "--state", "s", "--out", "o", "--verify-max", "9000"])
+    with pytest.raises(SystemExit):
+        loop.main(["run", "--work", "w", "--state", "s", "--out", "o", "--dns-max", "90000"])
+
+
+def test_homepage_check_collects_links_of_proxy_pages_and_frontier_persists(tmp_path):
+    def fake(name, timeout):
+        if name == "dir.example":
+            return {"st": 200, "title": "Proxy list", "links": ["p1.example", "p2.example"]}
+        return {"st": 200, "title": "Bakery", "links": ["x.example"]}
+    got: dict = {}
+    homepage.check(["dir.example", "bakery.example"], qps=8, fetcher=fake, links_out=got)
+    assert got == {"dir.example": ["p1.example", "p2.example"]}
+    st = loop.State(tmp_path)
+    st.frontier = ["p1.example", "p2.example", "p1.example"]
+    st.save()
+    assert loop.State(tmp_path).frontier == ["p1.example", "p2.example"]

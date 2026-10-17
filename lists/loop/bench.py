@@ -17,7 +17,17 @@ The gate is paired: both packs are scored on the same names, so the difference
 is the list change itself. A pack regresses when, against the last published
 pack, it loses more held-out restricted or proxy names than it gains by more
 than the noise allowance, or blocks more ordinary sites the reference leaves
-open."""
+open.
+
+v0.8.21 loop, web proxies:
+  - the hand-kept proxy set is scored on names that still resolve (a neutral
+    resolver), because a name that no longer exists is "blocked" by the reference
+    (NXDOMAIN) and unreachable through Pax alike; counting it skewed the score
+  - a fresh held-out proxy sample (proxy.heldout_pool: lists Pax never builds
+    from): names that resolve tonight and whose homepage is a working proxy today
+  - proxy gate: Pax's decisions are deterministic, so on the same names the
+    candidate pack may not lose a single proxy the last pack blocked unless it
+    gains at least as many (no noise allowance)"""
 from __future__ import annotations
 
 import math
@@ -28,7 +38,9 @@ import loop_util as lu
 from loop_util import Budget, RateLimiter, log
 
 import build
+import homepage
 import pax_restricted as pr
+import proxy as px
 
 NEUTRAL_DOH = "https://cloudflare-dns.com/dns-query"
 HELDOUT = ("heldout_a_url", "heldout_b_url", "heldout_c_url")
@@ -118,9 +130,17 @@ def paired(names, ref: dict, new, last) -> dict:
             "last_fp": sum(1 for d in L if lb[d] and not ref[d])}
 
 
+PROXY_KEYS = ("proxy", "proxy_fresh")
+
+
 def regressions(scores: dict) -> list[str]:
     out = []
-    for key in ("adult", "proxy"):
+    for key in PROXY_KEYS:
+        s = scores.get(key)
+        if s and s["n"] and s["losses"] > s["gains"]:
+            out.append(f"{key}: {s['losses']} proxies lost vs {s['gains']} gained against the last pack "
+                       f"(n={s['n']}; the proxy gate allows no net loss)")
+    for key in ("adult",):
         s = scores.get(key)
         if not s or not s["n"]:
             continue
@@ -137,9 +157,25 @@ def regressions(scores: dict) -> list[str]:
     return out
 
 
+def fresh_proxies(n: int, exclude: set, rng, qps: float, neutral_lookup, fetch=lu.fetch,
+                  labeller=None, max_probe: int = 900, max_pages: int = 600) -> tuple[list[str], dict]:
+    """Up to `n` held-out names that resolve tonight and whose homepage is a working
+    proxy today. Returns (names, counts)."""
+    pool = [d for d in px.heldout_pool(fetch) if d not in exclude]
+    rng.shuffle(pool)
+    pool = pool[:max_probe]
+    live = polite_map(lambda d: alive(d, neutral_lookup), pool, qps, Budget(len(pool)))
+    up = [d for d in pool if live.get(d) is True][:max_pages]
+    labeller = labeller or (lambda names: homepage.check(names, qps=qps))
+    v = labeller(up) if up else {}
+    names = [d for d in up if v.get(d) == "proxy"][:n]
+    return names, {"pool": len(pool), "resolving": len(up), "working_proxies": len(names)}
+
+
 def run(new, last, tranco: list[str], seen: set, seed: int, qps: float = 8.0, budget: int = 1000,
         adult_n: int = 400, benign_n: int = 250, proxy_n: int = 0, ref_url: str | None = None,
-        neutral_url: str = NEUTRAL_DOH, fetch=lu.fetch, ref_lookup=None, neutral_lookup=None) -> dict:
+        neutral_url: str = NEUTRAL_DOH, fetch=lu.fetch, ref_lookup=None, neutral_lookup=None,
+        proxy_fresh_n: int = 0, labeller=None) -> dict:
     """Returns {"scores", "regressions", "sampled" (names to remember), "queries", "error"}."""
     rng = random.Random(seed)
     ref_lookup = ref_lookup or pr.doh_lookup(ref_url or pr.source("reference_doh"), timeout=5.0)
@@ -154,13 +190,20 @@ def run(new, last, tranco: list[str], seen: set, seed: int, qps: float = 8.0, bu
     proxy = lu.gate_names("proxy-heldout.txt")
     if proxy_n:
         proxy = rng.sample(proxy, min(proxy_n, len(proxy)))
+    plive = polite_map(lambda d: alive(d, neutral_lookup), proxy, qps, Budget(len(proxy)))
+    proxy = [d for d in proxy if plive.get(d) is True]
+    fresh, fresh_counts = ([], {})
+    if proxy_fresh_n:
+        fresh, fresh_counts = fresh_proxies(proxy_fresh_n, set(proxy) | set(adult), rng, qps,
+                                            neutral_lookup, fetch, labeller)
     mid = tranco[10_000:200_000]
     benign = rng.sample(mid, min(benign_n, len(mid))) if mid else []
-    names = list(dict.fromkeys(adult + proxy + benign))
+    names = list(dict.fromkeys(adult + proxy + fresh + benign))
     ref_budget = Budget(budget)
     ref = polite_map(lambda d: ref_verdict(d, ref_lookup), names, qps, ref_budget)
     answered = sum(1 for v in ref.values() if v in (True, False))
     out = {"queries": {"reference": ref_budget.used, "neutral": neutral_budget.used},
+           "proxy_fresh": fresh_counts,
            "sampled": adult, "error": None, "regressions": [], "scores": {}}
     if not names or answered < 0.8 * len(names):
         out["error"] = (f"the reference resolver answered only {answered} of {len(names)} names; "
@@ -168,5 +211,7 @@ def run(new, last, tranco: list[str], seen: set, seed: int, qps: float = 8.0, bu
         return out
     out["scores"] = {"adult": paired(adult, ref, new, last), "proxy": paired(proxy, ref, new, last),
                      "benign": paired(benign, ref, new, last)}
+    if proxy_fresh_n:
+        out["scores"]["proxy_fresh"] = paired(fresh, ref, new, last)
     out["regressions"] = regressions(out["scores"])
     return out

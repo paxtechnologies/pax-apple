@@ -9,7 +9,8 @@
 #   4. Tranco top 10k: every new block confirmed restricted or a proxy by its
 #      homepage, else its list entry is held back from the pack
 #   5. a benchmark on fresh held-out samples against a reference resolver (at most
-#      8 queries a second, 1,000 a night): no regression against the last pack
+#      8 queries a second, 1,000 a night): no regression against the last pack; for
+#      web proxies (the hand-kept set and a fresh held-out sample) no net loss at all
 # All pass: the pack is signed with the filter key (secret PAX_FILTER_SIGNING_KEY;
 # this workflow never sees the app update key, and pack signatures carry the
 # context "pax-filter-pack-v1", so one never verifies as an app update) and published as the `filter-pack` release assets plus
@@ -33,6 +34,14 @@ on:
         description: "Only print the public half of PAX_FILTER_SIGNING_KEY and the pinned key (nothing else runs)"
         type: boolean
         default: false
+      verify_max:
+        description: "Homepage checks this run (at most 5000; nightly 1500)"
+        type: string
+        default: "1500"
+      dns_max:
+        description: "Proxy candidates DNS-checked this run (at most 40000; nightly 6000)"
+        type: string
+        default: "6000"
 
 permissions:
   contents: write   # filter-pack release, filter-packs and filter-loop branches
@@ -89,9 +98,13 @@ jobs:
       - name: "Build and gates 2-5"
         id: run
         if: steps.tests.outcome == 'success'
+        env:
+          VERIFY_MAX: ${{ inputs.verify_max }}
+          DNS_MAX: ${{ inputs.dns_max }}
         run: |
           set +e
-          python3 lists/loop/run.py run --work "$WORK" --state "$STATE" --out "$PACK" --code "$GITHUB_SHA"
+          python3 lists/loop/run.py run --work "$WORK" --state "$STATE" --out "$PACK" --code "$GITHUB_SHA" \
+            --verify-max "${VERIFY_MAX:-1500}" --dns-max "${DNS_MAX:-6000}"
           code=$?
           echo "code=$code" >> "$GITHUB_OUTPUT"
           if [ "$code" = 0 ]; then echo "passed=true" >> "$GITHUB_OUTPUT"; fi

@@ -76,6 +76,40 @@ next to the pinned one and does nothing else.
 Rotating the filter key: add the new public key to `FILTER_PUBLIC_KEYS_HEX`, ship an app release, then
 change the secret.
 
+## Web proxies and bypass sites (loop update, 2026-10-17)
+
+Loop-only change: nothing in the app reads these files, so it ships through filter
+packs with no app release.
+
+- **More candidates, open sources only** (lists/loop/proxy.py). Besides the UT1
+  redirector category, each night the loop reads up to 300 proxy pages it has already
+  confirmed and queues the sites they link to (proxy pages and proxy directories link
+  to more proxies; links not reached tonight wait in `state/proxy-frontier.json.gz`),
+  takes newly registered names that read like a proxy, searches certificate
+  transparency for a rotating handful of confirmed proxy brands, and tries those
+  brands under the top-level domains mirrors use. Redirector names that read like a
+  proxy are checked before the rest, and a DNS check drops names that no longer exist
+  before any page is fetched ("gone", rechecked after 90 days). Every candidate still
+  needs a homepage verdict of "proxy" before it is added, and the Tranco and
+  known-good gates still apply.
+- **Homepage check**: pages built on the common web-proxy engines, "web VPN",
+  unblocker, mirror and translator-proxy titles count as proxies; parked or suspended
+  pages are recognised from the page itself; a gambling page on an old proxy name is
+  not a proxy; the site's own name in its title is not evidence. Tuned on redirector
+  pages only.
+- **Benchmark**: the hand-kept proxy set is scored on names that still resolve (a
+  name that no longer exists counted as "blocked" by the reference). A fresh
+  held-out proxy sample is added: two public circumvention lists Pax never builds
+  from and never uses as a candidate source, re-checked every night (names that
+  resolve and whose homepage is a working proxy today).
+- **Proxy gate**: on both proxy sets the candidate pack may not lose a proxy the last
+  pack blocked unless it gains at least as many (no noise allowance, since Pax's
+  decisions are deterministic). The scoreboard shows both sets.
+- Nightly homepage checks went from 1,000 to 1,500, half for proxy candidates when
+  there are enough, so restricted-content candidates keep about 750 a night. A manual
+  run can raise `verify_max` (up to 5,000) and `dns_max` (up to 40,000) to work
+  through a backlog.
+
 ## Running it by hand
 
 ```sh
