@@ -1,0 +1,2 @@
+version,result,last_version,pax_block,pax_bypass,pax_nrd,added_restricted,added_proxy,uk57_blocked,known_good_blocked,top10k_new,top10k_held_back,adult_n,adult_ref,adult_new,adult_last,proxy_n,proxy_ref,proxy_new,proxy_last,benign_n,benign_new_fp,benign_last_fp,ref_queries,reason
+2026.1017.1537,published,2026.1017.1,1346162,16379,1319,55,0,0,0,0,0,400,318,346,346,77,71,64,64,248,6,6,728,

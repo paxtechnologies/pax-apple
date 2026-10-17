@@ -1,0 +1,100 @@
+{
+ "bench": {
+  "queries": {
+   "neutral": 800,
+   "reference": 728
+  },
+  "scores": {
+   "adult": {
+    "gains": 0,
+    "last": 346,
+    "last_fp": 60,
+    "losses": 0,
+    "n": 400,
+    "new": 346,
+    "new_fp": 60,
+    "new_open_ref_blocks": 32,
+    "ref": 318
+   },
+   "benign": {
+    "gains": 0,
+    "last": 19,
+    "last_fp": 6,
+    "losses": 0,
+    "n": 248,
+    "new": 19,
+    "new_fp": 6,
+    "new_open_ref_blocks": 0,
+    "ref": 13
+   },
+   "proxy": {
+    "gains": 0,
+    "last": 64,
+    "last_fp": 4,
+    "losses": 0,
+    "n": 77,
+    "new": 64,
+    "new_fp": 4,
+    "new_open_ref_blocks": 11,
+    "ref": 71
+   }
+  }
+ },
+ "build": {
+  "bypass": 16379,
+  "final": 1346162,
+  "hagezi_doh_vpn": 16274,
+  "hand_list": 28,
+  "list_a": 92346,
+  "list_b": 474528,
+  "list_c": {
+   "raw": 4591366,
+   "without_blogspot": 965948
+  },
+  "loop_block_extra": 55,
+  "loop_bypass_extra": 0,
+  "nrd": {
+   "days_found": 14,
+   "days_requested": 14,
+   "entries": 1319
+  },
+  "pax_zones": 3,
+  "single_label": 4,
+  "union": 1353498,
+  "verified_block_extra": 8690,
+  "verified_bypass_extra": 313
+ },
+ "code": "4b05edcb446040b17cf53a9adddf4cb9c348441a",
+ "entries": {
+  "pax-block": 1346162,
+  "pax-bypass": 16379,
+  "pax-nrd": 1319
+ },
+ "failures": [],
+ "finished_at": "2026.1017.1546",
+ "known_good": {
+  "encoded": null,
+  "known_good_blocked": 0,
+  "uk57_blocked": 0
+ },
+ "last_version": "2026.1017.1",
+ "ok": true,
+ "started_at": "2026.1017.1537",
+ "top10k": {
+  "confirmed": 0,
+  "encoded_held": null,
+  "held_back": 0,
+  "new_blocks": 0,
+  "unconfirmed": 0
+ },
+ "verification": {
+  "added_proxy": 0,
+  "added_restricted": 55,
+  "checked": 1000,
+  "waiting": {
+   "proxy": 98118,
+   "restricted": 48487
+  }
+ },
+ "version": "2026.1017.1537"
+}
