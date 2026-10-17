@@ -76,7 +76,7 @@ def release(tmp_path, s, zip_bytes, part_size=sr.PART_SIZE, corrupt_part=None, s
     for p in parts:
         data = (tmp_path / "parts" / p["name"]).read_bytes()
         if corrupt_part == p["name"]:
-            data = b"X" + data[1:]
+            data = bytes([data[0] ^ 0xFF]) + data[1:]   # always a change (b"X" matched 1 in 256 random bytes)
         s.urls[JSD + p["name"]] = data
         s.urls[GH + p["name"]] = data
     return payload
