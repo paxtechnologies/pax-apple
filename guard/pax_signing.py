@@ -39,7 +39,7 @@ PUBLIC_KEYS_HEX = [
 # pack signature can never verify as an app update, nor the other way round.
 FILTER_CONTEXT = b"pax-filter-pack-v1"
 FILTER_PUBLIC_KEYS_HEX = [
-    "83b0cbd5e697ab9c6beacf5a0763058d2e48b0779e0c2ee4927421b598251445",
+    "c67f5aaf3efa12453d83ad4c6993b16066425e3afe84d37fb2267492a6b9b846",
 ]
 
 
