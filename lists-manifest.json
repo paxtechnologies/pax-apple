@@ -1,0 +1,65 @@
+{
+ "key_id": "3369066c",
+ "payload": {
+  "generated_at": "2026-10-17T13:09:27+00:00",
+  "lists": {
+   "pax-allow": {
+    "bytes": 177,
+    "entries": 2,
+    "file": "pax-allowlist.txt",
+    "format": "domains",
+    "kind": "allow",
+    "max_drop": 1.0,
+    "min_entries": 1,
+    "sha256": "d2f522fddaea1a27b8220c36dde09b0b1f3bc38808d4ac595ec821d85efdc386"
+   },
+   "pax-block": {
+    "bytes": 8036411,
+    "entries": 1346107,
+    "file": "pax-block.txt.gz",
+    "format": "domains",
+    "kind": "block",
+    "max_drop": 0.1,
+    "min_entries": 1000000,
+    "restricted": true,
+    "sha256": "49b22642a0791526e4f4f9f8f9024fbe5a7b14691782c4e36f57914d239cfb52"
+   },
+   "pax-bypass": {
+    "bytes": 110318,
+    "entries": 16379,
+    "file": "pax-bypass.txt.gz",
+    "format": "domains",
+    "kind": "block",
+    "max_drop": 0.3,
+    "min_entries": 5000,
+    "restricted": false,
+    "sha256": "37fe2438ed7cd85c2e4bdd106568878b5791ff89ee5fb57714b0a84adc025be6"
+   },
+   "pax-nrd": {
+    "bytes": 7680,
+    "entries": 1319,
+    "file": "pax-nrd.txt.gz",
+    "format": "domains",
+    "kind": "block",
+    "max_drop": 0.6,
+    "min_entries": 100,
+    "optional": true,
+    "restricted": true,
+    "sha256": "70e28af02e4887ac08367dd0d57c38657a8f1a42856fd5a50f3def6c79072ddb"
+   },
+   "safesearch": {
+    "bytes": 30600,
+    "entries": 385,
+    "file": "safesearch_rules.csv",
+    "format": "csv",
+    "kind": "safesearch",
+    "max_drop": 0.1,
+    "min_entries": 300,
+    "sha256": "9f6a68254f9b9b5db77d2713d3511546ff643bae1d126ddaad1b9bf1e25d44a9"
+   }
+  },
+  "schema": "pax.lists.v1",
+  "version": "2026.1017.1309"
+ },
+ "signature": "XWwKmjE+/4RAuDhIEC9nyZPyLcprC/gTqV8edT5DdGvFRoF3CI/zfHkwp2H3iRghQ0vrPjczPrgAFyTQDKjLCA=="
+}
