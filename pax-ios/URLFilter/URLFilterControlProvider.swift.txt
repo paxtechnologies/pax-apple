@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Phase 2 sketch (iOS 26+). Not compiled yet: add an Xcode 26 URL Filter extension target first.
+import NetworkExtension
+
+final class URLFilterControlProvider: NEURLFilterControlProvider {
+    func start() async throws {}
+    func stop(reason: NEProviderStopReason) async throws {}
+
+    /// Returns the Pax Bloom filter, or nil when the tag shows it hasn't changed.
+    func fetchPrefilter(existingPrefilterTag: String?) async throws -> NEURLFilterPrefilter? {
+        // TODO: download https://api.paxpeace.com/v1/urlfilter/prefilter (signed), compare its tag
+        // with existingPrefilterTag, and build NEURLFilterPrefilter from it.
+        return nil
+    }
+}

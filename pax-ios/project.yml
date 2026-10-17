@@ -1,0 +1,155 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax for iPhone and iPad (App Store build). Generate the Xcode project with
+#   brew install xcodegen && xcodegen generate
+# (the .xcodeproj is not committed). CI: .github/workflows/ios.yml
+name: Pax
+options:
+  bundleIdPrefix: org.paxpeace
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: Z94GSK7JA8
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+targets:
+  Pax:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Shared
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Pax
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: App/Pax.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.org.paxpeace.pax]
+        com.apple.developer.networking.networkextension: [dns-settings]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax
+        PRODUCT_NAME: Pax
+    dependencies:
+      - target: PaxShieldConfiguration
+      - target: PaxShieldAction
+      - target: PaxMonitor
+      - sdk: FamilyControls.framework
+      - sdk: ManagedSettings.framework
+      - sdk: DeviceActivity.framework
+      - sdk: NetworkExtension.framework
+
+  PaxShieldConfiguration:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShieldConfiguration
+      - Shared/PaxShared.swift
+      - Shared/PaxColors.swift
+    info:
+      path: ShieldConfiguration/Info.plist
+      properties:
+        CFBundleDisplayName: Pax Shield
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldConfigurationExtension
+    entitlements:
+      path: ShieldConfiguration/ShieldConfiguration.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.org.paxpeace.pax]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax.shield-configuration
+    dependencies:
+      - sdk: ManagedSettings.framework
+      - sdk: ManagedSettingsUI.framework
+
+  PaxShieldAction:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShieldAction
+    info:
+      path: ShieldAction/Info.plist
+      properties:
+        CFBundleDisplayName: Pax Shield Action
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldActionExtension
+    entitlements:
+      path: ShieldAction/ShieldAction.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.org.paxpeace.pax]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax.shield-action
+    dependencies:
+      - sdk: ManagedSettings.framework
+
+  PaxMonitor:
+    type: app-extension
+    platform: iOS
+    sources:
+      - DeviceActivityMonitor
+      - Shared/PaxShared.swift
+      - Shared/PaxPolicy.swift
+      - Shared/PaxRestrictions.swift
+    info:
+      path: DeviceActivityMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: Pax Monitor
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PaxMonitor
+    entitlements:
+      path: DeviceActivityMonitor/PaxMonitor.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.org.paxpeace.pax]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax.monitor
+    dependencies:
+      - sdk: DeviceActivity.framework
+      - sdk: ManagedSettings.framework
+      - sdk: FamilyControls.framework
+
+  PaxTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+      - Shared/PaxShared.swift
+      - Shared/PaxPolicy.swift
+      - Shared/TurnOffRules.swift
+      - Shared/EscrowSecret.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Pax:
+    build:
+      targets:
+        Pax: all
+        PaxTests: [test]
+    test:
+      targets: [PaxTests]

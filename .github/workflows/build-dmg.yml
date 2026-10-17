@@ -31,6 +31,9 @@ name: Build DMG
 
 on:
   push:
+    # iOS work branches (pax-ios/) are built by ios.yml only. Tags still run (releases).
+    branches-ignore: ['ios/**']
+    tags: ['**']
   workflow_dispatch:
 
 permissions:

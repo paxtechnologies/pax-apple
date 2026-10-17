@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 name: ci
-on: [push, pull_request]
+on:
+  push:
+    # iOS work branches (pax-ios/) are built by ios.yml only. Tags still run.
+    branches-ignore: ['ios/**']
+    tags: ['**']
+  pull_request:
 permissions:
   contents: write   # the ci-logs-python / ci-logs-mac branches
 concurrency:
