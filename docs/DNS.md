@@ -123,6 +123,14 @@ the Caddyfile drops it; the next check (every 2 minutes) adds it again. Since v0
 challenge hand-off in the primary's Caddyfile and sets `PAX_CADDY_SYNC=0`, so a rebuilt primary serves the
 filter from its Caddyfile.
 
+v0.8.17: the second server's catch-all `http://` block lost to Caddy's automatic HTTP->HTTPS redirect
+for `dns.paxpeace.com` (Caddy puts that redirect before catch-all routes), so the primary's challenges
+that reached it were redirected, not handed on, and the primary never got its certificate. pax-server on
+the second server (role `dns`, `PAX_CADDY_ACME_FORWARD`, on by default) now puts a host-matched forwarding
+route at the front of its port-80 server through the same admin API, checked against
+`https://dns.paxpeace.com/health`. The primary, while its DoH site is in place but no certificate is served,
+asks Caddy to reload the same configuration at most every 20 minutes so a fresh attempt starts.
+
 **Privacy**: no query logging. Caddy has no access log; the primary drops uvicorn access-log lines for any
 `dns-query` or replica path in-process, and the second server runs uvicorn with `--no-access-log`. Nothing
 stores names or client addresses; the per-address rate-limit counters live in memory only.

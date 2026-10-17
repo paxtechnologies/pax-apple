@@ -94,6 +94,10 @@ class Settings:
     replica_key_sha256: tuple = ()
     # v0.8.8 primary only: add the DoH site to the local Caddy (caddy_sync.py).
     caddy_sync: bool = False
+    # v0.8.17 role "dns" only: put the ACME challenge forwarder (to the primary)
+    # at the front of the local Caddy's port-80 server (caddy_sync.py, mode "dns").
+    # Separate from PAX_CADDY_SYNC, which the second server's env sets to 0.
+    caddy_acme_forward: bool = False
     caddy_admin_url: str = "http://127.0.0.1:2019"
     dns_host: str = "dns.paxpeace.com"
     api_host: str = "api.paxpeace.com"
@@ -126,6 +130,8 @@ class Settings:
                                      os.environ.get("PAX_REPLICA_KEY_SHA256", "").split(",") if h.strip()),
             # On by default for a real primary (role all), off in tests (Settings()).
             caddy_sync=(role == "all" and os.environ.get("PAX_CADDY_SYNC", "1").strip() not in ("0", "false", "off")),
+            caddy_acme_forward=(role == "dns" and os.environ.get("PAX_CADDY_ACME_FORWARD", "1").strip()
+                                not in ("0", "false", "off")),
             caddy_admin_url=os.environ.get("PAX_CADDY_ADMIN_URL", d.caddy_admin_url),
             dns_host=os.environ.get("PAX_DNS_HOST", d.dns_host),
             api_host=os.environ.get("PAX_API_HOST", d.api_host),

@@ -187,22 +187,36 @@ def create_dns_app(settings: Settings, doh=None) -> FastAPI:
     """v0.8.8 role "dns": a second server that answers DoH only. No accounts,
     no escrow, no email; nothing here writes user state."""
     doh = doh if doh is not None else _make_doh(settings)
+    caddy = None
+    if settings.caddy_acme_forward and settings.doh_enabled:
+        # v0.8.17: hand the primary's ACME challenges on (see caddy_sync.py).
+        from .caddy_sync import CaddySync
+        caddy = CaddySync(settings.dns_host, settings.api_host, settings.caddy_admin_url,
+                          mode="dns")
 
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
         doh.start()
+        if caddy is not None:
+            caddy.start()
         try:
             yield
         finally:
             doh.stop()
+            if caddy is not None:
+                caddy.stop()
 
     app = FastAPI(title="Pax DNS", version=__version__, lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     app.state.doh = doh
+    app.state.caddy = caddy
 
     @app.get("/v1/health")
     def health():
-        return {"ok": True, "version": __version__, "role": "dns", "dns": doh.status()}
+        out = {"ok": True, "version": __version__, "role": "dns", "dns": doh.status()}
+        if caddy is not None:
+            out["dns_site"] = caddy.state     # v0.8.17 (informational)
+        return out
 
     _add_doh_routes(app, doh, settings)
     return app

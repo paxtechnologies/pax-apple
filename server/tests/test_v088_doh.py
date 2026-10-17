@@ -343,7 +343,8 @@ def test_caddy_sync_waits_for_dns_then_adds_site_once():
     a = FakeAdmin(CADDYFILE_JSON)
     addrs = {"v": []}
     c = cs.CaddySync("dns.paxpeace.com", "api.paxpeace.com", own_ip="167.233.42.17",
-                     resolver=lambda h: addrs["v"], opener=a.opener, health=a.health)
+                     resolver=lambda h: addrs["v"], opener=a.opener, health=a.health,
+                     cert_probe=lambda h: True)
     assert c.check_once() == "waiting_for_dns_record" and not a.loads
     addrs["v"] = ["167.233.42.17", "198.51.100.20"]
     assert c.check_once() == "applied"
@@ -361,7 +362,8 @@ def test_caddy_sync_waits_for_dns_then_adds_site_once():
 def test_caddy_sync_rolls_back_when_api_breaks():
     a = FakeAdmin(CADDYFILE_JSON, health_after=False)
     c = cs.CaddySync("dns.paxpeace.com", "api.paxpeace.com", own_ip="167.233.42.17",
-                     resolver=lambda h: ["167.233.42.17"], opener=a.opener, health=a.health)
+                     resolver=lambda h: ["167.233.42.17"], opener=a.opener, health=a.health,
+                     cert_probe=lambda h: True)
     assert c.check_once() == "rolled_back"
     assert a.loads[-1] == CADDYFILE_JSON
 
