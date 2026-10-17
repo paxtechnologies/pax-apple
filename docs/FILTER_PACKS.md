@@ -112,6 +112,33 @@ packs with no app release.
   run can raise `verify_max` (up to 5,000) and `dns_max` (up to 40,000) to work
   through a backlog.
 
+### Round 2 (2026-10-17 evening)
+
+The proxies still missed were mostly sites the loop had never looked at (proxy
+lists, proxy software, VPN services, proxies hosted on shared hosts), not sites it
+judged wrongly. So round 2 widens discovery and tightens the judgement:
+
+- **Ranked names**: Tranco names below the top 10k whose registrable label reads
+  like a proxy or a VPN (the list is already downloaded for the gates).
+- **Open-source proxy projects**: the GitHub search API (the workflow's own
+  read-only token) finds repositories by topic and name (web proxy, unblocker,
+  Ultraviolet, Rammerhead, Scramjet and similar engines) and takes their published
+  sites: the homepage field and `<user>.github.io` sites. This is how proxies on
+  shared hosts (github.io, pages.dev, vercel.app, netlify.app) are found, one host
+  name at a time; the shared host itself is never blocked.
+- New registrations that read like a VPN are candidates too, and the loop re-reads
+  up to 800 confirmed proxy pages a night for links (was 300).
+- **Candidate verdict** (`homepage.candidate_verdict`, new candidates and the
+  top-10k gate only): consumer VPN services count as bypass sites (Pax already
+  treats VPN apps as bypass), but not enterprise VPN gateways, VPN detection
+  services, reviews or news; pages that use "proxy" for something else (developer
+  and network tools, email security, game test servers, trading-card proxies,
+  handle/DOI resolvers) and "unblocked games" sites without proxy code are not
+  proxies; "unblock" inside another word is not evidence. Tuned on ranked names
+  that read like a proxy or VPN, never on the held-out lists.
+- The benchmark keeps labelling its fresh held-out sample with the unchanged
+  `homepage.verdict`, so what counts as a working proxy there does not move.
+
 ## Running it by hand
 
 ```sh

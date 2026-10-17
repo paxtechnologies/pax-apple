@@ -101,6 +101,7 @@ jobs:
         env:
           VERIFY_MAX: ${{ inputs.verify_max }}
           DNS_MAX: ${{ inputs.dns_max }}
+          GH_TOKEN: ${{ github.token }}   # GitHub search for open-source proxy project sites (read-only use)
         run: |
           set +e
           python3 lists/loop/run.py run --work "$WORK" --state "$STATE" --out "$PACK" --code "$GITHUB_SHA" \

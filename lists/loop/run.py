@@ -29,7 +29,10 @@ State (the `filter-loop` branch, committed by the workflow so history is visible
   state/verified-bypass.txt.gz names it confirmed as web proxies (added to pax-bypass)
   (v0.8.21 loop: proxy candidates also come from new registrations, certificate
   transparency and lookalikes of confirmed brands, lists/loop/proxy.py; names that
-  no longer resolve are recorded as "gone" and skipped for 90 days)
+  no longer resolve are recorded as "gone" and skipped for 90 days; round 2 adds
+  Tranco names that read like a proxy or VPN, the published sites of open-source
+  proxy projects on GitHub, and judges new candidates with
+  homepage.candidate_verdict, which also counts consumer VPN services)
   state/held-back.json.gz      list entries held back {entry: yyyymmdd}
   state/sampled/<day>.json.gz  hashes of names already used as held-out samples
   state/packs.json             the packs published (version + file names)
@@ -44,6 +47,7 @@ import csv
 import datetime as dt
 import io
 import json
+import os
 import random
 import sys
 import tarfile
@@ -68,7 +72,7 @@ RECHECK_DAYS = 30           # a confirming verdict (restricted / proxy) is reuse
 RECHECK_OTHER_DAYS = 90     # an "other" / "down" / "gone" verdict: check the site again after this
 PROXY_SHARE = 0.5           # v0.8.21 loop: share of the night's homepage checks spent on proxy candidates
 CT_BRANDS_PER_NIGHT = 12
-CRAWL_PER_NIGHT = 300       # confirmed proxy pages re-read a night for their links
+CRAWL_PER_NIGHT = 800       # confirmed proxy pages re-read a night for their links (round 2: was 300)
 FRONTIER_MAX = 20_000
 HOLD_DAYS = 30
 MAX_NEW_TOP10K = 300
@@ -271,7 +275,7 @@ def build_lists(src: Path, state: State, held: set, last_files: dict, work: Path
 
 def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
                      nrd_days: int = 14, qps: float = 8.0, crawl: int = CRAWL_PER_NIGHT,
-                     skip=frozenset()) -> dict:
+                     skip=frozenset(), top=(), github=None) -> dict:
     """v0.8.21 loop: proxy candidates beyond the redirector list (proxy.py): links
     on confirmed proxy pages (and last night's unchecked links), new registrations,
     certificate transparency and lookalikes of confirmed brands."""
@@ -286,7 +290,7 @@ def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
     random.Random(lu.today()).shuffle(seeds)
     linked: dict = {}
     if crawl and seeds:
-        homepage.check(seeds[:crawl], qps=qps, links_out=linked)
+        homepage.check(seeds[:crawl], qps=qps, links_out=linked, judge=homepage.candidate_verdict)
     links = [h for hs in linked.values() for h in hs]
     links = list(dict.fromkeys(state.frontier + links))
     links = [h for h in links if h not in skip]
@@ -294,9 +298,14 @@ def discover_proxies(work: Path, state: State, known: set, rng, fetch=lu.fetch,
     ct = proxy.ct_candidates(brands, CT_BRANDS_PER_NIGHT, lu.today(), fetch)
     look = proxy.lookalikes(brands, frozenset(known))
     rng.shuffle(look)
-    log(f"proxy discovery: {len(links)} linked names, {len(nrd)} new registrations, "
+    ranked = [n for n in proxy.tranco_candidates(list(top)) if n not in skip]
+    gh = github(os.environ.get("GH_TOKEN")) if github else proxy.github_candidates(os.environ.get("GH_TOKEN"))
+    gh = [n for n in gh if n not in skip]
+    log(f"proxy discovery: {len(links)} linked names, {len(gh)} open-source project sites, "
+        f"{len(nrd)} new registrations, {len(ranked)} ranked names, "
         f"{len(ct)} certificate names, {len(look)} lookalikes of {len(brands)} brands")
-    return {"links": links, "new_registrations": nrd, "certificates": ct, "lookalikes": look[:3000]}
+    return {"links": links, "project_sites": gh, "new_registrations": nrd, "ranked": ranked,
+            "certificates": ct, "lookalikes": look[:3000]}
 
 
 def run(args) -> int:
@@ -328,10 +337,11 @@ def run(args) -> int:
         fresh = lambda n: state.recent_verdict(n) is None  # noqa: E731
         todo_b = [n for n in cblock if n not in known_block and fresh(n) and not last.blocked(n)]
         found = discover_proxies(work, state, known_bypass, rng, qps=args.qps, crawl=args.crawl_max,
-                                 skip=set(top10k))
+                                 skip=set(top10k), top=top)
         result["discovery"] = {k: len(v) for k, v in found.items()}
         todo_p, seen_p = [], set()
-        for n in found["links"] + found["new_registrations"] + found["certificates"] + found["lookalikes"] + cbypass:
+        for n in (found["links"] + found["project_sites"] + found["new_registrations"] + found["ranked"]
+                  + found["certificates"] + found["lookalikes"] + cbypass):
             if n not in seen_p and n not in known_bypass and fresh(n) and not last.blocked(n):
                 seen_p.add(n)
                 todo_p.append(n)
@@ -353,7 +363,8 @@ def run(args) -> int:
         todo_p = [n for n in probe if alive.get(n)][:np_]
         todo_b = todo_b[:args.verify_max - len(todo_p)]
         linked: dict = {}
-        verdicts = homepage.check(todo_b + todo_p, qps=args.qps, links_out=linked)
+        verdicts = homepage.check(todo_b, qps=args.qps)
+        verdicts.update(homepage.check(todo_p, qps=args.qps, links_out=linked, judge=homepage.candidate_verdict))
         added_b = [n for n in todo_b if verdicts.get(n) == "adult"]
         added_p = [n for n in todo_p if verdicts.get(n) == "proxy"]
         for n, v in verdicts.items():
@@ -394,7 +405,8 @@ def run(args) -> int:
             if fails:
                 result["failures"] += fails
                 break
-            t = gate_top10k(new, last, top10k, state, lambda names: homepage.check(names, qps=args.qps))
+            t = gate_top10k(new, last, top10k, state,
+                            lambda names: homepage.check(names, qps=args.qps, judge=homepage.candidate_verdict))
             result["top10k"] = {"new_blocks": t["new_blocks"], "confirmed": len(t["confirmed"]),
                                 "unconfirmed": len(t["unconfirmed"]),
                                 "held_back": len(held_now | t["hold"]),

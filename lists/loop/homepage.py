@@ -20,7 +20,17 @@ old proxy name is not a proxy (GAMBLE), and the site's own name is taken out of
 its title first, so "unblockweb.biz" titled "unblockweb.biz" is not a proxy by
 its name alone. Paid proxy networks (residential, datacenter, rotating proxies)
 count as proxies too: they bypass a DNS filter the same way a VPN does. Tuned on UT1 redirector pages only, never on the held-out lists
-or the hand-kept benchmark set."""
+or the hand-kept benchmark set.
+
+Round 2 (candidate_verdict, used for new candidates and the top-10k gate only):
+consumer VPN services count as bypass sites (VPN_TITLE: the page sells or gives
+away a VPN; enterprise gateways, VPN detection services, reviews and news are
+not), and pages that only use the word "proxy" for something else are not
+proxies (NOT_PROXY: developer and network tools, email security, game test
+servers, trading-card "proxies"; "unblock" inside another word). Tuned on Tranco
+names that read like a proxy or VPN, never on the held-out lists. The benchmark
+keeps labelling its fresh held-out sample with `verdict`, so what counts as a
+working proxy there does not move with these changes."""
 from __future__ import annotations
 
 import re
@@ -44,6 +54,24 @@ GAMBLE = re.compile(r"casino|\bslots?\b|togel|cá cược|nhà cái|tài xỉu|\
 PARK_BODY = re.compile(r"location\.href\s*=\s*[\"']/lander|suspendedpage|defaultwebpage\.cgi|buy\.nameshift\.com|"
                        r"webserver is functioning normally|parkingcrew|sedoparking|bodis\.com|afternic\.com/forsale", re.I)
 PAID_PROXY = re.compile(r"prox(?:y|ies)", re.I)
+VPN_TITLE = re.compile(r"vpn(?![a-z])|впн", re.I)
+VPN_WORD = re.compile(r"(?<![a-z])vpn|vpn(?![a-z])|впн", re.I)
+VPN_NOT = re.compile(r"\bsdk\b|detect|log ?in\b|log ?out\b|sign ?in\b|portal|big-ip|globalprotect|anyconnect|"
+                     r"fortinet|fortigate|pulse secure|citrix|\bssl ?vpn\b|\bedu|universit|school|news|review|"
+                     r"\bvs\.?\b|compare|comparison|router|firewall|enterprise|corporate|business vpn|zero trust|"
+                     r"\bztna\b|sase|mesh|tailscale|for teams|business|\bauto|\bcars?\b|voiture|capital|"
+                     r"invest|\bimages?\b|\bpng\b|guides?\b|it services|\bblog|без vpn|without (?:a )?vpn|"
+                     r"no vpn", re.I)
+NOT_PROXY = re.compile(r"debug|developer|reverse proxy|load balanc|api gateway|ingress|service mesh|squid|haproxy|"
+                       r"nginx|envoy|traefik|e-?mail|nospam|spam filter|card maker|proxy cards?|\bmtg\b|"
+                       r"magic: the gathering|free ?fire|\bob\d\d\b|apk|game server|minecraft|velocity|"
+                       r"bungeecord|proxy (?:vote|voting|statement|advisor)|shareholder|agentic|"
+                       r"detection api|ip lookup|whois|\bproxy (?:check|test)er\b|handle proxy|\bdoi\b", re.I)
+# "Unblocked games" sites: browser games re-hosted to get past school filters, not
+# proxies (unless the page also carries proxy code or says it is a proxy).
+GAMES = re.compile(r"\bgames?\b|\bplay\b|clicker|\b\d+x\b", re.I)
+PROXY_WORD = re.compile(r"prox|vpn|bypass|anonym|hide (?:my|your) ip|mirror", re.I)
+_EMBEDDED_UNBLOCK = re.compile(r"(?<=[a-z])unblock", re.I)
 _LINK = re.compile(r"""href\s*=\s*["']?https?://([a-z0-9][a-z0-9.-]*[a-z0-9])""", re.I)
 MAX_LINKS = 300
 _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
@@ -132,8 +160,31 @@ def verdict(rec: dict) -> str:
     return "other"
 
 
+def candidate_verdict(rec: dict) -> str:
+    """Round 2 verdict for new candidates (see the module notes): `verdict`, minus
+    pages that use "proxy" for something else, plus consumer VPN services."""
+    v = verdict(dict(rec, title=_EMBEDDED_UNBLOCK.sub(" ", rec.get("title") or "")))
+    title = rec.get("title") or ""
+    if v == "proxy":
+        # Proxy-engine code on the page is evidence on its own; a title or a word count is not
+        # when the page is plainly about something else.
+        if not rec.get("frame") and NOT_PROXY.search(title):
+            return "other"
+        if (not rec.get("frame") and rec.get("pxy", 0) < 3 and GAMES.search(title)
+                and not PROXY_WORD.search(_without_own_name(title, rec.get("host", "")))):
+            return "other"
+        return v
+    if v != "other" or GAMBLE.search(title) or NOT_PROXY.search(title):
+        return v
+    own = _without_own_name(title, rec.get("host", ""))
+    lab = (pr.registrable_label(rec.get("host", "")) or "").lower()
+    if VPN_TITLE.search(title) and not VPN_NOT.search(title) and (VPN_WORD.search(own) or "vpn" in lab):
+        return "proxy"
+    return v
+
+
 def check(names, qps: float = 8.0, workers: int = 32, timeout: float = 8.0, fetcher=fetch_home,
-          links_out: dict | None = None) -> dict:
+          links_out: dict | None = None, judge=verdict) -> dict:
     """{name: verdict}. At most `qps` new requests a second. With `links_out`, the
     links of every page judged a proxy go into it ({name: [linked names]})."""
     names = list(dict.fromkeys(names))
@@ -145,7 +196,7 @@ def check(names, qps: float = 8.0, workers: int = 32, timeout: float = 8.0, fetc
         limiter.wait()
         try:
             rec = fetcher(n, timeout)
-            v = verdict(rec)
+            v = judge(rec)
             if links_out is not None and v == "proxy" and rec.get("links"):
                 links_out[n] = rec["links"]
             return n, v

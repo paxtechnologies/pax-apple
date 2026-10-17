@@ -451,3 +451,44 @@ def test_homepage_check_collects_links_of_proxy_pages_and_frontier_persists(tmp_
     st.frontier = ["p1.example", "p2.example", "p1.example"]
     st.save()
     assert loop.State(tmp_path).frontier == ["p1.example", "p2.example"]
+
+
+# ------------------------------------------- round 2: VPN services, more sources
+def test_candidate_verdict_vpn_services_and_not_proxies():
+    cv = homepage.candidate_verdict
+    # consumer VPN services count as bypass sites
+    assert cv({"st": 200, "title": "Blast VPN — Browse Without Limits", "host": "blastvpn.org"}) == "proxy"
+    assert cv({"st": 200, "title": "Лучший ВПН для России | BeeFreeVPN", "host": "beefreevpn.ru"}) == "proxy"
+    # ... but not enterprise gateways, reviews, VPN detection or words that only contain "vpn"
+    assert cv({"st": 200, "title": "SSL VPN Portal - Log in", "host": "vpn.example.com"}) == "other"
+    assert cv({"st": 200, "title": "Best VPNs compared: reviews 2026", "host": "vpnreviews.example"}) == "other"
+    assert cv({"st": 200, "title": "Free transparent PNG images", "host": "favpng.example"}) == "other"
+    assert cv({"st": 200, "title": "Secure VPN Solutions for Business", "host": "corpvpn.example"}) == "other"
+    # pages that use "proxy" for something else
+    assert cv({"st": 200, "title": "Email Security | NoSpamProxy", "host": "nospamproxy.example", "pxy": 6}) == "other"
+    assert cv({"st": 200, "title": "Charles Web Debugging Proxy", "host": "charles.example"}) == "other"
+    assert cv({"st": 200, "title": "Proxy Server Free Fire APK Download", "host": "ff.example", "pxy": 90}) == "other"
+    assert cv({"st": 200, "title": "FunBlock", "host": "funblocks.example"}) == "other"
+    assert cv({"st": 200, "title": "Slope Unblocked Games - Play Free", "host": "slope.example"}) == "other"
+    # proxy code on the page still wins, and real proxies stay proxies
+    assert cv({"st": 200, "title": "Unblocked Games", "host": "g.example", "frame": 2}) == "proxy"
+    assert cv({"st": 200, "title": "Free Web Proxy - Unblock Websites", "host": "p.example", "pxy": 9}) == "proxy"
+    # the benchmark's labeller is unchanged
+    assert homepage.verdict({"st": 200, "title": "Blast VPN — Browse Without Limits", "host": "blastvpn.org"}) == "other"
+
+
+def test_tranco_and_github_candidates():
+    top = ["google.com"] * 3 + ["bakery.com", "megaproxy.net", "fastvpn.ru", "unblock-it.org"]
+    assert proxy.tranco_candidates(top, start=3) == ["megaproxy.net", "fastvpn.ru", "unblock-it.org"]
+    page = json.dumps({"items": [
+        {"name": "someone.github.io", "homepage": ""},
+        {"name": "uv-app", "homepage": "https://my-uv.vercel.app/"},
+        {"name": "x", "homepage": "discord.gg/abc"},
+        {"name": "y", "homepage": "https://docs.example.org"},
+        {"name": "z", "homepage": "www.proxysite.example"}]}).encode()
+    got = proxy.github_candidates(fetch=lambda url: page, pages=1, pause=0)
+    assert got == ["someone.github.io", "my-uv.vercel.app", "proxysite.example"]
+
+    def boom(url):
+        raise OSError("rate limited")
+    assert proxy.github_candidates(fetch=boom, pages=1, pause=0) == []

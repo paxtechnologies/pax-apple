@@ -14,6 +14,14 @@ homepage check before it is added, and the Tranco and known-good gates after):
   - certificate transparency (crt.sh): names that start with the label of a
     proxy brand the workflow has already confirmed (`brands`), a few brands a night
   - lookalikes: a confirmed brand under the top-level domains proxy mirrors use
+  - (round 2) the Tranco top 1M below the top 10k: names whose registrable label
+    reads like a proxy or a VPN (`tranco_candidates`), the list the workflow
+    already downloads for its gates
+  - (round 2) GitHub: the published sites (repository homepages and
+    <user>.github.io sites) of open-source web-proxy and unblocker projects, found
+    by repository topic and name (`github_candidates`, the GitHub search API);
+    this is how proxies hosted on shared hosts (github.io, pages.dev, vercel.app,
+    netlify.app, ...) are found, one host name at a time
 A cheap DNS check (the runner's own resolver) drops names that no longer exist
 before any homepage is fetched.
 
@@ -68,12 +76,85 @@ SHARED_HOSTS = ("github.io", "gitlab.io", "pages.dev", "workers.dev", "vercel.ap
                 "replit.app", "repl.co", "fly.dev", "blogspot.com")
 
 
+VPN_TOKEN = re.compile(r"vpn")
+
+
 def label(name: str) -> str:
     return pr.registrable_label(name) or ""
 
 
 def reads_like_proxy(name: str) -> bool:
     return bool(TOKENS.search(label(name)))
+
+
+def reads_like_bypass(name: str) -> bool:
+    """A proxy or a VPN by its name (candidate selection only, never a rule)."""
+    lab = label(name)
+    return bool(TOKENS.search(lab) or VPN_TOKEN.search(lab))
+
+
+def tranco_candidates(top, start: int = 10_000) -> list[str]:
+    """Ranked names below the top `start` whose label reads like a proxy or VPN,
+    in rank order."""
+    return [n for n in top[start:] if reads_like_bypass(n)]
+
+
+GITHUB_SEARCH = "https://api.github.com/search/repositories?q={q}&sort=updated&order=desc&per_page=100&page={page}"
+GITHUB_QUERIES = ("topic:web-proxy", "topic:unblocker", "topic:proxy-site", "topic:ultraviolet",
+                  "topic:interstellar", "topic:holy-unblocker", "topic:rammerhead", "topic:scramjet",
+                  "topic:unblocked", "topic:webproxy", "topic:proxy-website", "topic:school-proxy",
+                  "unblocker in:name", "github.io in:name proxy", "github.io in:name unblock")
+# Hosts a repository homepage often points at that are never the proxy itself.
+NOT_SITES = re.compile(r"(^|\.)(github\.com|discord\.(gg|com)|youtube\.com|youtu\.be|npmjs\.com|patreon\.com|"
+                       r"ibb\.co|imgur\.com|twitter\.com|x\.com|t\.me|reddit\.com|google\.com|"
+                       r"docs\.[a-z0-9.-]+|pypi\.org|crates\.io|wikipedia\.org)$")
+
+
+def github_candidates(token: str | None = None, pages: int = 2, fetch=None, pause: float = 2.5) -> list[str]:
+    """Published sites of open-source web-proxy / unblocker repositories (homepage
+    field and <user>.github.io repositories). Flaky or rate-limited searches just
+    give fewer names tonight."""
+    import time
+    import urllib.request
+
+    def default_fetch(url):
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": lu.UA}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:  # noqa: S310
+            return r.read()
+    fetch = fetch or default_fetch
+    out: dict = {}
+    for q in GITHUB_QUERIES:
+        for page in range(1, pages + 1):
+            try:
+                items = json.loads(fetch(GITHUB_SEARCH.format(q=urllib.parse.quote(q), page=page)) or b"{}").get("items") or []
+            except Exception as exc:  # noqa: BLE001
+                log(f"github search {q.split(':')[0]}: skipped ({type(exc).__name__})")
+                break
+            for it in items:
+                hosts = []
+                hp = (it.get("homepage") or "").strip()
+                if hp:
+                    if "://" not in hp:
+                        hp = "https://" + hp
+                    hosts.append(urllib.parse.urlparse(hp).hostname or "")
+                name = (it.get("name") or "").lower()
+                if name.endswith(".github.io") and name.count(".") == 2:
+                    hosts.append(name)
+                for h in hosts:
+                    h = h.lower().strip(".")
+                    if h.startswith("www."):
+                        h = h[4:]
+                    if "." in h and not re.fullmatch(r"[0-9.:]+", h) and not NOT_SITES.search(h):
+                        out[h] = None
+            if len(items) < 100:
+                break
+            if pause:
+                time.sleep(pause)
+        if pause:
+            time.sleep(pause)
+    return list(out)
 
 
 def priority(names) -> list[str]:
@@ -114,7 +195,7 @@ def nrd_candidates(raw_dir, days: int, today: dt.date | None = None) -> list[str
             continue
         for d in p.read_text().split():
             d = d.strip().lower().rstrip(".")
-            if "." in d and reads_like_proxy(d):
+            if "." in d and reads_like_bypass(d):
                 out.add(d)
     return sorted(out)
 
