@@ -18,7 +18,8 @@ translator-proxy titles (PTITLE2), parked or suspended pages recognised from the
 page itself (PARK_BODY: a parking redirect has no title), a gambling page on an
 old proxy name is not a proxy (GAMBLE), and the site's own name is taken out of
 its title first, so "unblockweb.biz" titled "unblockweb.biz" is not a proxy by
-its name alone. Tuned on UT1 redirector pages only, never on the held-out lists
+its name alone. Paid proxy networks (residential, datacenter, rotating proxies)
+count as proxies too: they bypass a DNS filter the same way a VPN does. Tuned on UT1 redirector pages only, never on the held-out lists
 or the hand-kept benchmark set."""
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ PTITLE2 = re.compile(r"web ?vpn|online vpn|vpn (?:online|browser)|unblock(?:ed)?
 GAMBLE = re.compile(r"casino|\bslots?\b|togel|cá cược|nhà cái|tài xỉu|\bbet\d|sunwin|hitclub|\bjudi\b|gacor|baccarat", re.I)
 PARK_BODY = re.compile(r"location\.href\s*=\s*[\"']/lander|suspendedpage|defaultwebpage\.cgi|buy\.nameshift\.com|"
                        r"webserver is functioning normally|parkingcrew|sedoparking|bodis\.com|afternic\.com/forsale", re.I)
+PAID_PROXY = re.compile(r"prox(?:y|ies)", re.I)
 _LINK = re.compile(r"""href\s*=\s*["']?https?://([a-z0-9][a-z0-9.-]*[a-z0-9])""", re.I)
 MAX_LINKS = 300
 _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
@@ -120,13 +122,17 @@ def verdict(rec: dict) -> str:
     if GAMBLE.search(title):
         return "other"
     own = _without_own_name(title, rec.get("host", ""))
-    if not _P["comm"].search(title) and (_P["ptitle"].search(own) or PTITLE2.search(own)
-                                         or rec.get("pxy", 0) >= 3 or rec.get("frame", 0) >= 1):
+    if (_P["ptitle"].search(own) or PTITLE2.search(own) or rec.get("pxy", 0) >= 3
+            or rec.get("frame", 0) >= 1):
+        return "proxy"
+    # Paid proxy networks sell the same way round Pax's filter (a browser set to use
+    # one resolves names at the proxy), like the VPNs the bypass list already holds.
+    if _P["comm"].search(own) and PAID_PROXY.search(own):
         return "proxy"
     return "other"
 
 
-def check(names, qps: float = 8.0, workers: int = 8, timeout: float = 8.0, fetcher=fetch_home,
+def check(names, qps: float = 8.0, workers: int = 32, timeout: float = 8.0, fetcher=fetch_home,
           links_out: dict | None = None) -> dict:
     """{name: verdict}. At most `qps` new requests a second. With `links_out`, the
     links of every page judged a proxy go into it ({name: [linked names]})."""

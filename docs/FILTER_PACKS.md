@@ -93,7 +93,9 @@ packs with no app release.
   needs a homepage verdict of "proxy" before it is added, and the Tranco and
   known-good gates still apply.
 - **Homepage check**: pages built on the common web-proxy engines, "web VPN",
-  unblocker, mirror and translator-proxy titles count as proxies; parked or suspended
+  unblocker, mirror and translator-proxy titles count as proxies, and so do paid proxy
+  networks (a browser set to use one resolves names at the proxy, so it gets round
+  the filter like a VPN); parked or suspended
   pages are recognised from the page itself; a gambling page on an old proxy name is
   not a proxy; the site's own name in its title is not evidence. Tuned on redirector
   pages only.

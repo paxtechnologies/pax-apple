@@ -152,7 +152,7 @@ def ct_candidates(brand_labels, per_night: int, day: str, fetch=lu.fetch) -> lis
     return sorted(out)
 
 
-def dns_alive(names, workers: int = 48, timeout: float = 4.0, resolver=None) -> dict:
+def dns_alive(names, workers: int = 128, timeout: float = 4.0, resolver=None) -> dict:
     """{name: True/False}: does the name still resolve (the runner's resolver)."""
     def default(n):
         try:

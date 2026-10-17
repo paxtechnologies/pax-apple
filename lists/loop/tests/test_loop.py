@@ -44,7 +44,8 @@ def test_homepage_verdicts():
     assert v({"st": 200, "title": "Home", "rating": True}) == "adult"
     assert v({"st": 200, "title": f"Free {WORD} videos", "adl": 3}) == "adult"
     assert v({"st": 200, "title": "Free web proxy - unblock any site"}) == "proxy"
-    assert v({"st": 200, "title": "Residential proxies for scraping"}) == "other"
+    assert v({"st": 200, "title": "Residential proxies for scraping"}) == "proxy"     # paid proxies bypass too
+    assert v({"st": 200, "title": "Web scraping API for data teams"}) == "other"
     assert v({"st": 200, "title": "This domain is for sale", "rta": True}) == "down"
     assert v({"st": 404, "title": "x"}) == "down"
     assert v({"st": 0, "err": "timeout"}) == "down"
@@ -327,7 +328,7 @@ def test_homepage_proxy_signals():
     assert v({"st": 200, "title": "Home", "frame": 1}) == "proxy"
     assert v({"st": 200, "title": "Free Web VPN"}) == "proxy"
     assert v({"st": 200, "title": "Proxy mirrors for every site"}) == "proxy"
-    assert v({"st": 200, "title": "Residential proxies - buy proxy plans", "frame": 0}) == "other"
+    assert v({"st": 200, "title": "Datacenter hosting and colocation", "frame": 0}) == "other"
     assert homepage.FRAME.search('<script src="/uv/uv.bundle.js"></script>')
     assert homepage.PARK_BODY.search('<script>window.onload=function(){window.location.href="/lander"}</script>')
     assert not homepage.FRAME.search("<p>Corrosion of metal pipes</p>")
