@@ -28,6 +28,11 @@ them:
                                   words, allow_words, exclude (LookupRule)
   bypass_rule                     (v0.8.18) web proxies by name: contains, labels,
                                   exclude (BypassNameRule; not restricted)
+  homepage                        (v0.8.19) the homepage check the filter workflow
+                                  uses on new candidates and new Tranco hits
+                                  (lists/loop/homepage.py)
+  sources.heldout_* / verify_* /  (v0.8.19) the filter workflow's held-out test
+  reference_doh                   sources, verification sources and reference resolver
 
 "Restricted" here means: blocked for everyone, and never released by an
 exception. Media converters (pax-dns/lists/media-converters.txt) are treated the
@@ -62,29 +67,48 @@ BLOCK_PAGE_IPS = frozenset({"0.0.0.0", "::", "146.112.61.104", "146.112.61.105",
                             "146.112.61.107", "146.112.61.108", "146.112.61.110"})
 
 _DATA = """
-H4sIAAAAAAACA61W247jNgz9lzxvHHQ7BbbzK8UikCXa5kSWXF0SJ4v995IS5TizQNGHzsOENCny
-iFf9OPT3RcV4DtnC4f3HQXuXFLp4eP/rcIN+CX69H74chgDQ6PIbMUGjj3vGYkybYM+wCaGF1GJQ
-j9hsRz15b188Zddbry/ECiXehCOQfI6+PRXp2+sHoSA8aWRgExqY73T/jcaFyDe4QthA5N6ibpxy
-3t1nfJCp718OsGqbDXCwikKn/dxwd1fHKlb1YOOmQdLLqy2fY4sLQjx8/0lQlDPnEjs6FsAYTGIZ
-5zEHod806TmwnQ8jsQauqCh5oekuuOK1c8AXvamUFmVEooKe8Ap+8Dn4mxMDCZ2BZnz0L6yD2xh8
-dibKhx6TnnICYW8TxoW048Rnh7tWaY9SPHy7ZNclzyGmr4kMWkibjeHPPx7eASkwo1y0LZ4DJItD
-0xsDIWvA/AyjbRLv7J0PCkuRG3HYcaYrWa8RncGg2skwxaQS6pdIoy/SmALqBOaoJ9CXblHrAkpX
-t5Rj9PE8KGt7pS9nrryabx/clHuxt16pvnwDs7p1beSk5pi2SBOUlPt2o7vPbEY4FnwTOi7KXXrl
-RuGB9TYrad3sT3+/SJhJAZq0Bxifvj7w8WgWnBosNrXZpwmChdguAIEi3yBTGn9/68glC44T8AiR
-lDvhahl+StBLkrkicujVVg8c9IW/NqjejUpTsIS3VMIfKs7YwkOyt4a3jJudMpPetHz3QT2ohWNL
-4AXuNx/MmXLob2cmSwZnNIbuDGs10Ac0I1R6UTg6+eypkCqJERKTkRpg9oF1y4iIeK0KFDY5hdYW
-UxYdalUUFyq0WMZXrD5jbgSsqR2EIM5U8IIlx0oYaMadiHoUAje/UY4vZRoSQdrVvfWhEhA4WQ0F
-+7TNd7PPA4dwzw2K2CwjvH1FEQqUXaC3/uD6X+WGXC1xuHHJlpphnocrI9GeIPE09f6Sl21bfcqX
-yoZasVjqlfxSW1finp6ZVK+wt0j2n6K2S+0++VucP8dly80uz6/pltjtc/RraloZbcmR0L7W3ZZA
-yf+E2tdgPouq5QhcvXuNZFCmXL1ykSf78mQvuffFfSuAXQk/i2NXLlK2EyZP204wTLzXmEBHw62S
-+36asepxFaAWIvOkLTvXSuFX+MR460fpBNV+Xdr3BhFZ2UrcX7rn2Y3ZYf12bZi2ZqMqqojoP4F0
-6JQwOT0qtfgbHVukFnfLv0YuX2TMCTj0dd+s8td9LJW70xDnK9/TzBXfptC/dcazJWqLSEvUTbLb
-Ii+DdD9Ed1NvP0uJ/lDXydRKGjHYIr3AIu0XSwo1JaY8TSKVm/2/9tv38uADasf3A+3U7rlou+tv
-DJ7eJ5qd0bu0P9OF4Wz8RMoTvWbi++lEXKctKNfTOyYiLUPaOvz1pEy26TigJc8nvpycnzy/qg57
-8dHwQvpspSyYmM7qTK9FKityqkZ44LlkLK3pqZCD3WEK6taNmCgy1ACB39OUOr7uqRo4kbtjeYLy
-8Xia6bl9uqE1WgVzYutHXpPGsyDuPfUbFI/R/AKk/wSkyFmzc/Yk5tjP13ZAb/ZKOJrOU/xqz0Ts
-cjpqtXCjQzeEU29Vu4ahh6T1ytTId/QO7cZHeTkYsP85ROgGGl2UFKih+OD4cPWcih3ifI8WqM3O
-168HqsdkZfSzV5kiW9NwA33/+Q+nL6Ep5AwAAA==
+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
 """
 
 
@@ -142,6 +166,11 @@ def samples() -> list[str]:
 
 def source(key: str) -> str:
     return data()["sources"][key]
+
+
+def homepage_patterns() -> dict:
+    """v0.8.19: the homepage check's patterns (lists/loop/homepage.py)."""
+    return dict(data()["homepage"])
 
 
 # ------------------------------------------------------------------ the rules
@@ -393,7 +422,7 @@ def doh_lookup(url: str = CLEANBROWSING_FAMILY_DOH, timeout: float = 5.0) -> Cal
     def lookup(wire: bytes) -> bytes:
         req = urllib.request.Request(url, data=wire, method="POST", headers={
             "Content-Type": "application/dns-message", "Accept": "application/dns-message",
-            "User-Agent": "pax/0.8.18"})
+            "User-Agent": "pax/0.8.19"})
         with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed https URL)
             return r.read()
     return lookup

@@ -1,0 +1,212 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax's nightly filter workflow (v0.8.19): the filter improves itself with no person
+# and no outside service in the loop. Every night (and on demand) it refreshes the
+# list sources, checks new candidates by their homepage (rate-limited), builds the
+# lists reproducibly and runs the gates (lists/loop/run.py):
+#   1. unit tests for the lists, the pack format and the loop
+#   2. floors and max-drop (the same limits pax-guard and the server apply)
+#   3. the 57 everyday UK sites and the known-good set: none blocked
+#   4. Tranco top 10k: every new block confirmed restricted or a proxy by its
+#      homepage, else its list entry is held back from the pack
+#   5. a benchmark on fresh held-out samples against a reference resolver (at most
+#      8 queries a second, 1,000 a night): no regression against the last pack
+# All pass: the pack is signed with the filter key (secret PAX_FILTER_SIGNING_KEY,
+# never the app update key) and published as the `filter-pack` release assets plus
+# the `filter-packs` branch (jsDelivr mirror). pax-guard and the DoH servers check
+# for it every 6 hours and run their own checks and canary before using it.
+# Any gate fails: nothing is published, and an issue labelled filter-loop says why.
+# Either way the scoreboard and loop state are committed to the `filter-loop`
+# branch, so the history is visible. docs/FILTER_PACKS.md.
+name: filter-loop
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the pack if every gate passes"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # filter-pack release, filter-packs and filter-loop branches
+  issues: write     # the filter-loop issue when a run refuses
+
+concurrency:
+  group: filter-loop
+  cancel-in-progress: false
+
+env:
+  STATE: ${{ github.workspace }}/../loop-state
+  PACK: ${{ github.workspace }}/../loop-pack
+  WORK: ${{ github.workspace }}/../loop-work
+
+jobs:
+  loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r guard/requirements-dev.txt
+      - name: Loop state (filter-loop branch)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf "$STATE"
+          if git ls-remote --exit-code --heads origin filter-loop >/dev/null 2>&1; then
+            git clone -q --branch filter-loop --single-branch \
+              "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$STATE"
+          else
+            mkdir -p "$STATE" && cd "$STATE" && git init -q && git checkout -q --orphan filter-loop
+          fi
+      - name: "Gate 1: unit tests"
+        id: tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          { (cd guard && pytest -q) && (cd common && pytest -q) && (cd lists && pytest -q); } 2>&1 \
+            | tee "$RUNNER_TEMP/tests.log"
+      - name: "Build and gates 2-5"
+        id: run
+        if: steps.tests.outcome == 'success'
+        run: |
+          set +e
+          python3 lists/loop/run.py run --work "$WORK" --state "$STATE" --out "$PACK" --code "$GITHUB_SHA"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = 0 ]; then echo "passed=true" >> "$GITHUB_OUTPUT"; fi
+          exit 0
+      - name: Sign the pack
+        id: sign
+        if: steps.run.outputs.passed == 'true' && (github.event_name == 'schedule' || inputs.publish == true)
+        env:
+          PAX_FILTER_SIGNING_KEY: ${{ secrets.PAX_FILTER_SIGNING_KEY }}
+        run: python3 lists/loop/run.py sign --out "$PACK"
+      - name: Publish the pack
+        id: publish
+        if: steps.sign.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PACK/payload.json")"
+          if ! gh release view filter-pack >/dev/null 2>&1; then
+            gh release create filter-pack --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "Pax filter pack" \
+              --notes "Signed filter lists for pax-guard and Pax's DoH servers (filter-pack.json). Built, tested and published by the nightly filter workflow. Not an app release."
+          fi
+          existing="$(gh release view filter-pack --json assets -q '.assets[].name')"
+          # Files first (content-addressed, so already-published ones are skipped), manifest last.
+          for f in "$PACK"/*.txt.gz; do
+            [ -e "$f" ] || continue
+            n="$(basename "$f")"
+            grep -qxF "$n" <<<"$existing" || gh release upload filter-pack "$f"
+          done
+          gh release upload filter-pack "$PACK/filter-pack.json" --clobber
+          # The jsDelivr mirror: this pack and the one before it.
+          M="$RUNNER_TEMP/mirror" && rm -rf "$M" && mkdir -p "$M"
+          cp "$PACK/filter-pack.json" "$M/"
+          while read -r o; do
+            [ -n "$o" ] || continue
+            if [ -f "$PACK/$o" ]; then cp "$PACK/$o" "$M/"; else gh release download filter-pack -p "$o" -D "$M" || true; fi
+          done < "$PACK/mirror.txt"
+          printf '# Pax filter pack (mirror)\n\nSigned list updates published by the nightly filter workflow. See docs/FILTER_PACKS.md on main.\n' > "$M/README.md"
+          (cd "$M" && git init -q && git checkout -q --orphan filter-packs && git add -A \
+            && git -c user.name="Pax Technologies" -c user.email="hello@paxpeace.com" commit -q -m "Filter pack $V")
+          pushed=0
+          for i in 1 2 3 4 5; do
+            if (cd "$M" && git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/filter-packs); then pushed=1; break; fi
+            sleep $((i * 4))
+          done
+          [ "$pushed" = 1 ] || echo "::warning::the filter-packs mirror branch could not be updated; the release is the primary source"
+          curl -sS -m 30 "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@filter-packs/filter-pack.json" >/dev/null || true
+          # Old files no pack still points at.
+          while read -r a; do
+            [ -n "$a" ] || continue
+            [ "$a" = filter-pack.json ] && continue
+            grep -qxF "$a" "$PACK/keep.txt" || gh release delete-asset filter-pack "$a" -y || true
+          done <<<"$existing"
+          python3 lists/loop/run.py check-published --version "$V"
+          python3 lists/loop/run.py published --state "$STATE" --out "$PACK"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Record the scoreboard (filter-loop branch)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.publish.outcome == 'success' && 'published' || 'not published' }}
+        run: |
+          set -euo pipefail
+          [ -d "$STATE" ] || exit 0
+          cd "$STATE"
+          cat > README.md <<'EOF'
+          # Pax filter workflow: history
+
+          Written by the nightly filter workflow (.github/workflows/filter-loop.yml on main).
+          `scoreboard/history.csv` has one row per run; `scoreboard/latest.md` explains the latest.
+          `state/` is what the workflow remembers between nights (homepage verdicts, checked
+          additions, held-back entries, published packs). Site names are kept gzipped or encoded.
+          EOF
+          sed -i 's/^          //' README.md
+          git add -A
+          if git diff --cached --quiet; then exit 0; fi
+          V="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$PACK/result.json" 2>/dev/null || echo unknown)"
+          git -c user.name="Pax Technologies" -c user.email="hello@paxpeace.com" commit -q -m "Filter loop $V: $OUTCOME"
+          for i in 1 2 3 4 5; do
+            if git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/filter-loop; then exit 0; fi
+            sleep $((i * 4))
+          done
+          echo "::warning::the scoreboard could not be pushed to filter-loop"
+      - name: Open or update the filter-loop issue
+        if: >-
+          always() && (steps.tests.outcome != 'success' || steps.run.outputs.passed != 'true'
+          || steps.sign.outcome == 'failure' || steps.publish.outcome == 'failure')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTS: ${{ steps.tests.outcome }}
+          SIGN: ${{ steps.sign.outcome }}
+          PUBLISH: ${{ steps.publish.outcome }}
+        run: |
+          set -euo pipefail
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          python3 - "$PACK/result.json" "$RUN_URL" > "$RUNNER_TEMP/issue.md" <<'PY'
+          import json, os, sys
+          try:
+              r = json.load(open(sys.argv[1]))
+          except Exception:
+              r = {}
+          lines = [f"The nightly filter workflow published nothing ({r.get('version', 'no version')}).", ""]
+          if os.environ.get("TESTS") != "success":
+              lines.append("- Gate 1 failed: the unit tests did not pass.")
+          for f in r.get("failures") or []:
+              lines.append(f"- {f}")
+          if os.environ.get("SIGN") == "failure":
+              lines.append("- Signing failed (is the PAX_FILTER_SIGNING_KEY secret set, and does it match the public key in guard/pax_signing.py?).")
+          if os.environ.get("PUBLISH") == "failure":
+              lines.append("- Publishing failed after signing; the run log has the step that stopped.")
+          lines += ["", f"Run: {sys.argv[2]}", "",
+                    "Pax keeps using the last published pack. The next run is tonight at 03:00 UTC; "
+                    "this issue closes itself when a pack is published."]
+          print("\n".join(lines))
+          PY
+          gh label create filter-loop --color 6E8BA8 --description "Nightly filter workflow" >/dev/null 2>&1 || true
+          n="$(gh issue list --label filter-loop --state open --json number -q '.[0].number' || true)"
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --title "Filter workflow: no pack published" --label filter-loop --body-file "$RUNNER_TEMP/issue.md"
+          fi
+      - name: Close the filter-loop issue after a published pack
+        if: steps.publish.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.publish.outputs.version }}
+        run: |
+          set -euo pipefail
+          for n in $(gh issue list --label filter-loop --state open --json number -q '.[].number' || true); do
+            gh issue close "$n" --comment "Filter pack $V passed every gate and was published."
+          done

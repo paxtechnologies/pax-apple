@@ -24,12 +24,27 @@ match the first label at a label edge, like the new-registration rule). A
 plug-in block list is restricted unless its descriptor says "restricted": false.
 See docs/FILTER_LISTS.md.
 
-Updates (daily): a signed lists-manifest.json from GitHub Releases, with a
-jsDelivr mirror. Every changed file must match the signed SHA-256, parse, have
-at least min_entries, and not shrink by more than max_drop against the copy in
-use. Only then is it swapped in; the copy it replaced is kept as "previous",
-and the bundled copy is always the last fallback. A failed update changes
-nothing (never fail open).
+Updates (v0.8.19, "filter packs"): every ~6 hours a signed filter-pack.json
+from the GitHub release tagged `filter-pack`, with a jsDelivr mirror of the
+`filter-packs` branch. Packs are built, tested and signed by the nightly
+filter workflow in the repo (.github/workflows/filter-loop.yml; see
+docs/FILTER_PACKS.md) with a key of their own (pax_signing.FILTER_PUBLIC_KEYS_HEX,
+never the app update key). A pack is taken only when:
+  * its signature checks out against the filter key;
+  * its version is newer than the copy in use (and the bundled copy), and it is
+    not a version this Mac/server already refused;
+  * it only changes block lists the bundled manifest knows (the allowlist and
+    SafeSearch rules change only with an app update), and the bundled manifest's
+    floors, max_drop and "restricted" flags apply whatever the pack says;
+  * every changed file matches its signed SHA-256, parses, has at least
+    min_entries, and shrinks by no more than max_drop against both the copy in
+    use and the bundled copy;
+  * the canary self-test passes on the new lists before they are swapped in.
+The copy it replaces is kept as "previous". If a swapped-in pack later fails
+the canary, the caller rolls back to the previous good copy (rollback_pack) and
+the version is never taken again; the bundled copy is the last fallback, and
+the family-filter chain covers a total failure. A failed update changes nothing
+(never fail open).
 """
 from __future__ import annotations
 
@@ -58,16 +73,23 @@ from domain_matcher import SmallSuffixSet, SuffixMatcher  # noqa: E402
 HERE = Path(__file__).resolve().parent
 BUNDLED_DIR = HERE / "filters"
 REPO_SLUG = "paxtechnologies/pax-apple"
-# Primary: the rolling "lists" release. Mirror: jsDelivr serving the orphan
-# pax-lists branch the same workflow pushes. Both need a public repo (see
-# docs/DEPENDENCIES.md); until then updates fail and the bundled lists stay.
-LISTS_BASES = [
-    f"https://github.com/{REPO_SLUG}/releases/download/lists/",
-    f"https://cdn.jsdelivr.net/gh/{REPO_SLUG}@pax-lists/",
+# v0.8.19 filter packs. Primary: the rolling "filter-pack" release. Mirror: jsDelivr
+# serving the orphan `filter-packs` branch the same workflow pushes. List files in a
+# pack are content-addressed ("object" names carry their SHA-256), so a mirror that
+# lags behind still serves files that match the manifest it serves.
+PACK_BASES = [
+    f"https://github.com/{REPO_SLUG}/releases/download/filter-pack/",
+    f"https://cdn.jsdelivr.net/gh/{REPO_SLUG}@filter-packs/",
 ]
-MANIFEST_NAME = "lists-manifest.json"
-UPDATE_INTERVAL = 24 * 3600
-UPDATE_JITTER = 2 * 3600
+LISTS_BASES = PACK_BASES          # (name kept for callers written before 0.8.19)
+PACK_MANIFEST = "filter-pack.json"
+MANIFEST_NAME = PACK_MANIFEST
+PACK_SCHEMA = "pax.filterpack.v1"
+UPDATE_INTERVAL = 6 * 3600
+UPDATE_JITTER = 3600
+REFUSED_KEEP = 20                 # refused pack versions remembered
+_OBJECT = re.compile(r"^[a-z0-9-]{1,40}-[0-9a-f]{16}\.(txt\.gz|txt|csv)$")
+_VERSION = re.compile(r"^\d{4}\.\d{1,4}\.\d{1,6}$")
 # jsDelivr serves files up to 20 MB from GitHub; lists/build.py keeps every list
 # file under this, and a bigger download is refused.
 MAX_DOWNLOAD = 20 * 1024 * 1024
@@ -76,6 +98,14 @@ _LABEL = re.compile(r"^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$")
 
 class ListError(Exception):
     pass
+
+
+def version_key(v) -> tuple:
+    """"2026.1018.300" -> (2026, 1018, 300). Unparseable versions sort first."""
+    try:
+        return tuple(int(x) for x in str(v).split("."))
+    except (TypeError, ValueError):
+        return ()
 
 
 # ------------------------------------------------------------------ parsing
@@ -291,12 +321,20 @@ class FilterStore:
         except (OSError, ValueError):
             return None
 
-    def _list_bytes(self, lid: str, item: dict) -> tuple[bytes, str]:
+    def _current_usable(self, cur: dict | None, bundled: dict) -> bool:
+        """v0.8.19: an updated copy older than the bundled one (e.g. after an app
+        update that bundles newer lists) is ignored."""
+        return bool(cur) and version_key(cur.get("version")) >= version_key(bundled.get("version"))
+
+    def _list_bytes(self, lid: str, item: dict, current_dir: Path | None = None,
+                    current: dict | None = None) -> tuple[bytes, str]:
         """The copy to use: the updated one if it still checks out, else bundled."""
-        cur = self.current_manifest()
-        if cur and lid in cur.get("lists", {}):
+        cdir = current_dir or (self.root / "current")
+        cur = current if current_dir is not None else self.current_manifest()
+        if cur and lid in cur.get("lists", {}) and (current_dir is not None
+                                                    or self._current_usable(cur, self.bundled_manifest())):
             citem = cur["lists"][lid]
-            p = self.root / "current" / citem["file"]
+            p = cdir / citem["file"]
             try:
                 data = p.read_bytes()
                 if hashlib.sha256(data).hexdigest() == citem["sha256"]:
@@ -318,7 +356,10 @@ class FilterStore:
         except (OSError, ValueError):
             pass
         cache.parent.mkdir(parents=True, exist_ok=True)
-        for old in cache.parent.glob(f"{lid}-*.paxm"):
+        # v0.8.19: keep the two newest compiled copies (the one in use and the one a
+        # pack being checked needs), so a refused pack doesn't cost a recompile.
+        olds = sorted(cache.parent.glob(f"{lid}-*.paxm"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in olds[1:]:
             old.unlink(missing_ok=True)
         src = cache.with_suffix(".src")
         src.write_bytes(data)
@@ -339,12 +380,17 @@ class FilterStore:
             src.unlink(missing_ok=True)
 
     # ----------------------------------------------------------------- load
-    def load(self) -> FilterSet:
+    def load(self, current_dir: Path | None = None) -> FilterSet:
+        """The lists in use. `current_dir` (v0.8.19): load a staged pack from
+        there instead of current/ (to check it before it is swapped in)."""
         man = self.bundled_manifest()
+        staged = None
+        if current_dir is not None:
+            staged = json.loads((current_dir / "manifest.json").read_text())
         block, restricted, allow_names, safesearch, kw_rules, info = [], [], [], {}, [], {"lists": {}}
         for lid, item in man.get("lists", {}).items():
             try:
-                data, origin = self._list_bytes(lid, item)
+                data, origin = self._list_bytes(lid, item, current_dir, staged)
                 kind = item.get("kind")
                 if kind == "block":
                     m = self._matcher(lid, data, item)
@@ -385,9 +431,13 @@ class FilterStore:
                 info["lists"][f"plugin:{lid}"] = {"entries": n, "origin": "plugin"}
             except (OSError, ValueError, ListError, KeyError) as exc:
                 self.log(f"PAX-DNS-007 plugin list {lid} skipped: {exc}")
-        cur = self.current_manifest()
+        cur = staged if current_dir is not None else self.current_manifest()
+        if current_dir is None and not self._current_usable(cur, man):
+            cur = None
         info["version"] = (cur or man).get("version")
         info["bundled_version"] = man.get("version")
+        info["origin"] = "pack" if cur and cur.get("schema") == PACK_SCHEMA else (
+            "updated" if cur else "bundled")
         # v0.8.18: the built-in name rules ship with the code (a signed app
         # update), not with the list manifest.
         info["name_rules"] = True
@@ -423,25 +473,27 @@ class FilterStore:
             return False
         return now >= float(meta.get("next_at", float(meta.get("checked_at", 0)) + UPDATE_INTERVAL))
 
-    def update(self, fetch, now: float | None = None, bases: list[str] | None = None) -> dict:
-        """Fetch the signed manifest and any changed lists; swap in only what
-        passes every check. `fetch(url) -> bytes`. Returns a report."""
+    def update(self, fetch, now: float | None = None, bases: list[str] | None = None,
+               canary=None) -> dict:
+        """Fetch the signed filter pack and any changed lists; swap in only what
+        passes every check. `fetch(url) -> bytes`. `canary(FilterSet) -> list of
+        failures` runs on the new lists before the swap (v0.8.19). Returns a report."""
         now = time.time() if now is None else now
         report: dict = {"checked_at": now, "changed": [], "rejected": [], "ok": False}
-        bases = bases or LISTS_BASES
+        bases = bases or PACK_BASES
         payload = None
         base_used = None
         errors = []
         limited = None
         for base in bases:
             try:
-                doc = json.loads(fetch(base + MANIFEST_NAME))
-                payload = pax_signing.verify_document(doc)
+                doc = json.loads(fetch(base + PACK_MANIFEST))
+                payload = pax_signing.verify_document(doc, pax_signing.filter_keys())
                 base_used = base
                 break
             except pax_signing.SignatureError as exc:
                 errors.append(f"{base}: {exc}")
-                self.log(f"PAX-UPDATE-002 list manifest from {base} rejected: {exc}")
+                self.log(f"PAX-UPDATE-002 filter pack from {base} rejected: {exc}")
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"{base}: {type(exc).__name__}")
                 status = getattr(exc, "status", None) or getattr(exc, "code", None)
@@ -457,74 +509,181 @@ class FilterStore:
                     wait = min(24 * 3600, max(wait, int(ra)))
                 report["backoff_seconds"] = wait
                 report["backoff_until"] = now + wait + random.randint(0, 300)
-                self.log(f"PAX-UPDATE-008 list source rate-limited; next try in {wait // 60} min")
+                self.log(f"PAX-UPDATE-008 filter pack source rate-limited; next try in {wait // 60} min")
             self._save_meta(report)
             return report
-        if payload.get("schema") != "pax.lists.v1" or not isinstance(payload.get("lists"), dict):
-            report["error"] = "unknown manifest schema"
+        version = str(payload.get("version", ""))
+        report["version"] = version
+        if (payload.get("schema") != PACK_SCHEMA or not isinstance(payload.get("lists"), dict)
+                or not _VERSION.match(version)):
+            report["error"] = "unknown filter pack schema"
             self._save_meta(report)
             return report
         bundled = self.bundled_manifest()
-        cur = self.current_manifest() or bundled
-        if str(payload.get("version", "")) < str(cur.get("version", "")):
-            report["error"] = f"older lists ({payload.get('version')} < {cur.get('version')}) refused"
-            self.log(f"PAX-DNS-005 {report['error']}")
+        cur_raw = self.current_manifest()
+        cur = cur_raw if self._current_usable(cur_raw, bundled) else bundled
+        if version in self.refused_versions():
+            report.update(ok=True, up_to_date=True, note=f"pack {version} was refused before")
+            self._save_meta(report)
+            return report
+        if version_key(version) <= version_key(cur.get("version")):
+            if version_key(version) < version_key(cur.get("version")):
+                report["error"] = f"older lists ({version} < {cur.get('version')}) refused"
+                self.log(f"PAX-DNS-005 {report['error']}")
+            else:
+                report.update(ok=True, up_to_date=True)
             self._save_meta(report)
             return report
         staging = self.root / "staging"
         shutil.rmtree(staging, ignore_errors=True)
         staging.mkdir(parents=True)
         new_lists: dict = {}
+        # Every list the bundled manifest knows starts as the copy in use.
+        for lid, rule in bundled.get("lists", {}).items():
+            old = cur.get("lists", {}).get(lid) or rule
+            try:
+                src = self.root / "current" / old["file"]
+                if cur is not bundled and src.is_file():
+                    data = src.read_bytes()
+                else:
+                    data, old = read_bytes_maybe_parts(self.bundled_dir / rule["file"]), rule
+            except OSError:
+                continue
+            (staging / old["file"]).write_bytes(data)
+            new_lists[lid] = old
         for lid, item in payload["lists"].items():
             rule = bundled.get("lists", {}).get(lid)
-            if rule is None:
+            if rule is None or not isinstance(item, dict):
                 continue                      # unknown list: ignore (newer manifest)
+            if rule.get("kind") != "block":
+                # v0.8.19: a pack can't touch the allowlist or SafeSearch rules.
+                if item.get("sha256") != (new_lists.get(lid) or {}).get("sha256"):
+                    report["rejected"].append({"list": lid, "why": "packs may only change block lists"})
+                continue
             item = dict(item)
             # The bundled floors are the minimum; a manifest can only tighten them.
             item["min_entries"] = max(int(item.get("min_entries", 1)), int(rule.get("min_entries", 1)))
             item["max_drop"] = min(float(item.get("max_drop", 1.0)), float(rule.get("max_drop", 1.0)))
             item["kind"], item["file"] = rule["kind"], rule["file"]
+            item["format"] = rule.get("format", "domains")
             if "restricted" in rule:
-                item["restricted"] = rule["restricted"]   # an update can't free a restricted list
-            old = cur.get("lists", {}).get(lid) or rule
+                item["restricted"] = rule["restricted"]   # a pack can't free a restricted list
+            else:
+                item.pop("restricted", None)
+            old = new_lists.get(lid) or rule
             if old.get("sha256") == item.get("sha256"):
-                src = self.root / "current" / item["file"]
-                data = src.read_bytes() if src.is_file() else read_bytes_maybe_parts(self.bundled_dir / item["file"])
-                (staging / item["file"]).write_bytes(data)
-                new_lists[lid] = old
+                continue
+            obj = item.get("object") or item["file"]
+            if not (_OBJECT.match(str(obj)) or obj == item["file"]):
+                report["rejected"].append({"list": lid, "why": "bad object name", "check": True})
                 continue
             try:
-                data = fetch(base_used + item["file"])
+                data = fetch(base_used + obj)
+            except Exception as exc:  # noqa: BLE001 - a download problem, not a bad pack
+                report["download_failed"] = True
+                report["rejected"].append({"list": lid, "why": f"download failed ({type(exc).__name__})"})
+                continue
+            try:
                 if len(data) > MAX_DOWNLOAD:
                     raise ListError("too large")
                 n = validate_candidate(item, data, old.get("entries"))
-                if item["kind"] == "block":
-                    compile_bytes(data, item.get("format", "domains"), item["file"]) \
-                        if not self.compile_in_subprocess else None
+                if rule.get("entries"):
+                    # ...and never more than max_drop below the bundled copy either.
+                    validate_candidate(item, data, int(rule["entries"]))
                 (staging / item["file"]).write_bytes(data)
                 item["entries"] = n
                 new_lists[lid] = item
                 report["changed"].append(lid)
             except Exception as exc:  # noqa: BLE001 - keep the copy in use
-                report["rejected"].append({"list": lid, "why": str(exc)[:200]})
+                report["rejected"].append({"list": lid, "why": str(exc)[:200], "check": True})
                 self.log(f"PAX-DNS-005 list {lid} update rejected: {exc}")
-                prev = cur.get("lists", {}).get(lid)
-                if prev:
-                    src = self.root / "current" / prev["file"]
-                    data = src.read_bytes() if src.is_file() else read_bytes_maybe_parts(
-                        self.bundled_dir / prev["file"])
-                    (staging / prev["file"]).write_bytes(data)
-                    new_lists[lid] = prev
+        if report.get("download_failed"):
+            # Take a pack whole or not at all; try again at the next check.
+            report["changed"] = []
+            report["error"] = "a list file could not be downloaded; trying again later"
+        elif any(r.get("check") and r["list"] in bundled.get("lists", {}) and
+                 bundled["lists"][r["list"]].get("restricted", True) and
+                 not bundled["lists"][r["list"]].get("optional")
+                 for r in report["rejected"]):
+            # A required restricted list failed its checks: the pack as a whole is
+            # suspect, so none of it is taken.
+            report["changed"] = []
+            report["error"] = "a required list failed its checks; pack refused"
+            self.refuse(version, report["error"])
         if report["changed"]:
-            manifest = {"schema": "pax.lists.v1", "version": payload.get("version"), "lists": new_lists}
+            manifest = {"schema": PACK_SCHEMA, "version": version, "lists": new_lists,
+                        "taken_at": int(now)}
+            (staging / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
+            if canary is not None:
+                try:
+                    failures = list(canary(self.load(current_dir=staging)) or [])
+                except Exception as exc:  # noqa: BLE001 - a pack that won't load fails
+                    failures = [f"the pack would not load ({type(exc).__name__}: {str(exc)[:120]})"]
+                if failures:
+                    report["changed"] = []
+                    report["error"] = "canary failed on the new lists: " + "; ".join(failures)[:300]
+                    report["canary"] = failures
+                    self.refuse(version, report["error"])
+                    self.log(f"PAX-DNS-005 filter pack {version} refused: {report['error']}")
+        if report["changed"]:
+            self._promote(staging)
+            report["ok"] = report["taken"] = True
+        elif "error" not in report and not report["rejected"]:
+            # A newer pack whose lists match the ones in use: take its version (so
+            # status shows the pack in use), no list changes, nothing to re-check.
+            manifest = {"schema": PACK_SCHEMA, "version": version, "lists": new_lists, "taken_at": int(now)}
             (staging / "manifest.json").write_text(json.dumps(manifest, sort_keys=True))
             self._promote(staging)
+            report["ok"] = report["taken"] = True
         else:
             shutil.rmtree(staging, ignore_errors=True)
-        report["ok"] = True
-        report["version"] = payload.get("version")
+            report["ok"] = "error" not in report
         self._save_meta(report)
         return report
+
+    # ------------------------------------------------------- v0.8.19 packs
+    def refused_versions(self) -> list[str]:
+        return [r.get("version") for r in self._meta().get("refused", []) if isinstance(r, dict)]
+
+    def refuse(self, version: str, why: str) -> None:
+        meta = self._meta()
+        refused = [r for r in meta.get("refused", []) if isinstance(r, dict) and r.get("version") != version]
+        refused.append({"version": version, "why": why[:200], "at": int(time.time())})
+        meta["refused"] = refused[-REFUSED_KEEP:]
+        self._write_meta(meta)
+
+    def rollback_pack(self, why: str) -> bool:
+        """A swapped-in pack failed the canary: back to the previous good copy
+        and never take that version again. Returns True if a pack was undone."""
+        cur = self.current_manifest()
+        if not cur:
+            return False
+        self.refuse(str(cur.get("version")), "after the swap: " + why)
+        self.rollback()
+        meta = self._meta()
+        meta["rolled_back"] = {"version": cur.get("version"), "why": why[:200], "at": int(time.time())}
+        self._write_meta(meta)
+        return True
+
+    def pack_status(self) -> dict:
+        """For health / Settings › Advanced."""
+        meta = self._meta()
+        bundled = self.bundled_manifest()
+        cur = self.current_manifest()
+        usable = self._current_usable(cur, bundled)
+        return {
+            "version": (cur if usable else bundled).get("version"),
+            "origin": ("pack" if usable and cur.get("schema") == PACK_SCHEMA else
+                       "updated" if usable else "bundled"),
+            "bundled_version": bundled.get("version"),
+            "last_check_at": meta.get("checked_at"),
+            "last_ok": meta.get("ok"),
+            "last_error": (meta.get("error") or "")[:200] or None,
+            "last_offered": meta.get("version"),
+            "next_at": meta.get("next_at"),
+            "refused": [r.get("version") for r in meta.get("refused", [])][-5:],
+            "rolled_back": meta.get("rolled_back"),
+        }
 
     def _promote(self, staging: Path) -> None:
         """current -> previous, staging -> current (two renames)."""
@@ -553,9 +712,16 @@ class FilterStore:
     def _save_meta(self, report: dict) -> None:
         report.setdefault("next_at", float(report.get("checked_at", time.time())) + UPDATE_INTERVAL
                           + random.randint(0, UPDATE_JITTER))
+        prev = self._meta()
+        for k in ("refused", "rolled_back"):          # v0.8.19: kept across checks
+            if k in prev and k not in report:
+                report[k] = prev[k]
+        self._write_meta(report)
+
+    def _write_meta(self, meta: dict) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         tmp = self.root / ".update.json.tmp"
-        tmp.write_text(json.dumps(report))
+        tmp.write_text(json.dumps(meta))
         os.replace(tmp, self.root / "update.json")
 
 

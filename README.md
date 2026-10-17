@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.18
+# Pax Peace (Apple), v0.8.19
 
 **Less scrolling. More living.**
 
@@ -107,6 +107,12 @@ extension/    src/                 v0.5 Pax Image Blur (MV3): content script, cl
                 ▼
           iPhone / iPad: supervised + locked Pax profile ──DoH──► filtering resolver
 ```
+
+**Filter lists update themselves.** Every night a GitHub Actions workflow in this repo rebuilds Pax's
+lists, tests them (everyday sites, the Tranco top 10k, a held-out benchmark) and, only if every check
+passes, publishes a signed *filter pack*. Macs and Pax's DoH servers check for one every 6 hours and run
+their own checks and self-test before using it, keeping the last good lists otherwise. No person is in
+that loop; see [`docs/FILTER_PACKS.md`](docs/FILTER_PACKS.md).
 
 **Order of set-up matters.** The app first re-reads supervision from the phone and stops if it isn't
 supervised (nothing escrowed, nothing locked). It escrows the password *before* it installs the locked

@@ -169,9 +169,17 @@ public enum HomeLayout {
 
     /// "Pax noticed a change to this Mac's security settings (sip, 17 Oct 2026 at 12:43)."
     public static func tamperNotice(kind: String, at ts: Int) -> String {
+        let when = Date(timeIntervalSince1970: TimeInterval(ts)).formatted(date: .abbreviated, time: .shortened)
+        // v0.8.19: filter pack outcomes (signed list updates).
+        switch kind {
+        case "filters:pack_refused":
+            return "A filter list update didn't pass Pax's checks, so Pax kept the lists it had (\(when))."
+        case "filters:pack_rolled_back":
+            return "New filter lists failed Pax's self-test, so Pax went back to the previous lists (\(when))."
+        default: break
+        }
         let what = kind.replacingOccurrences(of: "changed:", with: "").replacingOccurrences(of: "_", with: " ")
-        return "Pax noticed a change to this Mac's security settings (\(what), "
-            + Date(timeIntervalSince1970: TimeInterval(ts)).formatted(date: .abbreviated, time: .shortened) + ")."
+        return "Pax noticed a change to this Mac's security settings (\(what), \(when))."
     }
 
     /// The one line under "What's blocked".

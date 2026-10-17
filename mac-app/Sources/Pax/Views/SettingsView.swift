@@ -178,6 +178,14 @@ private struct MacDetailsSettings: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // v0.8.19: the filter lists in use (signed filter packs, checked every 6 hours).
+            if let v = FilterPackText.value(mac.guardStatus?.filter_pack) {
+                DetailRow(label: "Filter lists", value: v)
+                if let line = FilterPackText.lastCheck(mac.guardStatus?.filter_pack) {
+                    Text(line).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             FamilyLayerSettings()
             if let t = mac.guardStatus?.tamper, !t.recent.isEmpty {
                 Text("Security notices").font(Theme.body(13, weight: .semibold)).foregroundStyle(Theme.primaryText)

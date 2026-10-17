@@ -138,19 +138,15 @@ writable), kinds `block|allow`, formats `domains|hosts|adblock|keywords`.
 
 ## Updates
 
-Daily, pax-guard fetches `lists-manifest.json` from the GitHub release tagged `lists`
-(`https://github.com/paxtechnologies/pax-apple/releases/download/lists/`), else jsDelivr
-(`@pax-lists` branch). The manifest must be signed with the release key ([UPDATES.md](UPDATES.md)); every
-changed file must match its signed SHA-256, parse, meet its floor and not shrink by more than `max_drop`.
-Only then is it swapped in; the replaced copy is kept as "previous" and the bundled copy is the last
-fallback. A failed update changes nothing. The Build DMG workflow republishes the bundled lists on every
-`v*` tag; a scheduled list rebuild is future work.
+Since v0.8.19 list updates are **filter packs**: built, tested and signed every night by the
+filter workflow in this repo, with a key of their own, and checked again by every Mac and server
+before use. See [FILTER_PACKS.md](FILTER_PACKS.md).
 
 Rebuilding by hand:
 
 ```sh
 cd lists
 python3 build.py block --out /tmp/l && python3 build.py nrd --out /tmp/l && python3 build.py static --out /tmp/l
-PAX_UPDATE_SIGNING_KEY=... python3 build.py manifest --out /tmp/l --sign-key-env PAX_UPDATE_SIGNING_KEY
+python3 build.py manifest --out /tmp/l --version 2026.1017.1   # unsigned: the bundled copy needs no signature
 python3 build.py bundle --from /tmp/l        # into ../guard/filters (parts <85 KB)
 ```

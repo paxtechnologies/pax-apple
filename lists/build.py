@@ -190,8 +190,12 @@ def finalize(block: set[str], exclude: set[str], allow: set[str]) -> list[str]:
     return sorted(d for d in block if not covered_by_parent(d, block))
 
 
-def build_block(sources_dir: Path | None) -> tuple[list[str], list[str], dict]:
-    """(pax-block, pax-bypass, stats)."""
+def build_block(sources_dir: Path | None, extra_block=(), extra_bypass=(),
+                remove=()) -> tuple[list[str], list[str], dict]:
+    """(pax-block, pax-bypass, stats). v0.8.19: `extra_block` / `extra_bypass` are
+    names the filter workflow checked by their homepage (lists/loop), and `remove`
+    exact entries it held back (a new block in the Tranco top 10k that its homepage
+    check didn't confirm)."""
     stats: dict = {}
     union: set[str] = set()
     for sid in RESTRICTED_SOURCES:
@@ -206,15 +210,24 @@ def build_block(sources_dir: Path | None) -> tuple[list[str], list[str], dict]:
     hand, zones = hand_list(), read_local_list("pax-zones.txt")
     extra = read_verified("pax-block-extra.txt.gz")
     stats["verified_block_extra"] = len(extra)
-    union |= set(hand) | set(zones) | set(extra)
+    loop_block = {n for n in (clean_name(x) for x in extra_block) if n}
+    stats["loop_block_extra"] = len(loop_block)
+    union |= set(hand) | set(zones) | set(extra) | loop_block
     exclude, allow = set(read_local_list("pax-exclude.txt")), set(read_local_list("pax-allowlist.txt"))
+    held = {n for n in (clean_name(x) for x in remove) if n}
+    if held:      # an entry held back takes its subdomain entries with it
+        union = {d for d in union if not allowed(d, held)}
     final = finalize(union, exclude, allow)
     restricted = set(final)
     bypass_raw = parse_names(source_text("hagezi_doh_vpn", sources_dir))
     stats["hagezi_doh_vpn"] = len(bypass_raw)
     bypass_extra = read_verified("pax-bypass-extra.txt.gz")
     stats["verified_bypass_extra"] = len(bypass_extra)
-    bypass_raw |= set(bypass_extra)
+    loop_bypass = {n for n in (clean_name(x) for x in extra_bypass) if n}
+    stats["loop_bypass_extra"] = len(loop_bypass)
+    bypass_raw |= set(bypass_extra) | loop_bypass
+    if held:
+        bypass_raw = {d for d in bypass_raw if not allowed(d, held)}
     bypass = [d for d in finalize(bypass_raw, exclude, allow)
               if d not in restricted and not covered_by_parent(d, restricted)]
     stats.update({"hand_list": len(hand), "pax_zones": len(zones), "union": len(union),
@@ -266,6 +279,20 @@ def build_nrd(days: int, raw_dir: Path | None, today: dt.date) -> tuple[list[str
 
 
 # ------------------------------------------------------------------- writing
+BLOCK_HEADER = ("# Pax restricted-content list (suffix match: each entry blocks itself and every subdomain).\n"
+                "# HaGeZi and OISD (GPL-3.0), UT1 (CC BY-SA 4.0, Universite Toulouse Capitole),\n"
+                "# checked ShadowWhisperer names (Unlicense) and Pax's own hand list and zones;\n"
+                "# minus pax-exclude and pax-allowlist. Built by lists/build.py.\n")
+BYPASS_HEADER = ("# Pax DoH/VPN/proxy bypass list: HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass (GPL-3.0)\n"
+                 "# and checked UT1 redirector web proxies (CC BY-SA 4.0, Universite Toulouse Capitole),\n"
+                 "# minus anything pax-block covers. Suffix match. Built by lists/build.py.\n")
+
+
+def nrd_header(days: int, today) -> str:
+    return (f"# Pax new-registration list: domains registered in the {days} days before {today}\n"
+            "# (WhoisDS free daily lists) whose name matches the name rule at a label edge.\n")
+
+
 def write_gz(path: Path, lines: list[str], header: str) -> None:
     buf = io.BytesIO()
     with gzip.GzipFile(filename="", mode="wb", fileobj=buf, compresslevel=9, mtime=0) as gz:
@@ -353,24 +380,15 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "block":
         a.out.mkdir(parents=True, exist_ok=True)
         final, bypass, stats = build_block(a.sources)
-        header = ("# Pax restricted-content list (suffix match: each entry blocks itself and every subdomain).\n"
-                  "# HaGeZi and OISD (GPL-3.0), UT1 (CC BY-SA 4.0, Universite Toulouse Capitole),\n"
-                  "# checked ShadowWhisperer names (Unlicense) and Pax's own hand list and zones;\n"
-                  "# minus pax-exclude and pax-allowlist. Built by lists/build.py.\n")
-        write_gz(a.out / "pax-block.txt.gz", final, header)
-        write_gz(a.out / "pax-bypass.txt.gz", bypass,
-                 "# Pax DoH/VPN/proxy bypass list: HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass (GPL-3.0)\n"
-                 "# and checked UT1 redirector web proxies (CC BY-SA 4.0, Universite Toulouse Capitole),\n"
-                 "# minus anything pax-block covers. Suffix match. Built by lists/build.py.\n")
+        write_gz(a.out / "pax-block.txt.gz", final, BLOCK_HEADER)
+        write_gz(a.out / "pax-bypass.txt.gz", bypass, BYPASS_HEADER)
         (a.out / "block-stats.json").write_text(json.dumps(stats, indent=1) + "\n")
         log(json.dumps({k: v for k, v in stats.items() if k != "excluded"}))
     elif a.cmd == "nrd":
         a.out.mkdir(parents=True, exist_ok=True)
         today = dt.date.fromisoformat(a.today) if a.today else dt.datetime.now(dt.timezone.utc).date()
         names, stats = build_nrd(a.days, a.raw, today)
-        header = (f"# Pax new-registration list: domains registered in the {a.days} days before {today}\n"
-                  "# (WhoisDS free daily lists) whose name matches the name rule at a label edge.\n")
-        write_gz(a.out / "pax-nrd.txt.gz", names, header)
+        write_gz(a.out / "pax-nrd.txt.gz", names, nrd_header(a.days, today))
         log(json.dumps(stats))
     elif a.cmd == "static":
         a.out.mkdir(parents=True, exist_ok=True)

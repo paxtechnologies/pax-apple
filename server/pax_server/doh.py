@@ -53,6 +53,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import re
 import sys
 import threading
@@ -326,6 +327,7 @@ class DohService:
         self.last_full: float = 0.0
         self.sync_failures = 0
         self.lists_error: Optional[str] = None
+        self.last_pack_report: Optional[dict] = None
         self._stop = threading.Event()
         self._threads: list = []
         self.stats = {"queries": 0, "rate_limited": 0, "bad": 0}
@@ -351,7 +353,9 @@ class DohService:
             log.error("PAX-DNS-006 filter lists failed to load: %s", self.lists_error)
 
     def update_lists(self) -> None:
-        """Daily signed list update (same manifest and checks as the Mac)."""
+        """v0.8.19: the signed filter pack, every ~6 hours (same checks as the Mac):
+        the canary runs on the new lists before the swap, and a swapped-in pack that
+        then fails the canary is rolled back at once and never taken again."""
         if self.filter_store is None:
             return
         def fetch(url):
@@ -359,11 +363,40 @@ class DohService:
             with urllib.request.urlopen(req, timeout=120) as r:
                 return r.read(fl.MAX_DOWNLOAD + 1)
         try:
-            report = self.filter_store.update(fetch)
-            if report.get("changed"):
-                self.forwarder.set_filters(self.filter_store.load())
+            report = self.filter_store.update(fetch, canary=dnsf.check_filterset)
         except Exception as exc:  # noqa: BLE001 - the lists in use stay
-            log.warning("filter list update skipped: %s", type(exc).__name__)
+            log.warning("filter pack update skipped: %s", type(exc).__name__)
+            return
+        self.last_pack_report = {k: report.get(k) for k in ("version", "changed", "error", "ok", "checked_at")}
+        if report.get("taken") and not report.get("changed"):
+            self.forwarder.set_filters(self.filter_store.load())     # same lists, newer version
+            log.warning("filter pack %s taken (no list changes)", report.get("version"))
+            return
+        if not report.get("changed"):
+            if report.get("error"):
+                log.warning("filter pack %s not taken: %s", report.get("version"), str(report["error"])[:200])
+            return
+        self.forwarder.set_filters(self.filter_store.load())
+        result = dict(self.forwarder.last_canary or {})
+        if not self.forwarder.primary_upstreams:
+            fails = dnsf.check_filterset(self.forwarder.filters)
+            result = {"ok": not fails, "failures": fails}
+        if result.get("ok", True):
+            log.warning("filter pack %s applied (%s)", report.get("version"), ", ".join(report["changed"]))
+            return
+        why = "; ".join(result.get("failures") or [])[:160] or "canary failed"
+        self.filter_store.rollback_pack(why)
+        self.forwarder.set_filters(self.filter_store.load())
+        log.error("PAX-DNS-005 filter pack %s failed the canary after the swap (%s); rolled back",
+                  report.get("version"), why)
+
+    def _pack_status(self) -> Optional[dict]:
+        if self.filter_store is None:
+            return None
+        try:
+            return self.filter_store.pack_status()
+        except Exception:  # noqa: BLE001 - informational
+            return None
 
     # ------------------------------------------------------------- sync
     def sync_once(self) -> None:
@@ -419,7 +452,8 @@ class DohService:
             (boot, 10 ** 9, 0.0),
             (self.sync_once, self.poll_seconds, 0.0),
             (self.forwarder.health_check, 60.0, 5.0),
-            (self.update_lists, 24 * 3600.0, 3600.0),
+            # v0.8.19: filter packs every 6 hours (first check 1-5 minutes after start)
+            (self.update_lists, fl.UPDATE_INTERVAL, 60.0 + random.random() * 240.0),
         ]
         for fn, every, delay in jobs:
             t = threading.Thread(target=self._loop, args=(fn, every, delay), daemon=True,
@@ -481,6 +515,7 @@ class DohService:
             "filter_mode": st.get("filter_mode"),
             "fallback_reason": st.get("fallback_reason"),
             "canary": st.get("canary"),
+            "filter_pack": self._pack_status(),             # v0.8.19
             "accounts": len(self.policies),
             "last_sync_age_seconds": (None if self.last_sync is None
                                       else round(self.clock() - self.last_sync, 1)),

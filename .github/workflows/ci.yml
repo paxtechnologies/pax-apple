@@ -19,12 +19,12 @@ jobs:
       - run: >-
           pip install -r profile/requirements-dev.txt -r server/requirements-dev.txt
           -r pax-dns/requirements-dev.txt -r device/requirements-dev.txt -r guard/requirements-dev.txt
-      - name: pytest (profile, server, pax-dns, device, guard, common)
+      - name: pytest (profile, server, pax-dns, device, guard, common, lists)
         run: |
           set -o pipefail
           {
             set -e
-            for d in profile server pax-dns device guard common; do (cd "$d" && pytest -q); done
+            for d in profile server pax-dns device guard common lists; do (cd "$d" && pytest -q); done
             python3 common/gen_error_codes.py --check
           } 2>&1 | tee "$RUNNER_TEMP/test.log"
       - name: Publish the log to the ci-logs-python branch

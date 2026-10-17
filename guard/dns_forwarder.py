@@ -118,11 +118,20 @@ CANARY_INTERVAL = 180
 CANARY_MIN_ENTRIES = 100_000         # the restricted lists hold well over a million
 CANARY_TIMEOUT = 2.0                 # seconds for the whole self-test
 DECIDE_SLOW = 0.5                    # one decision slower than this: fall back, re-test
-CANARY_EVERYDAY = ("example.com", "wikipedia.org", "apple.com", "gov.uk", "bbc.co.uk")
+CANARY_EVERYDAY = ("example.com", "wikipedia.org", "apple.com", "gov.uk", "bbc.co.uk",
+                   # v0.8.19: a few more, since the canary also vets each new filter pack
+                   "nhs.uk", "microsoft.com", "github.com", "paxpeace.com", "amazon.co.uk")
 
 
 class DNSError(Exception):
     pass
+
+
+def check_filterset(filters, min_entries: int = CANARY_MIN_ENTRIES) -> list:
+    """v0.8.19: the canary self-test on a set of lists that isn't in use yet (a new
+    filter pack, before it is swapped in). Returns the failures ([] = passed)."""
+    fwd = Forwarder([], filters=filters, log=lambda m: None, canary_min_entries=min_entries)
+    return list(fwd.canary().get("failures") or [])
 
 
 # --------------------------------------------------------------- wire format

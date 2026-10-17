@@ -83,7 +83,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.18"
+VERSION = "0.8.19"
 BASE = Path("/Library/PaxGuard")
 CONFIG_PATH = BASE / "config.json"
 STATE_DIR = BASE / "state"
@@ -1239,9 +1239,37 @@ class Guard:
         t.start()
 
     def update_lists_now(self) -> dict:
-        report = self.filter_store.update(lambda url: self.sys.fetch(url, timeout=300))
-        if report.get("changed"):
+        """v0.8.19: fetch the signed filter pack (every ~6 h). The canary runs on the
+        new lists before they're swapped in; if the swapped-in lists then fail the
+        canary in use, roll back to the previous good copy at once. Each outcome
+        goes to the tamper log."""
+        import dns_forwarder as dnsf
+        report = self.filter_store.update(lambda url: self.sys.fetch(url, timeout=300),
+                                          canary=dnsf.check_filterset)
+        version = report.get("version")
+        if report.get("taken") and not report.get("changed"):
+            self._load_filters()          # same lists, newer pack version
+            log(f"filter pack {version} taken (no list changes)")
+        elif report.get("changed"):
             self._load_filters()
+            result = self.forwarder.last_canary if self.forwarder is not None else {}
+            if self.forwarder is not None and not self.forwarder.primary_upstreams:
+                fails = dnsf.check_filterset(self.forwarder.filters)
+                result = {"ok": not fails, "failures": fails}
+            if result and not result.get("ok", True):
+                why = "; ".join(result.get("failures") or [])[:160] or "canary failed"
+                self.filter_store.rollback_pack(why)
+                self._load_filters()
+                report["rolled_back"] = True
+                self.tamper_log.append("filters:pack_rolled_back", {"version": version, "reason": why})
+                log(f"PAX-DNS-005 filter pack {version} failed the canary after the swap ({why}); "
+                    "rolled back to the previous good lists")
+            else:
+                # A normal nightly event: the guard log and status, not a security notice.
+                log(f"filter pack {version} applied ({', '.join(report.get('changed') or [])})")
+        elif report.get("canary") or (report.get("error") and "refused" in report.get("error", "")):
+            self.tamper_log.append("filters:pack_refused", {"version": version,
+                                                            "reason": str(report.get("error"))[:160]})
         return report
 
     def standard_accounts(self) -> list[str]:
@@ -1759,6 +1787,8 @@ class Guard:
             "runtime": self.runtime_status(),
             "sync": self.list_sync.status() if self.cfg.local_escrow else None,   # v0.8.9
             "browser_rules": self.browser_rules(),                                 # v0.8.14
+            # v0.8.19: which filter pack is in use and how the last check went.
+            "filter_pack": self.filter_store.pack_status() if self.filter_store is not None else None,
         }
 
     # ------------------------------------------------------------------ loop

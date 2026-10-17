@@ -30,6 +30,16 @@ PUBLIC_KEYS_HEX = [
 ]
 
 
+# v0.8.19: a separate key signs filter packs (list-only updates published by the
+# nightly filter workflow, .github/workflows/filter-loop.yml). Its private half
+# lives only in the GitHub Actions secret PAX_FILTER_SIGNING_KEY. A filter pack is
+# verified with these keys only, and an app update with PUBLIC_KEYS_HEX only, so
+# neither key can stand in for the other.
+FILTER_PUBLIC_KEYS_HEX = [
+    "83b0cbd5e697ab9c6beacf5a0763058d2e48b0779e0c2ee4927421b598251445",
+]
+
+
 class SignatureError(Exception):
     """Unsigned, wrongly signed, or malformed document (PAX-UPDATE-002)."""
 
@@ -43,8 +53,17 @@ def key_id(public: bytes) -> str:
 
 
 def pinned_keys() -> list[bytes]:
+    return _keys(PUBLIC_KEYS_HEX)
+
+
+def filter_keys() -> list[bytes]:
+    """v0.8.19: the keys a filter pack must be signed with (never the app key)."""
+    return _keys(FILTER_PUBLIC_KEYS_HEX)
+
+
+def _keys(hexes: list[str]) -> list[bytes]:
     out = []
-    for h in PUBLIC_KEYS_HEX:
+    for h in hexes:
         try:
             k = bytes.fromhex(h)
         except ValueError:

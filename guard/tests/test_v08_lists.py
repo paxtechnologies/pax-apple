@@ -79,6 +79,7 @@ def store(tmp, bundled, plugins=None):
 def signed_manifest(man, version, files: dict, seed=SEED):
     payload = json.loads(json.dumps(man))
     payload["version"] = version
+    payload["schema"] = fl.PACK_SCHEMA          # v0.8.19 filter packs
     for lid, data in files.items():
         payload["lists"][lid]["sha256"] = _sha(data)
         payload["lists"][lid]["bytes"] = len(data)
@@ -87,7 +88,8 @@ def signed_manifest(man, version, files: dict, seed=SEED):
 
 @pytest.fixture(autouse=True)
 def pin_test_key(monkeypatch):
-    monkeypatch.setattr(pax_signing, "PUBLIC_KEYS_HEX", [PUB.hex()])
+    # v0.8.19: list updates are filter packs, signed with the filter key.
+    monkeypatch.setattr(pax_signing, "FILTER_PUBLIC_KEYS_HEX", [PUB.hex()])
 
 
 BLOCK = [f"bad{i}.example" for i in range(50)] + [TLD]
@@ -107,7 +109,7 @@ def test_update_swaps_in_good_list_and_keeps_previous(tmp_path):
     b, man = make_bundle(tmp_path, BLOCK)
     st = store(tmp_path, b)
     new = gz(BLOCK + ["new-bad.example"])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1002.0", {"pax-block": new}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1002.0", {"pax-block": new}),
             BASE + "pax-block.txt.gz": new}
     rep = st.update(lambda u: urls[u], bases=[BASE])
     assert rep["ok"] and rep["changed"] == ["pax-block"]
@@ -115,7 +117,7 @@ def test_update_swaps_in_good_list_and_keeps_previous(tmp_path):
     assert fs.blocked_by("new-bad.example") and fs.info["lists"]["pax-block"]["origin"] == "updated"
     # a second good update keeps the first as "previous"
     newer = gz(BLOCK + ["new-bad.example", "newer.example"])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1003.0", {"pax-block": newer}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1003.0", {"pax-block": newer}),
             BASE + "pax-block.txt.gz": newer}
     assert st.update(lambda u: urls[u], bases=[BASE])["changed"] == ["pax-block"]
     assert (st.root / "previous" / "pax-block.txt.gz").read_bytes() == new
@@ -126,12 +128,12 @@ def test_unsigned_or_wrongly_signed_manifest_changes_nothing(tmp_path):
     b, man = make_bundle(tmp_path, BLOCK)
     st = store(tmp_path, b)
     new = gz(BLOCK + ["evil-unblock.example"])
-    unsigned = json.dumps({"payload": dict(man, version="2026.1009.0")}).encode()
-    rep = st.update(lambda u: {BASE + "lists-manifest.json": unsigned, BASE + "pax-block.txt.gz": new}[u],
+    unsigned = json.dumps({"payload": dict(man, version="2026.1009.0", schema=fl.PACK_SCHEMA)}).encode()
+    rep = st.update(lambda u: {BASE + fl.PACK_MANIFEST: unsigned, BASE + "pax-block.txt.gz": new}[u],
                     bases=[BASE])
     assert not rep["ok"] and "unsigned" in rep["error"]
     other = signed_manifest(man, "2026.1009.0", {"pax-block": new}, seed=bytes(32))
-    rep = st.update(lambda u: {BASE + "lists-manifest.json": other, BASE + "pax-block.txt.gz": new}[u],
+    rep = st.update(lambda u: {BASE + fl.PACK_MANIFEST: other, BASE + "pax-block.txt.gz": new}[u],
                     bases=[BASE])
     assert not rep["ok"] and "bad signature" in rep["error"]
     assert st.current_manifest() is None
@@ -142,27 +144,29 @@ def test_hash_mismatch_mass_deletion_and_tiny_lists_rejected(tmp_path):
     st = store(tmp_path, b)
     good = gz(BLOCK + ["x.example"])
     tampered = gz(BLOCK + ["y.example"])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1002.0", {"pax-block": good}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1002.0", {"pax-block": good}),
             BASE + "pax-block.txt.gz": tampered}
     rep = st.update(lambda u: urls[u], bases=[BASE])
     assert rep["rejected"] and "SHA-256" in rep["rejected"][0]["why"]
     # 51 -> 40 entries is more than the 10% max_drop
     shrunk = gz(BLOCK[:40])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1002.0", {"pax-block": shrunk}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1003.0", {"pax-block": shrunk}),
             BASE + "pax-block.txt.gz": shrunk}
     rep = st.update(lambda u: urls[u], bases=[BASE])
     assert rep["rejected"] and "removed" in rep["rejected"][0]["why"]
     tiny = gz(["a.example", "b.example"])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1002.0", {"pax-block": tiny}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1004.0", {"pax-block": tiny}),
             BASE + "pax-block.txt.gz": tiny}
     rep = st.update(lambda u: urls[u], bases=[BASE])
     assert rep["rejected"] and "minimum" in rep["rejected"][0]["why"]
     junk = b"\x1f\x8bnot really gzip"
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1002.0", {"pax-block": junk}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1005.0", {"pax-block": junk}),
             BASE + "pax-block.txt.gz": junk}
     rep = st.update(lambda u: urls[u], bases=[BASE])
     assert rep["rejected"] and "unreadable" in rep["rejected"][0]["why"]
     assert st.load().info["lists"]["pax-block"]["origin"] == "bundled"
+    # v0.8.19: each refused version is remembered and never taken again
+    assert {"2026.1002.0", "2026.1003.0", "2026.1004.0", "2026.1005.0"} <= set(st.refused_versions())
 
 
 def test_manifest_cannot_loosen_bundled_floors(tmp_path):
@@ -172,7 +176,7 @@ def test_manifest_cannot_loosen_bundled_floors(tmp_path):
     payload_man = json.loads(json.dumps(man))
     payload_man["lists"]["pax-block"]["max_drop"] = 0.99
     payload_man["lists"]["pax-block"]["min_entries"] = 1
-    urls = {BASE + "lists-manifest.json": signed_manifest(payload_man, "2026.1002.0", {"pax-block": shrunk}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(payload_man, "2026.1002.0", {"pax-block": shrunk}),
             BASE + "pax-block.txt.gz": shrunk}
     assert st.update(lambda u: urls[u], bases=[BASE])["rejected"]
 
@@ -181,12 +185,12 @@ def test_older_lists_refused_and_mirror_used(tmp_path):
     b, man = make_bundle(tmp_path, BLOCK, version="2026.1010.0")
     st = store(tmp_path, b)
     old = gz(BLOCK + ["z.example"])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.0901.0", {"pax-block": old}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.0901.0", {"pax-block": old}),
             BASE + "pax-block.txt.gz": old}
     rep = st.update(lambda u: urls[u], bases=[BASE])
     assert not rep["ok"] and "older" in rep["error"]
     mirror = "https://mirror.test/"
-    urls = {mirror + "lists-manifest.json": signed_manifest(man, "2026.1011.0", {"pax-block": old}),
+    urls = {mirror + fl.PACK_MANIFEST: signed_manifest(man, "2026.1011.0", {"pax-block": old}),
             mirror + "pax-block.txt.gz": old}
 
     def fetch(u):
@@ -200,7 +204,7 @@ def test_damaged_updated_copy_falls_back_to_bundled(tmp_path):
     b, man = make_bundle(tmp_path, BLOCK)
     st = store(tmp_path, b)
     new = gz(BLOCK + ["n.example"])
-    urls = {BASE + "lists-manifest.json": signed_manifest(man, "2026.1002.0", {"pax-block": new}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(man, "2026.1002.0", {"pax-block": new}),
             BASE + "pax-block.txt.gz": new}
     st.update(lambda u: urls[u], bases=[BASE])
     (st.root / "current" / "pax-block.txt.gz").write_bytes(b"garbage")
@@ -208,12 +212,13 @@ def test_damaged_updated_copy_falls_back_to_bundled(tmp_path):
     assert fs.info["lists"]["pax-block"]["origin"] == "bundled" and fs.blocked_by("bad1.example")
 
 
-def test_due_daily(tmp_path):
+def test_due_every_six_hours(tmp_path):
     b, _ = make_bundle(tmp_path, BLOCK)
     st = store(tmp_path, b)
     assert st.due(1000)
     st._save_meta({"checked_at": 1000})
-    assert not st.due(1000 + 3600) and st.due(1000 + 86400 + fl.UPDATE_JITTER + 1)
+    assert fl.UPDATE_INTERVAL == 6 * 3600
+    assert not st.due(1000 + 3600) and st.due(1000 + fl.UPDATE_INTERVAL + fl.UPDATE_JITTER + 1)
 
 
 class Limited(OSError):
@@ -230,7 +235,7 @@ def test_rate_limited_sources_back_off(tmp_path):
         raise Limited(429, 7200)
     rep = st.update(fetch, now=10_000, bases=[BASE])
     assert not rep["ok"] and rep["backoff_seconds"] == 7200
-    assert not st.due(10_000 + 7000) and st.due(10_000 + 86400 + fl.UPDATE_JITTER + 1)
+    assert not st.due(10_000 + 7000) and st.due(10_000 + fl.UPDATE_INTERVAL + fl.UPDATE_JITTER + 1)
     rep = st.update(lambda u: (_ for _ in ()).throw(Limited(503)), now=20_000, bases=[BASE])
     assert rep["backoff_seconds"] == 14400                 # doubled
     assert fl.MAX_DOWNLOAD == 20 * 1024 * 1024
@@ -274,7 +279,7 @@ def test_restricted_and_overridable_lists_are_kept_apart(tmp_path):
     new = gz(BLOCK + ["new-bad.example"])
     payload = json.loads(json.dumps(man))
     payload["lists"]["pax-block"]["restricted"] = False
-    urls = {BASE + "lists-manifest.json": signed_manifest(payload, "2026.1002.0", {"pax-block": new}),
+    urls = {BASE + fl.PACK_MANIFEST: signed_manifest(payload, "2026.1002.0", {"pax-block": new}),
             BASE + "pax-block.txt.gz": new}
     assert st.update(lambda u: urls[u], bases=[BASE])["changed"] == ["pax-block"]
     fs = st.load()

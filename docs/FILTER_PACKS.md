@@ -1,0 +1,79 @@
+# Filter packs (v0.8.19)
+
+Pax's filter improves itself every night with no person and no outside service in the loop. The
+workflow runs from this repository on GitHub Actions; anyone can read what it did and why.
+
+## How the loop works
+
+1. **03:00 UTC every night** (and on demand), `.github/workflows/filter-loop.yml` runs
+   `lists/loop/run.py` on `main`.
+2. **Refresh**: it downloads the sources Pax's lists are built from (see [FILTER_LISTS.md](FILTER_LISTS.md)),
+   the newly registered domains and the Tranco top 1M.
+3. **Check new candidates**: names that appeared in the two checked sources (restricted content and web
+   proxies) and aren't covered yet are checked by their homepage, at most 8 requests a second and 1,000
+   names a night (`lists/loop/homepage.py`). A name is added only when its own page labels itself for
+   adults or shows restricted content, or is a working web proxy. Verdicts are remembered (30 days for a
+   confirmed one, 90 days otherwise).
+4. **Build** the lists with `lists/build.py` (gzip with mtime 0: the same inputs give the same bytes; the
+   pack records the SHA-256 of every input and the commit it was built from).
+5. **Gates** (all must pass):
+   1. unit tests: `guard`, `common` and `lists` test suites;
+   2. floors and max-drop: every block list keeps its bundled minimum size and shrinks by no more than its
+      `max_drop` against the last published pack *and* the bundled lists;
+   3. the 57 everyday UK sites (`lists/gates/everyday-uk.txt`) and the known-good set
+      (`lists/gates/known-good.txt`, ~1,000 names): none blocked;
+   4. Tranco top 10k: every name newly blocked against the last pack must be confirmed restricted or a
+      proxy by its homepage. An unconfirmed one has its list entry *held back* from the pack (and from the
+      next 30 nights' packs); more than 300 new blocks, more than 50 held back, or a new block from a code
+      rule fails the run;
+   5. benchmark: fresh held-out samples (adult names from sources Pax doesn't build from, each night
+      different; a hand-kept proxy set; 250 ordinary sites from Tranco ranks 10,001-200,000) are scored by
+      the new pack, the last pack and a reference resolver (at most 8 queries a second, 1,000 a night). The
+      new pack must not lose more held-out names than it gains, beyond noise (1% of the set, at least 2),
+      or block more ordinary sites the reference leaves open (0.5%, at least 1). The reference is a
+      yardstick only: its answers are never copied into Pax's lists.
+6. **Publish** (only if every gate passed): the pack is signed with the filter key (GitHub Actions secret
+   `PAX_FILTER_SIGNING_KEY`) and uploaded to the release tagged `filter-pack`, then mirrored to the orphan
+   branch `filter-packs` (served by jsDelivr). The run then downloads and verifies what it published.
+7. **Record**: the scoreboard (`scoreboard/history.csv`, `latest.md`, `latest.json`) and the loop's memory
+   (`state/`) are committed to the `filter-loop` branch every night, published or not. Site names there are
+   gzipped or encoded, never plain text.
+8. **Refuse**: if any gate fails, nothing is published and the issue labelled `filter-loop` gets the reason.
+   It closes itself when a later pack is published.
+
+## What a Mac or server does with a pack
+
+pax-guard (Mac) and the DoH servers check `filter-pack.json` every 6 hours (GitHub release first, jsDelivr
+mirror second) and take a pack only if:
+
+- it is signed with a key in `pax_signing.FILTER_PUBLIC_KEYS_HEX` (the app update key is never accepted
+  for a pack, and the filter key never for an app update);
+- its version is newer than the lists in use and the bundled lists, and wasn't refused before;
+- it changes block lists only (the allowlist and SafeSearch rules change only with an app update), and the
+  bundled manifest's floors, `max_drop` and `restricted` flags apply whatever the pack says;
+- every changed file matches its signed SHA-256 (files are named by their hash), parses, and passes the floors;
+- the canary self-test passes on the new lists before they are swapped in.
+
+If a swapped-in pack later fails the canary, it is rolled back to the previous good lists at once and that
+version is never taken again. If everything fails, the family-filter chain answers (never open). Refusals
+and rollbacks are written to the tamper log; the version in use and the last check show in pax-guard's
+status (`filter_pack`), in Settings › Advanced › Filter lists, and in the servers' `/v1/health`
+(`dns.filter_pack`, `dns.lists_version`).
+
+## Keys
+
+- Filter key: Ed25519, public key `83b0cbd5…251445` (key id `5cedf522`) pinned in `guard/pax_signing.py`.
+  Private half only in the Actions secret `PAX_FILTER_SIGNING_KEY` (base64 of the 32-byte seed). The sign
+  step checks the secret against the pinned key before anything is published.
+- App update key: unchanged, `PAX_UPDATE_SIGNING_KEY`, used by Build DMG for app releases only.
+
+Rotating the filter key: add the new public key to `FILTER_PUBLIC_KEYS_HEX`, ship an app release, then
+change the secret.
+
+## Running it by hand
+
+```sh
+python3 lists/loop/run.py run --work /tmp/w --state /tmp/state --out /tmp/pack   # exit 0 = passed, 3 = refused
+PAX_FILTER_SIGNING_KEY=... python3 lists/loop/run.py sign --out /tmp/pack
+python3 lists/loop/run.py check-published                                         # verify the live pack
+```

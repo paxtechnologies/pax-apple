@@ -122,6 +122,25 @@ public struct GuardClient: Sendable {
         public let settings: Settings?
         /// v0.8.14: whether Chrome's locked extension list is older than this version's.
         public let browser_rules: BrowserRules?
+        /// v0.8.19: the filter pack (signed list update) in use and the last check.
+        public let filter_pack: FilterPack?
+
+        public struct FilterPack: Decodable, Sendable, Equatable {
+            public let version: String?
+            /// "pack" (a signed filter pack), "bundled" (the lists inside this version of Pax).
+            public let origin: String?
+            public let last_check_at: Double?
+            public let last_ok: Bool?
+            public let last_error: String?
+            public init(version: String?, origin: String?, last_check_at: Double? = nil,
+                        last_ok: Bool? = nil, last_error: String? = nil) {
+                self.version = version
+                self.origin = origin
+                self.last_check_at = last_check_at
+                self.last_ok = last_ok
+                self.last_error = last_error
+            }
+        }
 
         public struct BrowserRules: Decodable, Sendable, Equatable {
             public let browser: String?
@@ -508,6 +527,25 @@ public enum FilterStatusText {
         }
         if dns.active == "CleanBrowsing Family" { return "Filtering through CleanBrowsing." }
         return "Filtering through \(dns.active ?? "the backup filter") (backup)."
+    }
+}
+
+/// v0.8.19 Settings › Advanced: which filter lists are in use.
+public enum FilterPackText {
+    /// "2026.1018.300 (updated automatically)" / "2026.1017.1 (built into Pax)".
+    public static func value(_ pack: GuardClient.Status.FilterPack?) -> String? {
+        guard let pack, let v = pack.version, !v.isEmpty else { return nil }
+        return pack.origin == "pack" ? "\(v) (updated automatically)" : "\(v) (built into Pax)"
+    }
+
+    /// "Last checked 14:05." or "Last check didn't update: …" (nil before the first check).
+    public static func lastCheck(_ pack: GuardClient.Status.FilterPack?) -> String? {
+        guard let pack, let at = pack.last_check_at else { return nil }
+        let when = Date(timeIntervalSince1970: at).formatted(date: .abbreviated, time: .shortened)
+        if pack.last_ok == false, let e = pack.last_error, !e.isEmpty {
+            return "Last checked \(when). Kept the lists in use: \(e)"
+        }
+        return "Last checked \(when). Pax checks for new lists every 6 hours."
     }
 }
 

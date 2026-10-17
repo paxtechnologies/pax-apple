@@ -8,11 +8,10 @@
 #
 # v0.8.0 releases: on a tag v* (which must equal v$PAX_VERSION) it also signs
 # pax-update.json with the PAX_UPDATE_SIGNING_KEY secret (scripts/sign-release.py),
-# creates the GitHub Release with the DMG, the update zip and the manifest, and
-# republishes the signed filter lists under the release tag `lists` (never
-# "latest", so releases/latest/download/pax-update.json keeps pointing at the
-# app). The jsDelivr mirrors read the orphan branches `releases` and `pax-lists`.
-# docs/UPDATES.md.
+# creates the GitHub Release with the DMG, the update zip and the manifest. The
+# jsDelivr mirror reads the orphan branch `releases`. docs/UPDATES.md.
+# v0.8.19: filter lists ship as signed filter packs from filter-loop.yml instead
+# (own key, own release tag `filter-pack`); see docs/FILTER_PACKS.md.
 #
 # v0.8.6: the app bundles the iPhone helper's own Python (build-device-helper.sh). The
 # "Check the bundle" step fails the build unless every Mach-O in it is universal and
@@ -41,7 +40,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PAX_VERSION: "0.8.18"
+  PAX_VERSION: "0.8.19"
 
 jobs:
   dmg:
@@ -349,30 +348,14 @@ jobs:
               --notes "Pax $PAX_VERSION. Signed update. $SIGNED_NOTE"
           fi
 
-          # Filter lists: reassemble the bundled parts, sign the manifest, publish under `lists`.
-          LISTS="$RUNNER_TEMP/lists"
-          rm -rf "$LISTS" && mkdir -p "$LISTS"
-          /usr/bin/python3 - "$LISTS" <<'PY'
-          import json, sys
-          from pathlib import Path
-          sys.path.insert(0, "guard")
-          from filter_lists import read_bytes_maybe_parts
-          out = Path(sys.argv[1])
-          man = json.loads(Path("guard/filters/filters.json").read_text())
-          for item in man["lists"].values():
-              (out / item["file"]).write_bytes(read_bytes_maybe_parts(Path("guard/filters") / item["file"]))
-          PY
-          (cd lists && /usr/bin/python3 build.py manifest --out "$LISTS" --sign-key-env PAX_UPDATE_SIGNING_KEY)
-          if ! gh release view lists >/dev/null 2>&1; then
-            gh release create lists --target "$GITHUB_SHA" --prerelease --latest=false --title "Pax filter lists" \
-              --notes "Signed filter lists for pax-guard (lists-manifest.json). Not an app release."
-          fi
-          gh release upload lists "$LISTS"/* --clobber
+          # v0.8.19: filter lists are no longer republished here. Signed filter packs come
+          # from the nightly filter workflow (filter-loop.yml, its own signing key), and the
+          # app update key signs app updates only.
 
-          # jsDelivr mirrors: orphan branches `releases` (app) and `pax-lists` (lists).
+          # jsDelivr mirror: orphan branch `releases` (app).
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for pair in "releases:$REL" "pax-lists:$LISTS"; do
+          for pair in "releases:$REL"; do
             BR="${pair%%:*}"; DIR="${pair#*:}"
             M="$RUNNER_TEMP/mirror-$BR"
             rm -rf "$M" && mkdir -p "$M" && cp "$DIR"/* "$M/"
