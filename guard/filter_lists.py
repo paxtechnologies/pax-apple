@@ -488,7 +488,8 @@ class FilterStore:
         for base in bases:
             try:
                 doc = json.loads(fetch(base + PACK_MANIFEST))
-                payload = pax_signing.verify_document(doc, pax_signing.filter_keys())
+                payload = pax_signing.verify_document(doc, pax_signing.filter_keys(),
+                                                       context=pax_signing.FILTER_CONTEXT)
                 base_used = base
                 break
             except pax_signing.SignatureError as exc:

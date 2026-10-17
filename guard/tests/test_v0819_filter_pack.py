@@ -57,7 +57,7 @@ def pack(man, version, files: dict, seed=SEED, objects=True, **extra):
             urls[BASE + item["object"]] = data
         else:
             urls[BASE + item["file"]] = data
-    doc = json.dumps(pax_signing.sign_document(payload, seed)).encode()
+    doc = json.dumps(pax_signing.sign_document(payload, seed, context=pax_signing.FILTER_CONTEXT)).encode()
     urls[BASE + fl.PACK_MANIFEST] = doc
     return urls
 
@@ -71,15 +71,42 @@ def fetcher(urls):
 
 
 def test_keys_are_separate_and_pinned():
-    real_filter = "83b0cbd5e697ab9c6beacf5a0763058d2e48b0779e0c2ee4927421b598251445"
     import importlib
     fresh = importlib.reload(pax_signing)
     try:
-        assert fresh.FILTER_PUBLIC_KEYS_HEX == [real_filter]
-        assert real_filter not in fresh.PUBLIC_KEYS_HEX
+        assert len(fresh.FILTER_PUBLIC_KEYS_HEX) == 1 and len(bytes.fromhex(fresh.FILTER_PUBLIC_KEYS_HEX[0])) == 32
         assert not set(fresh.FILTER_PUBLIC_KEYS_HEX) & set(fresh.PUBLIC_KEYS_HEX)
+        assert fresh.FILTER_CONTEXT == b"pax-filter-pack-v1"
     finally:
         importlib.reload(pax_signing)
+
+
+def test_filter_key_is_derived_with_hkdf_sha512():
+    seed = bytes(range(32))
+    f = pax_signing.derive_filter_seed(seed)
+    assert len(f) == 32 and f != seed and pax_signing.derive_filter_seed(seed) == f
+    # RFC 5869 HKDF-SHA-512, empty salt, info "pax-filter-pack-v1", L = 32
+    import hashlib
+    import hmac
+    prk = hmac.new(bytes(64), seed, hashlib.sha512).digest()
+    assert f == hmac.new(prk, b"pax-filter-pack-v1\x01", hashlib.sha512).digest()[:32]
+    assert pax_signing.derive_filter_seed(bytes(32)) != f
+
+
+def test_signatures_never_cross_between_packs_and_app_updates():
+    """Even with the very same key, a pack signature can't pass as an app update or back."""
+    payload = {"version": "2026.1018.300", "schema": fl.PACK_SCHEMA, "lists": {}}
+    as_pack = pax_signing.sign_document(payload, SEED, context=pax_signing.FILTER_CONTEXT)
+    as_app = pax_signing.sign_document(payload, SEED)
+    keys = [PUB]
+    assert pax_signing.verify_document(as_pack, keys, context=pax_signing.FILTER_CONTEXT) == payload
+    assert pax_signing.verify_document(as_app, keys) == payload
+    with pytest.raises(pax_signing.SignatureError):
+        pax_signing.verify_document(as_pack, keys)
+    with pytest.raises(pax_signing.SignatureError):
+        pax_signing.verify_document(as_app, keys, context=pax_signing.FILTER_CONTEXT)
+    with pytest.raises(ValueError):
+        pax_signing.sign_document(payload, SEED, context=b"other")
 
 
 def test_pack_signed_with_the_app_key_is_refused(tmp_path):
@@ -88,6 +115,11 @@ def test_pack_signed_with_the_app_key_is_refused(tmp_path):
     urls = pack(man, "2026.1018.300", {"pax-block": base.gz(BLOCK + ["n.example"])}, seed=APP_SEED)
     rep = st.update(fetcher(urls), bases=[BASE])
     assert not rep["ok"] and "bad signature" in rep["error"] and st.current_manifest() is None
+    # signed with the filter key but without the pack context (as an app update would be)
+    payload = json.loads(urls[BASE + fl.PACK_MANIFEST])["payload"]
+    urls[BASE + fl.PACK_MANIFEST] = json.dumps(pax_signing.sign_document(payload, SEED)).encode()
+    rep = st.update(fetcher(urls), bases=[BASE])
+    assert not rep["ok"] and "bad signature" in rep["error"]
     # ...and a document signed with the filter key never passes as an app update
     doc = pax_signing.sign_document({"version": "9.9.9"}, SEED)
     with pytest.raises(pax_signing.SignatureError):
@@ -210,7 +242,7 @@ def test_bad_object_names_and_download_failures(tmp_path):
     urls = pack(man, "2026.1018.1", {"pax-block": data})
     doc = json.loads(urls[BASE + fl.PACK_MANIFEST])
     doc["payload"]["lists"]["pax-block"]["object"] = "../../etc/passwd"
-    urls[BASE + fl.PACK_MANIFEST] = json.dumps(pax_signing.sign_document(doc["payload"], SEED)).encode()
+    urls[BASE + fl.PACK_MANIFEST] = json.dumps(pax_signing.sign_document(doc["payload"], SEED, context=pax_signing.FILTER_CONTEXT)).encode()
     rep = st.update(fetcher(urls), bases=[BASE])
     assert not rep["changed"] and "bad object name" in json.dumps(rep["rejected"])
     # a download failure is not a bad pack: nothing changes and the version is not refused

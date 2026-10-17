@@ -6,7 +6,8 @@ checks new candidates by their homepage, builds the lists reproducibly, runs the
 gates, and leaves a pack ready to sign only if every gate passes.
 
   run.py run --work DIR --state DIR --out DIR      build + gates (exit 0 pass, 3 refused)
-  run.py sign --out DIR                            sign with $PAX_FILTER_SIGNING_KEY
+  run.py sign --out DIR                            sign with the key derived from $PAX_UPDATE_SIGNING_KEY
+  run.py public-key                                print the derived filter public key (public, safe)
   run.py published --state DIR --out DIR           record a pack the workflow published
   run.py check-published [--version V]             fetch + verify the live pack
 
@@ -452,6 +453,11 @@ def cmd_sign(args) -> int:
     return 0
 
 
+def cmd_public_key(args) -> int:
+    print(pack.public_key_hex(pack.env_key()))
+    return 0
+
+
 def cmd_published(args) -> int:
     state = State(Path(args.state))
     payload = json.loads((Path(args.out) / "payload.json").read_text())
@@ -494,6 +500,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("published")
     p.add_argument("--state", required=True)
     p.add_argument("--out", required=True)
+    sub.add_parser("public-key")
     c = sub.add_parser("check-published")
     c.add_argument("--version", default=None)
     c.add_argument("--mirror", action="store_true")
@@ -504,7 +511,7 @@ def main(argv=None) -> int:
         if a.ref_budget > 1000:
             raise SystemExit("--ref-budget above 1,000 is not allowed")
         return run(a)
-    return {"sign": cmd_sign, "published": cmd_published, "check-published": cmd_check_published}[a.cmd](a)
+    return {"sign": cmd_sign, "public-key": cmd_public_key, "published": cmd_published, "check-published": cmd_check_published}[a.cmd](a)
 
 
 if __name__ == "__main__":

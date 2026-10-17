@@ -83,7 +83,7 @@ def signed_manifest(man, version, files: dict, seed=SEED):
     for lid, data in files.items():
         payload["lists"][lid]["sha256"] = _sha(data)
         payload["lists"][lid]["bytes"] = len(data)
-    return json.dumps(pax_signing.sign_document(payload, seed)).encode()
+    return json.dumps(pax_signing.sign_document(payload, seed, context=pax_signing.FILTER_CONTEXT)).encode()
 
 
 @pytest.fixture(autouse=True)

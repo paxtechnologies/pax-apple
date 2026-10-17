@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import hmac
 import json
 
 import ed25519
@@ -30,13 +31,16 @@ PUBLIC_KEYS_HEX = [
 ]
 
 
-# v0.8.19: a separate key signs filter packs (list-only updates published by the
-# nightly filter workflow, .github/workflows/filter-loop.yml). Its private half
-# lives only in the GitHub Actions secret PAX_FILTER_SIGNING_KEY. A filter pack is
-# verified with these keys only, and an app update with PUBLIC_KEYS_HEX only, so
-# neither key can stand in for the other.
+# v0.8.19: filter packs (list-only updates published by the nightly filter workflow,
+# .github/workflows/filter-loop.yml) are signed with a key of their own, derived from
+# the app update key's seed with HKDF-SHA-512 and the fixed context FILTER_CONTEXT
+# (derive_filter_seed). The derived key's public half is pinned here. On top of the
+# separate key, a pack's signature covers FILTER_CONTEXT + the canonical payload, while
+# an app update's covers the canonical payload alone (which always starts with "{"),
+# so a pack signature can never verify as an app update, nor the other way round.
+FILTER_CONTEXT = b"pax-filter-pack-v1"
 FILTER_PUBLIC_KEYS_HEX = [
-    "83b0cbd5e697ab9c6beacf5a0763058d2e48b0779e0c2ee4927421b598251445",
+    "__FILTER_PUBLIC_KEY__",
 ]
 
 
@@ -88,13 +92,28 @@ def seed_from_text(text: str) -> bytes:
     return raw
 
 
-def sign_document(payload: dict, seed: bytes) -> dict:
+def derive_filter_seed(update_seed: bytes) -> bytes:
+    """v0.8.19: the filter-pack signing seed, HKDF-SHA-512 (RFC 5869, empty salt) of the
+    app update seed with info FILTER_CONTEXT."""
+    prk = hmac.new(b"\x00" * 64, update_seed, hashlib.sha512).digest()
+    return hmac.new(prk, FILTER_CONTEXT + b"\x01", hashlib.sha512).digest()[:32]
+
+
+def filter_message(payload: dict) -> bytes:
+    return FILTER_CONTEXT + b"\x00" + canonical(payload)
+
+
+def sign_document(payload: dict, seed: bytes, context: bytes | None = None) -> dict:
+    """`context` (v0.8.19): FILTER_CONTEXT for a filter pack, None for an app update."""
     pub = ed25519.public_key(seed)
-    sig = ed25519.sign(seed, canonical(payload))
+    msg = filter_message(payload) if context == FILTER_CONTEXT else canonical(payload)
+    if context not in (None, FILTER_CONTEXT):
+        raise ValueError("unknown signing context")
+    sig = ed25519.sign(seed, msg)
     return {"payload": payload, "signature": base64.b64encode(sig).decode(), "key_id": key_id(pub)}
 
 
-def verify_document(doc, keys: list[bytes] | None = None) -> dict:
+def verify_document(doc, keys: list[bytes] | None = None, context: bytes | None = None) -> dict:
     """The payload of a correctly signed document, else SignatureError. Never
     accepts a document without a signature, whatever else it says."""
     if not isinstance(doc, dict) or not isinstance(doc.get("payload"), dict):
@@ -109,7 +128,9 @@ def verify_document(doc, keys: list[bytes] | None = None) -> dict:
     keys = pinned_keys() if keys is None else keys
     if not keys:
         raise SignatureError("no public key pinned in this build")
-    msg = canonical(doc["payload"])
+    if context not in (None, FILTER_CONTEXT):
+        raise SignatureError("unknown signing context")
+    msg = filter_message(doc["payload"]) if context == FILTER_CONTEXT else canonical(doc["payload"])
     if any(ed25519.verify(k, msg, sig) for k in keys):
         return doc["payload"]
     raise SignatureError("bad signature")

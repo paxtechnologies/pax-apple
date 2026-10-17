@@ -59,13 +59,25 @@ def assemble(out: Path, lists: dict, version: str, meta: dict | None = None) -> 
     return payload
 
 
-def sign(out: Path, seed_text: str) -> dict:
-    """Sign payload.json into filter-pack.json, then check it against the public
-    key pinned in this checkout (a wrong secret fails here, before publishing)."""
-    if not seed_text.strip():
-        raise SystemExit("PAX_FILTER_SIGNING_KEY is empty: refusing to publish an unsigned pack")
+def filter_seed(update_key_text: str) -> bytes:
+    """The filter-pack seed, derived from the app update key (pax_signing.derive_filter_seed)."""
+    if not update_key_text.strip():
+        raise SystemExit("PAX_UPDATE_SIGNING_KEY is empty: refusing to publish an unsigned pack")
+    return pax_signing.derive_filter_seed(pax_signing.seed_from_text(update_key_text))
+
+
+def public_key_hex(update_key_text: str) -> str:
+    import ed25519
+    return ed25519.public_key(filter_seed(update_key_text)).hex()
+
+
+def sign(out: Path, update_key_text: str) -> dict:
+    """Sign payload.json into filter-pack.json with the derived filter key, then check
+    it against the public key pinned in this checkout (a wrong secret fails here,
+    before publishing)."""
+    seed = filter_seed(update_key_text)
     payload = json.loads((out / "payload.json").read_text())
-    doc = pax_signing.sign_document(payload, pax_signing.seed_from_text(seed_text))
+    doc = pax_signing.sign_document(payload, seed, context=pax_signing.FILTER_CONTEXT)
     verify(doc, out)
     (out / fl.PACK_MANIFEST).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     return doc
@@ -73,7 +85,7 @@ def sign(out: Path, seed_text: str) -> dict:
 
 def verify(doc: dict, objects_dir: Path | None = None, fetch=None, base: str = "") -> dict:
     """The payload of a correctly signed pack whose files all match; else raises."""
-    payload = pax_signing.verify_document(doc, pax_signing.filter_keys())
+    payload = pax_signing.verify_document(doc, pax_signing.filter_keys(), context=pax_signing.FILTER_CONTEXT)
     if payload.get("schema") != fl.PACK_SCHEMA:
         raise ValueError("not a filter pack")
     for lid, item in payload["lists"].items():
@@ -109,4 +121,5 @@ def fetch_published(fetch=lu.fetch, base: str = fl.PACK_BASES[0]):
 
 
 def env_key() -> str:
-    return os.environ.get("PAX_FILTER_SIGNING_KEY", "")
+    """The app update key's seed (Actions secret); the filter key is derived from it."""
+    return os.environ.get("PAX_UPDATE_SIGNING_KEY", "")
