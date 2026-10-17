@@ -86,7 +86,12 @@ def test_bad_signature_is_refused():
         sc.verify(other, sid, 1_800_000_000 + 1)
     assert e.value.code == sc.BAD_SIGNATURE
     raw = sc.issue(SEED, sid, 1_800_000_000)
-    flipped = raw[:-1] + ("A" if raw[-1] != "A" else "B")
+    # v0.8.16: flip a whole character inside the signature, not the last one (its low
+    # bits are base32 padding, so swapping it could leave the bytes, and the code, valid).
+    i = len(raw) - 10
+    while not raw[i].isalnum():
+        i -= 1
+    flipped = raw[:i] + ("A" if raw[i] != "A" else "B") + raw[i + 1:]
     with pytest.raises(sc.SupportCodeError) as e:
         sc.verify(flipped, sid, 1_800_000_000 + 1)
     assert e.value.code in (sc.BAD_SIGNATURE, sc.MALFORMED)
