@@ -459,9 +459,9 @@ def test_candidate_verdict_vpn_services_and_not_proxies():
     # consumer VPN services count as bypass sites
     assert cv({"st": 200, "title": "Blast VPN — Browse Without Limits", "host": "blastvpn.org"}) == "proxy"
     assert cv({"st": 200, "title": "Лучший ВПН для России | BeeFreeVPN", "host": "beefreevpn.ru"}) == "proxy"
-    # ... but not enterprise gateways, reviews, VPN detection or words that only contain "vpn"
+    # ... but not enterprise gateways, VPN detection or words that only contain "vpn"
+    # (round 6: VPN review / comparison pages now count, see the round 6 test)
     assert cv({"st": 200, "title": "SSL VPN Portal - Log in", "host": "vpn.example.com"}) == "other"
-    assert cv({"st": 200, "title": "Best VPNs compared: reviews 2026", "host": "vpnreviews.example"}) == "other"
     assert cv({"st": 200, "title": "Free transparent PNG images", "host": "favpng.example"}) == "other"
     assert cv({"st": 200, "title": "Secure VPN Solutions for Business", "host": "corpvpn.example"}) == "other"
     # pages that use "proxy" for something else
@@ -469,7 +469,6 @@ def test_candidate_verdict_vpn_services_and_not_proxies():
     assert cv({"st": 200, "title": "Charles Web Debugging Proxy", "host": "charles.example"}) == "other"
     assert cv({"st": 200, "title": "Proxy Server Free Fire APK Download", "host": "ff.example", "pxy": 90}) == "other"
     assert cv({"st": 200, "title": "FunBlock", "host": "funblocks.example"}) == "other"
-    assert cv({"st": 200, "title": "Slope Unblocked Games - Play Free", "host": "slope.example"}) == "other"
     # proxy code on the page still wins, and real proxies stay proxies
     assert cv({"st": 200, "title": "Unblocked Games", "host": "g.example", "frame": 2}) == "proxy"
     assert cv({"st": 200, "title": "Free Web Proxy - Unblock Websites", "host": "p.example", "pxy": 9}) == "proxy"
@@ -616,3 +615,50 @@ def test_chrome_rotation_and_majestic_candidates():
     def boom(url, timeout=None):
         raise OSError("down")
     assert proxy.majestic_candidates(fetch=boom) == []
+
+
+def test_round6_policy_unblocked_games_and_vpn_reviews_are_bypass():
+    """Decided 2026-10-17: unblocked-games pages and VPN review / affiliate pages are
+    bypass sites; paid proxy networks stay proxies."""
+    cv = homepage.candidate_verdict
+    for title, host in [("Slope Unblocked Games - Play Free", "slope.example"),
+                        ("Unblocked Games 76", "ug76.example"),
+                        ("Cookie Clicker Unblocked", "cc.example"),
+                        ("Unblocked Classroom 6x", "c6x.example"),
+                        ("The Unblocked Initiative", "p2pgames.example"),
+                        ("Best VPNs compared: reviews 2026", "vpnreviews.example"),
+                        ("The Best VPN Services of 2026 | Compare Top VPN Providers", "top10bestvpn.example"),
+                        ("Residential Proxies | Rotating Proxy Provider", "resi.example")]:
+        assert cv({"st": 200, "title": title, "host": host}) == "proxy", title
+    # still not bypass: games without "unblocked", "unblocked" without games, questions,
+    # news, gambling on an old games name, the site's name alone, publishers, sunblock
+    for title, host in [("Coolmath Games - Free Online Games", "coolmathgames.com"),
+                        ("Poki - Free Online Games - Play Now!", "poki.com"),
+                        ("Unblocked Games for school", "poki.com"),
+                        ("Speed Stars Unblocked", "ss.example"),
+                        ("Fortnite Unblocked? Play a Free Battle Royale Instead", "fn.example"),
+                        ("Tech Unblockedgames - Games Related Tech News", "tech.example"),
+                        ("Unblocked games news tracker", "t.example"),
+                        ("BeonBet Casino | Slots Unblocked Games", "bb.example"),
+                        ("Home | slope-unblocked-10x.example", "slope-unblocked-10x.example"),
+                        ("Buy Sunblock / Sunscreen - play safe", "sunblock.example"),
+                        ("Context for agentic software development | Unblocked", "getunblocked.example"),
+                        ("Unblock Drains - play area plumbing", "drains.example")]:
+        assert cv({"st": 200, "title": title, "host": host}) == "other", title
+    # the benchmark's labeller is unchanged
+    assert homepage.verdict({"st": 200, "title": "Best VPNs compared: reviews 2026", "host": "vpnreviews.example"}) == "other"
+
+
+def test_round6_policy_recheck_of_old_other_verdicts(tmp_path, monkeypatch):
+    st = loop.State(tmp_path)
+    st.checked = {"unblocked-games76.example": ["other", "20261017"],
+                  "topvpnrate.example": ["other", "20261017"],
+                  "bakery.example": ["other", "20261017"],
+                  "unblockedgames.example": ["other", "20261018"],
+                  "freevpn.example": ["down", "20261017"]}
+    monkeypatch.setattr(lu, "days_since", lambda d: 1)
+    assert st.recent_verdict("unblocked-games76.example") is None
+    assert st.recent_verdict("topvpnrate.example") is None
+    assert st.recent_verdict("bakery.example") == "other"
+    assert st.recent_verdict("unblockedgames.example") == "other"
+    assert st.recent_verdict("freevpn.example") == "down"

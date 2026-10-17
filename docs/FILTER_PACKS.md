@@ -134,7 +134,7 @@ judged wrongly. So round 2 widens discovery and tightens the judgement:
   services, reviews or news; pages that use "proxy" for something else (developer
   and network tools, email security, game test servers, trading-card proxies,
   handle/DOI resolvers) and "unblocked games" sites without proxy code are not
-  proxies; "unblock" inside another word is not evidence. Tuned on ranked names
+  proxies (reversed in round 6, see "What counts as a bypass site" below); "unblock" inside another word is not evidence. Tuned on ranked names
   that read like a proxy or VPN, never on the held-out lists.
 - The benchmark keeps labelling its fresh held-out sample with the unchanged
   `homepage.verdict`, so what counts as a working proxy there does not move.
@@ -176,6 +176,35 @@ judged wrongly. So round 2 widens discovery and tightens the judgement:
   drain / plumbing services and organisations' own remote-access pages are not
   proxies. The loop's own bypass list already includes the encrypted-DNS / VPN /
   proxy bypass list it is built from, so that list is not a candidate source.
+
+### What counts as a bypass site (decided 2026-10-17)
+
+Three policy questions were settled by Ruben on 2026-10-17. All three are yes:
+
+1. **Paid proxy networks count as proxies / bypass sites** (residential, datacenter,
+   rotating and mobile proxy providers). A browser set to use one resolves names at
+   the proxy, so it gets round the filter like a VPN. Unchanged: on since round 1b.
+2. **"Unblocked games" pages count as bypass sites.** These re-host browser games so
+   they get past school and work filters. This reverses rounds 2, 4 and 5, which
+   treated them as "other". The candidate verdict (`homepage.unblocked_games`)
+   needs the title, with the site's own name taken out, to say "unblocked" as a
+   word (not "sunblock" or "funblock") and either name games / play / a clicker /
+   "6x"-style labels or sit on a name that reads like games. Still not bypass
+   sites: questions and how-tos ("… unblocked?"), news, plugins, trackers,
+   gambling pages on old games names, drain services, developer tools, and the
+   games publishers' and learning sites' own names (a mirror under another name
+   still counts).
+3. **VPN review, ranking and affiliate pages count as bypass sites**, like the VPNs
+   they sell. The consumer-VPN rule no longer rules a page out for "review",
+   "compare" or "vs", and "VPNs" (plural) counts as a VPN word. Still not bypass
+   sites: enterprise gateways, VPN detection services, news, guides and blogs,
+   campaigns about VPN bans, and pages that are plainly about something else.
+
+Round 6 (loop only) put 2 and 3 into the candidate verdict. "Other" verdicts given
+before 2026-10-18 to names that read like an unblocker or a VPN are judged again
+once instead of waiting 90 days. The benchmark labeller (`homepage.verdict`) is
+unchanged, the held-out lists stay eval-only, and every gate (UK everyday sites,
+known-good set, Tranco top 10k, proxy no-net-loss, benchmark) still applies.
 
 ## Running it by hand
 

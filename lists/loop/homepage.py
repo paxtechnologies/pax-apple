@@ -34,7 +34,10 @@ working proxy there does not move with these changes. Round 4: a handful of prox
 words in the body (fewer than 10) with no proxy word in the title is no longer
 enough on its own. Round 5: "unblock" alone in the title (no proxy code, fewer
 than 3 proxy words, no proxy or VPN word) is not enough either, and drain and
-plumbing services and organisations' own remote-access pages are not proxies."""
+plumbing services and organisations' own remote-access pages are not proxies.
+Round 6 (policy decided 2026-10-17): unblocked-games pages count as bypass sites
+(unblocked_games), reversing round 4/5; paid proxy networks and consumer VPN pages
+stay bypass sites (VPN review and affiliate pages too, through the bypass list)."""
 from __future__ import annotations
 
 import re
@@ -58,23 +61,38 @@ GAMBLE = re.compile(r"casino|\bslots?\b|togel|cá cược|nhà cái|tài xỉu|\
 PARK_BODY = re.compile(r"location\.href\s*=\s*[\"']/lander|suspendedpage|defaultwebpage\.cgi|buy\.nameshift\.com|"
                        r"webserver is functioning normally|parkingcrew|sedoparking|bodis\.com|afternic\.com/forsale", re.I)
 PAID_PROXY = re.compile(r"prox(?:y|ies)", re.I)
-VPN_TITLE = re.compile(r"vpn(?![a-z])|впн", re.I)
+VPN_TITLE = re.compile(r"vpns?(?![a-z])|впн", re.I)  # round 6: "VPNs" too
 VPN_WORD = re.compile(r"(?<![a-z])vpn|vpn(?![a-z])|впн", re.I)
+# Round 6 (decided 2026-10-17): VPN review, ranking and affiliate pages count as bypass
+# sites like the VPNs they sell, so "review", "vs" and "compare" no longer rule a page out.
 VPN_NOT = re.compile(r"\bsdk\b|detect|log ?in\b|log ?out\b|sign ?in\b|portal|big-ip|globalprotect|anyconnect|"
-                     r"fortinet|fortigate|pulse secure|citrix|\bssl ?vpn\b|\bedu|universit|school|news|review|"
-                     r"\bvs\.?\b|compare|comparison|router|firewall|enterprise|corporate|business vpn|zero trust|"
+                     r"fortinet|fortigate|pulse secure|citrix|\bssl ?vpn\b|\bedu|universit|school|news|"
+                     r"router|firewall|enterprise|corporate|business vpn|zero trust|"
                      r"\bztna\b|sase|mesh|tailscale|for teams|business|\bauto|\bcars?\b|voiture|capital|"
                      r"invest|\bimages?\b|\bpng\b|guides?\b|it services|\bblog|без vpn|without (?:a )?vpn|"
-                     r"no vpn", re.I)
+                     r"no vpn|\bbans?\b|petition|campaign", re.I)
 NOT_PROXY = re.compile(r"debug|developer|reverse proxy|load balanc|api gateway|ingress|service mesh|squid|haproxy|"
                        r"nginx|envoy|traefik|e-?mail|nospam|spam filter|card maker|proxy cards?|\bmtg\b|"
                        r"magic: the gathering|free ?fire|\bob\d\d\b|apk|game server|minecraft|velocity|"
                        r"bungeecord|proxy (?:vote|voting|statement|advisor)|shareholder|agentic|"
                        r"detection api|ip lookup|whois|\bproxy (?:check|test)er\b|handle proxy|\bdoi\b|"
                        r"drains?\b|sewer|plumb|toilet|government vpn|remote access|staff vpn|employee", re.I)
-# "Unblocked games" sites: browser games re-hosted to get past school filters, not
-# proxies (unless the page also carries proxy code or says it is a proxy).
+# "Unblocked games" sites: browser games re-hosted to get past school filters. Decided
+# 2026-10-17 (round 6): these count as bypass sites. The title has to say "unblocked"
+# as a word and show it is a games page (UNBLOCKED_GAMES); a games word alone (a
+# publisher, an education site) is still not enough, see unblocked_games().
 GAMES = re.compile(r"\bgames?\b|\bplay\b|clicker|\b\d+x\b", re.I)
+UNBLOCKED_WORD = re.compile(r"\bunblocked\b", re.I)
+GAMES_LABEL = re.compile(r"game|ubg", re.I)
+# Not an unblocked-games page: a question or a how-to about one, news, a plugin, a tracker.
+UNBLOCKED_NOT = re.compile(r"\?|how to|\bnews\b|\bblog\b|wordpress|plugin|tracker|review|agentic|"
+                           r"software|developer|\bapi\b", re.I)
+# The games publishers' and learning sites' own names: their pages are not bypass sites
+# even if a title mentions "unblocked" (mirrors under other names still are).
+GAMES_PUBLISHERS = frozenset({"poki", "crazygames", "coolmathgames", "coolmath", "miniclip", "kongregate",
+                              "armorgames", "hoodamath", "abcya", "mathplayground", "y8", "friv", "kizi",
+                              "addictinggames", "newgrounds", "itch", "roblox", "minecraft", "steampowered",
+                              "epicgames", "khanacademy", "pbskids", "funbrain", "nitrotype", "prodigygame"})
 PROXY_WORD = re.compile(r"prox|vpn|bypass|anonym|hide (?:my|your) ip|mirror", re.I)
 WEAK_OK = re.compile(r"unblock|hid(?:e|ing) (?:my|your)|glype|censor|pirate ?bay|\btpb\b", re.I)
 UNBLOCK_ONLY = re.compile(r"unblock", re.I)
@@ -170,13 +188,33 @@ def verdict(rec: dict) -> str:
     return "other"
 
 
+def unblocked_games(rec: dict) -> bool:
+    """Round 6: a re-hosted games page made to get past school filters ("Unblocked
+    Games 76", "Slope Unblocked - Play Free"). The title says "unblocked" as a word
+    (not "sunblock"), and either names games / play / clicker / "6x" or sits on a
+    name that reads like games; never a question, news, a plugin or a publisher."""
+    host = rec.get("host", "")
+    title = _without_own_name(_EMBEDDED_UNBLOCK.sub(" ", rec.get("title") or ""), host)
+    if not UNBLOCKED_WORD.search(title) or UNBLOCKED_NOT.search(title):
+        return False
+    if GAMBLE.search(title) or NOT_PROXY.search(title):
+        return False
+    lab = (pr.registrable_label(host) or "").lower()
+    if lab in GAMES_PUBLISHERS:
+        return False
+    return bool(GAMES.search(title) or GAMES_LABEL.search(host))
+
+
 def candidate_verdict(rec: dict) -> str:
     """Round 2 verdict for new candidates (see the module notes): `verdict`, minus
-    pages that use "proxy" for something else, plus consumer VPN services."""
+    pages that use "proxy" for something else, plus consumer VPN services and
+    (round 6) unblocked-games pages."""
     title = rec.get("title") or ""
     if rec.get("st") == 200 and not rec.get("frame") and CHALLENGE.search(title):
         return "down"
     v = verdict(dict(rec, title=_EMBEDDED_UNBLOCK.sub(" ", title)))
+    if v in ("proxy", "other") and unblocked_games(rec):
+        return "proxy"
     if v == "proxy":
         # Proxy-engine code on the page is evidence on its own; a title or a word count is not
         # when the page is plainly about something else.

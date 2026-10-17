@@ -50,6 +50,7 @@ import io
 import json
 import os
 import random
+import re
 import sys
 import tarfile
 import zipfile
@@ -80,6 +81,11 @@ HOLD_DAYS = 30
 MAX_NEW_TOP10K = 300
 MAX_HELD_PER_RUN = 50
 CODE_RULES = {"keyword", "name-rule", "bypass-name-rule"}
+# Round 6 (policy decided 2026-10-17): unblocked-games pages and VPN review / affiliate
+# pages now count as bypass sites, so "other" verdicts given before the change to names
+# that read like an unblocker or a VPN are judged again (once) instead of waiting 90 days.
+POLICY_RECHECK_BEFORE = "20261018"
+POLICY_RECHECK = re.compile(r"unbl[o0]ck|vpn")
 EXIT_REFUSED = 3
 
 
@@ -123,6 +129,8 @@ class State:
     def recent_verdict(self, name: str) -> str | None:
         v = self.checked.get(name)
         if not v:
+            return None
+        if v[0] == "other" and str(v[1]) < POLICY_RECHECK_BEFORE and POLICY_RECHECK.search(name):
             return None
         limit = RECHECK_DAYS if v[0] in ("adult", "proxy") else RECHECK_OTHER_DAYS
         return v[0] if lu.days_since(v[1]) < limit else None
