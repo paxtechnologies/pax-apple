@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS devices (
     profile_identifier TEXT NOT NULL,
     password_ct        BLOB NOT NULL,
     installed_at       INTEGER NOT NULL,
-    released_at        INTEGER
+    released_at        INTEGER,
+    support_id         TEXT,                        -- v0.8.15: shown in the app (Details › Support ID)
+    support_release    INTEGER NOT NULL DEFAULT 0,  -- v0.8.15: "Allow verified support release"
+    support_pending_on INTEGER                      -- v0.8.15: when a requested "on" takes effect
 );
 
 CREATE TABLE IF NOT EXISTS removal_requests (
@@ -155,6 +158,16 @@ CREATE TABLE IF NOT EXISTS signin_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_signin_acct ON signin_codes(account_id, created_at);
 
+-- v0.8.15: verified support release. Every nonce ever redeemed, kept for good, so
+-- a code works once whatever any clock says.
+CREATE TABLE IF NOT EXISTS support_nonces (
+    nonce       TEXT PRIMARY KEY,
+    device_id   TEXT NOT NULL,
+    used_at     INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    key_id      TEXT
+);
+
 CREATE TABLE IF NOT EXISTS events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id  TEXT NOT NULL,
@@ -191,6 +204,16 @@ class Database:
         for col in ("dns_x_media", "dns_bluesky_media", "dns_youtube_restricted"):
             if col not in cols:
                 self._conn.execute(f"ALTER TABLE accounts ADD COLUMN {col} INTEGER NOT NULL DEFAULT 1")
+        # v0.8.15: verified support release. A device registered before 0.8.15 never
+        # agreed to it, so the column arrives OFF (DEFAULT 0) and nothing here turns it
+        # on; its support ID is made the first time the device is read.
+        dcols = {r[1] for r in self._conn.execute("PRAGMA table_info(devices)")}
+        if "support_id" not in dcols:
+            self._conn.execute("ALTER TABLE devices ADD COLUMN support_id TEXT")
+        if "support_release" not in dcols:
+            self._conn.execute("ALTER TABLE devices ADD COLUMN support_release INTEGER NOT NULL DEFAULT 0")
+        if "support_pending_on" not in dcols:
+            self._conn.execute("ALTER TABLE devices ADD COLUMN support_pending_on INTEGER")
         # v0.8.13 (project decision): pictures and video on X and Bluesky are always
         # blocked. Force every account back on and close any waiting request to turn
         # them off. Runs at every start; a no-op once done.

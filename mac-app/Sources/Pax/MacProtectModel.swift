@@ -58,6 +58,8 @@ final class MacProtectModel: ObservableObject {
     @Published var status: EscrowClient.DeviceStatus?
     @Published var revealedPassword: String?
     @Published var emergencyReason = ""
+    /// v0.8.15: "I have a support code" (a one-time code from Pax support).
+    @Published var supportCode = ""
     @Published var statusFetchedAt = Date()
     /// v0.8.0 local escrow: what pax-guard released (the FileVault recovery key
     /// and, on Intel, the firmware password come with paxadmin's password).
@@ -110,7 +112,8 @@ final class MacProtectModel: ObservableObject {
     private func lockdown() -> MacLockdown {
         MacLockdown(userName: userName, escrow: escrow,
                     allowExtraAdmins: defaults.bool(forKey: "pax.testing.allowExtraAdmins"),
-                    escrowMode: escrowMode, localWaitSeconds: max(1, setup.config.waitDays) * 86_400)
+                    escrowMode: escrowMode, localWaitSeconds: max(1, setup.config.waitDays) * 86_400,
+                    supportRelease: setup.config.supportRelease)
     }
 
     private var lastAction: (() -> Void)?
@@ -451,6 +454,44 @@ final class MacProtectModel: ObservableObject {
                 try await escrow.emergencyRelease(deviceID: id, reason: reason)
             }
             await refreshStatus()
+        }
+    }
+
+    /// v0.8.15: a verified support code. pax-guard (or the server) checks it, tells the
+    /// trusted person first, then releases at once, exactly like a finished wait.
+    func redeemSupportCode() {
+        guard let id = deviceID else { return }
+        let code = supportCode
+        perform { [self] in
+            if localKey {
+                let r = try await guardClient.redeemSupportCode(code)
+                released = r
+                if let pw = r.removal_password {
+                    revealedPassword = pw
+                    phase = .released
+                }
+            } else {
+                revealedPassword = try await escrow.redeemSupportCode(deviceID: id, code: code).removal_password
+                phase = .released
+            }
+            supportCode = ""
+        }
+    }
+
+    /// v0.8.15 "Allow verified support release": off at once; on after the full wait,
+    /// trusted person told first.
+    func setSupportRelease(_ on: Bool) {
+        guard let id = deviceID else { return }
+        perform { [self] in
+            if localKey {
+                do { status = try await guardClient.setSupportRelease(on) } catch {
+                    status = try? await guardClient.device()     // "telling your partner" still shows
+                    throw error
+                }
+            } else {
+                status = try await escrow.setSupportRelease(deviceID: id, allowed: on)
+            }
+            statusFetchedAt = Date()
         }
     }
 

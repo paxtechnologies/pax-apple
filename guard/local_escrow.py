@@ -40,6 +40,17 @@ and reveal: a request made in the grace period can only be used until the grace
 period ends (measured by the wall clock, by time credited since the request and
 by network time, so moving the clock back doesn't keep it alive), and any
 request lapses once its 7-day reveal window has passed.
+
+Verified support release (v0.8.15, support_code.py): in a genuine emergency that
+Pax support has checked, support can issue a one-time code for THIS Mac (its
+support ID). redeem_support() checks the switch, the signature, the device, the
+expiry and that the nonce was never used, emails the partner FIRST (not queued:
+if it can't be sent, nothing happens), then releases straight away exactly as a
+finished removal request does. The switch ("Allow verified support release")
+lives here, in state.json, and nothing outside this Mac can change it: set-up
+chooses it (on by default), Macs set up before 0.8.15 start with it off (they
+never agreed to it), turning it off is immediate, and turning it on waits the
+full wait with the partner told first, like shortening the wait.
 """
 from __future__ import annotations
 
@@ -201,7 +212,7 @@ class LocalEscrow:
 
     # ------------------------------------------------------------ deposit
     def deposit(self, name: str, secret: str, wait_seconds: int | None = None,
-                replace: bool = False) -> str:
+                replace: bool = False, support_release: bool = False) -> str:
         """Store a secret. paxadmin can be stored only once (set-up); the recovery
         key and firmware password are replaced by pax-guard when it rotates them.
         Returns the SHA-256 of the stored value so the caller can confirm it."""
@@ -222,7 +233,7 @@ class LocalEscrow:
                     "schema": 1, "installed_at": now, "wait_seconds": wait, "pending_wait": None,
                     "request": None, "released_at": None, "last_emergency_at": None,
                     "wall_last": now, "mono_last": self.mono(), "boot": self.boot_time(),
-                    "holds": {}})
+                    "holds": {}, "support": _new_support(bool(support_release), "setup")})
             else:
                 sec = self._read("secrets.json")
                 if name in sec and not (replace and name != "paxadmin"):
@@ -283,6 +294,10 @@ class LocalEscrow:
             if st.get("pending_wait") and now >= st["pending_wait"]["effective_at"]:
                 st["wait_seconds"] = st["pending_wait"]["seconds"]
                 st["pending_wait"] = None
+            sup = self._support(st)
+            if sup.get("pending_on") and now >= sup["pending_on"]["effective_at"]:
+                sup["allowed"], sup["pending_on"] = True, None
+                self.tamper_log("support_release_setting", {"allowed": True, "applied": True})
             # A wall clock that went backwards is not trusted as the new baseline
             # for "now >= unlock_at"; credited time already ignores the jump.
             st["wall_last"], st["mono_last"], st["boot"] = now, mono, boot
@@ -386,6 +401,7 @@ class LocalEscrow:
                 "pending_wait": st.get("pending_wait"), "holds": self.holds(),
                 "last_emergency_at": st.get("last_emergency_at"),
                 "partner": self.partner.public_view(),
+                **self._support_view(st),
             }
 
     # ------------------------------------------------------------ actions
@@ -458,6 +474,12 @@ class LocalEscrow:
             elif t == "partner":
                 self.partner.set_pending_partner({"email": gate.get("email") or None,
                                                   "effective_at": now + st["wait_seconds"]})
+            elif t == "support_on":
+                sup = self._support(st)
+                if not sup.get("notifying_on"):
+                    return False
+                sup["notifying_on"] = False
+                sup["pending_on"] = {"effective_at": now + st["wait_seconds"], "requested_at": now}
             else:
                 return False
             self._write("state.json", st)
@@ -609,6 +631,116 @@ class LocalEscrow:
                 self._write("state.json", st)
         return self.status()
 
+    # ------------------------------------------- v0.8.15 verified support release
+    def _support(self, st: dict) -> dict:
+        """The support-release state, created on first use. A Mac set up before
+        0.8.15 has none: it gets a support ID and the switch OFF (it never agreed
+        to support release). The caller writes state.json."""
+        sup = st.get("support")
+        if not isinstance(sup, dict) or not sup.get("id"):
+            sup = _new_support(False, "migrated")
+            st["support"] = sup
+        sup.setdefault("used_nonces", {})
+        sup.setdefault("pending_on", None)
+        sup.setdefault("notifying_on", False)
+        return sup
+
+    def _support_view(self, st: dict) -> dict:
+        had = isinstance(st.get("support"), dict) and st["support"].get("id")
+        sup = self._support(st)
+        if not had:
+            self._write("state.json", st)          # keep the new support ID
+        pend = sup.get("pending_on")
+        return {"support_id": sup["id"],
+                "support_release": {"allowed": bool(sup.get("allowed")),
+                                    "pending_on_at": pend["effective_at"] if pend else None,
+                                    "telling_partner": bool(sup.get("notifying_on")),
+                                    "since": sup.get("since")}}
+
+    def set_support_release(self, allowed) -> dict:
+        """Off: at once (stricter). On: after the current wait, partner told
+        first (fail closed, PAX-ESCROW-010), like shortening the wait."""
+        if not isinstance(allowed, bool):
+            raise EscrowError("PAX-ESCROW-008", "allowed must be true or false")
+        with self._lock:
+            st = self._read("state.json")
+            sup = self._support(st)
+            now = int(self.clock())
+            if not allowed:
+                was_notifying = sup.get("notifying_on")
+                sup.update({"allowed": False, "pending_on": None, "notifying_on": False})
+                self._write("state.json", st)
+                self.tamper_log("support_release_setting", {"allowed": False})
+                if was_notifying:
+                    self.partner.drop_gate({"type": "support_on"})
+                return self.status()
+            if sup.get("allowed") or sup.get("pending_on") or sup.get("notifying_on"):
+                self._write("state.json", st)
+                return self.status()
+            wait = st["wait_seconds"]
+            if self.partner.partner():
+                sup["notifying_on"] = True
+                self._write("state.json", st)
+                ok = self.partner.notify(
+                    "support_release_on_requested", "Verified support release requested",
+                    f"You asked to allow verified support release on this Mac. It takes {_fmt(wait)}.",
+                    "Your Pax partner asked to allow verified support release on their Mac: in a genuine "
+                    "emergency that Pax support has checked, a one-time code could remove Pax from that Mac "
+                    f"without the wait. You'd be emailed first. This takes effect in {_fmt(wait)}.",
+                    gate={"type": "support_on"})
+                if not ok:
+                    raise EscrowError("PAX-ESCROW-010", "We couldn't tell your partner yet, so the change "
+                                      "hasn't started. Pax keeps trying.")
+                self.activate({"type": "support_on"})
+            else:
+                sup["pending_on"] = {"effective_at": now + wait, "requested_at": now}
+                self._write("state.json", st)
+            self.tamper_log("support_release_setting", {"allowed": True, "after_seconds": wait})
+        return self.status()
+
+    def redeem_support(self, code: str) -> dict:
+        """A verified support code for this Mac: check it, email the partner first
+        (never queued: no email, no release), then release at once, exactly as
+        confirming a finished removal request does. Every refusal is logged."""
+        import support_code as sc
+        with self._lock:
+            st = self._read("state.json")
+            sup = self._support(st)
+            self._write("state.json", st)
+            try:
+                if not sup.get("allowed"):
+                    raise sc.SupportCodeError(sc.TURNED_OFF, "verified support release is off on this Mac")
+                c = sc.verify(code, sup["id"], self.clock(), trusted_now=self.trusted_time())
+                if c["nonce"] in sup["used_nonces"]:
+                    raise sc.SupportCodeError(sc.USED, "that code has already been used")
+            except sc.SupportCodeError as exc:
+                self.tamper_log("support_code_refused", {"code": exc.code})
+                raise EscrowError(exc.code, exc.message) from None
+            if st.get("released_at"):
+                raise EscrowError("PAX-ESCROW-005", "Pax has already released this Mac")
+            ok = self.partner.notify(
+                "support_release_used", "Verified support release used on this Mac",
+                "You used a one-time code from Pax support. Pax is releasing this Mac now.",
+                "Pax support checked an emergency with your Pax partner and issued a one-time code for "
+                "their Mac. It has just been used, so Pax is releasing that Mac now. You might want to "
+                "check in with them.", queue=False)
+            if not ok:
+                self.tamper_log("support_code_refused", {"code": sc.PARTNER_UNREACHABLE, "nonce": c["nonce"]})
+                raise EscrowError(sc.PARTNER_UNREACHABLE, "Pax couldn't email your partner just now, so nothing "
+                                  "was released. The code still works until it expires; try again shortly.")
+            now = int(self.clock())
+            sup["used_nonces"][c["nonce"]] = c["expires_at"]
+            old = st.get("request")
+            if old and old.get("status") == "notifying":
+                self.partner.drop_gate({"type": "removal", "id": old["id"]})
+            st["request"] = {"id": _secrets.token_hex(8), "kind": "support", "reason": "remove",
+                             "status": "pending", "created_at": now, "unlock_at": now, "wait": 0,
+                             "credited": 0, "reveal_notified": True, "support_nonce": c["nonce"]}
+            self._write("state.json", st)
+            self.tamper_log("support_release_used", {"nonce": c["nonce"], "key_id": c["key_id"],
+                                                     "expires_at": c["expires_at"]})
+            return self.reveal()
+
     # ------------------------------------------------------------ partner
     def set_partner(self, email: str | None) -> dict:
         """Adding the first partner is immediate; changing or removing one waits
@@ -660,6 +792,12 @@ class LocalEscrow:
         return True
 
 
+def _new_support(allowed: bool, since: str) -> dict:
+    import support_code as sc
+    return {"id": sc.new_support_id(), "allowed": bool(allowed), "pending_on": None,
+            "notifying_on": False, "used_nonces": {}, "since": since}
+
+
 def _fmt(seconds: int) -> str:
     seconds = int(seconds)
     if seconds <= 0:
@@ -694,6 +832,8 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--wait-seconds", type=int, default=DEFAULT_WAIT)
     d.add_argument("--dir", default=str(DEFAULT_DIR))
     d.add_argument("--name", default="paxadmin", choices=["paxadmin"])
+    d.add_argument("--support-release", choices=["on", "off"], default="off",
+                   help="v0.8.15: allow verified support release (the app sends its set-up choice, on by default)")
     d.add_argument("--reset", action="store_true",
                    help="set-up only: discard an escrow left by an earlier, unfinished set-up")
     sub.add_parser("status").add_argument("--dir", default=str(DEFAULT_DIR))
@@ -713,7 +853,8 @@ def main(argv: list[str] | None = None) -> int:
                 p.unlink()
             except OSError:
                 pass
-            digest = esc.deposit(a.name, secret, wait_seconds=a.wait_seconds)
+            digest = esc.deposit(a.name, secret, wait_seconds=a.wait_seconds,
+                                 support_release=a.support_release == "on")
             print(json.dumps({"stored": a.name, "sha256": digest}))
         else:
             print(json.dumps({k: v for k, v in esc.status().items()}))

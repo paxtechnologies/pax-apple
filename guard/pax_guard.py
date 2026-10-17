@@ -83,7 +83,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.14"
+VERSION = "0.8.15"
 BASE = Path("/Library/PaxGuard")
 CONFIG_PATH = BASE / "config.json"
 STATE_DIR = BASE / "state"
@@ -1395,6 +1395,17 @@ class Guard:
                 if cmd == "partner.transport":
                     return {"ok": True, "partner": self.escrow.partner.set_transport(
                         req.get("transport"), req.get("owner_email"))}
+                if cmd == "escrow.support_release":
+                    # v0.8.15 "Allow verified support release": off at once, on after the wait.
+                    return {"ok": True, "device": self.escrow.set_support_release(req.get("allowed"))}
+                if cmd == "escrow.redeem_support":
+                    # v0.8.15: a one-time code from Pax support for this Mac only.
+                    if not self._support_rate().allow():
+                        self.tamper_log.append("support_code_refused", {"code": "PAX-ESCROW-019"})
+                        return {"ok": False, "code": "PAX-ESCROW-019", "error": "too many tries; wait a minute"}
+                    out = self.escrow.redeem_support(str(req.get("code", ""))[:400])
+                    log(f"escrow released (verified support code) to uid {uid}")
+                    return {"ok": True, "released": out}
                 if cmd == "escrow.reveal":
                     if not self._reveal_rate.allow():
                         return {"ok": False, "code": "PAX-ESCROW-006", "error": "too many tries; wait a minute"}
@@ -1464,6 +1475,14 @@ class Guard:
                 raise
             return {"ok": False, "code": exc.code, "error": exc.message,
                     **({k: v for k, v in getattr(exc, "extra", {}).items()})}
+
+    def _support_rate(self):
+        """v0.8.15: at most 3 support codes a minute (a code is 146 letters; this only
+        stops a runaway loop, the signature is what keeps codes unguessable)."""
+        if getattr(self, "_support_limit", None) is None:
+            import guard_ipc
+            self._support_limit = guard_ipc.RateLimit(3)
+        return self._support_limit
 
     # ------------------------------------------------ v0.8.7 Blocked apps
     APP_IDENTITY_TTL = 600
@@ -1787,7 +1806,7 @@ def selftest() -> int:
     problems = []
     for mod in ("guard_config", "ed25519", "pax_signing", "domain_matcher", "filter_lists", "dns_forwarder",
                 "local_escrow", "local_blocklist", "list_sync", "guard_ipc", "pax_update", "tamper", "recovery_guard",
-                "pax_restricted", "guard_runtime",
+                "pax_restricted", "guard_runtime", "support_code",
                 # v0.8.6: the standard-library pieces pax-guard needs from whichever Python runs it
                 "ssl", "smtplib", "plistlib", "http.client", "socketserver", "email.message", "urllib.request"):
         try:

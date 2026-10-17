@@ -174,9 +174,11 @@ class PartnerNotifier:
             self.senders["smtp"](t, msg, partner, c.get("owner_email"))
 
     def notify(self, kind: str, subject: str, user_body: str, partner_body: str | None = None,
-               gate: dict | None = None, to: str | None = None) -> bool:
+               gate: dict | None = None, to: str | None = None, queue: bool = True) -> bool:
         """Send now; on failure queue it (with `gate`, the action waiting on it)
-        and return False. With no partner (and no `to` given) nothing is sent."""
+        and return False. With no partner (and no `to` given) nothing is sent.
+        queue=False (v0.8.15, verified support release): on failure nothing is
+        queued either; the caller refuses the action outright."""
         partner = to or self.partner()
         if not partner:
             return True
@@ -189,6 +191,9 @@ class PartnerNotifier:
         except Exception as exc:  # noqa: BLE001 - queue and retry
             msg["attempts"] = 1
             msg["last_error"] = (getattr(exc, "message", None) or type(exc).__name__)[:160]
+            if not queue:
+                self.log(f"partner email '{kind}' not sent ({msg['last_error']}); not queued")
+                return False
             msg["next_at"] = int(self.clock()) + RETRY_SECONDS[0]
             c = self.config()
             c["outbox"].append(msg)

@@ -197,6 +197,11 @@ struct WaitStep: View {
             }
             NoteRow(icon: "heart", text: "For the first hour you can undo Pax without waiting, in case "
                     + "something isn't right.")
+            // v0.8.15: one calm line, on by default, switchable here and later on the device's page.
+            Card {
+                ToggleRow(title: VerifiedSupportRelease.title, detail: VerifiedSupportRelease.setUpDetail,
+                          isOn: $model.config.supportRelease)
+            }
             if let failure = model.failure {
                 ErrorCard(error: failure, retry: { model.retry() },
                           details: { model.supportDetails(failure) })

@@ -45,6 +45,9 @@ public struct SetupConfiguration: Sendable {
     /// v0.8.8: what the user chose for Pax's DNS filter (sent to the server just before the
     /// profile is made, only when `dnsBase` is set).
     public var filterSettings = PaxFilterSettings()
+    /// v0.8.15 "Allow verified support release": on by default for new set-ups, with one
+    /// calm line on the wait step where it can be switched off.
+    public var supportRelease: Bool = VerifiedSupportRelease.setUpDefault
 
     public init(email: String = "", waitDays: Int = 3, partnerEmail: String? = nil,
                 mode: SupervisionMode = .keepData, dnsFilter: DNSFilter = .family,
@@ -292,7 +295,8 @@ public final class SetupCoordinator: @unchecked Sendable {
         progress(.started("Handing the removal password to Pax escrow"))
         _ = try await escrow.registerDevice(name: device.name, platform: "ios",
                                             profileIdentifier: profile.profileIdentifier,
-                                            removalPassword: profile.removalPassword)
+                                            removalPassword: profile.removalPassword,
+                                            supportRelease: config.supportRelease)
         progress(.finished("Password escrowed. You will not see it."))
 
         progress(.started("Installing protection on \(device.name)"))

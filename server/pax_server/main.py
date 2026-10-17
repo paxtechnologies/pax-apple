@@ -71,6 +71,17 @@ class DeviceIn(BaseModel):
     platform: str = Field("ios", pattern="^(ios|ipados|macos|mac)$")
     profile_identifier: str = Field(..., min_length=3, max_length=255)
     removal_password: str = Field(..., min_length=20, max_length=256)
+    # v0.8.15 "Allow verified support release": the app sends its set-up choice (on by
+    # default). Left out (an older app) it is off: that device never agreed to it.
+    support_release: bool = False
+
+
+class SupportSettingIn(BaseModel):
+    allowed: bool
+
+
+class SupportCodeIn(BaseModel):
+    code: str = Field(..., min_length=10, max_length=400)
 
 
 class AdblockIn(BaseModel):
@@ -339,7 +350,8 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.post("/v1/devices", status_code=201)
     def register_device(body: DeviceIn, acct=Depends(current_account)):
         return escrow.register_device(acct, body.name, body.platform,
-                                      body.profile_identifier, body.removal_password)
+                                      body.profile_identifier, body.removal_password,
+                                      support_release=body.support_release)
 
     @app.get("/v1/devices")
     def list_devices(acct=Depends(current_account)):
@@ -391,6 +403,19 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.post("/v1/devices/{device_id}/emergency", status_code=201)
     def emergency(device_id: str, body: EmergencyIn, acct=Depends(current_account)):
         return escrow.emergency_release(acct, device_id, body.reason)
+
+    @app.put("/v1/devices/{device_id}/support-release")
+    def set_support_release(device_id: str, body: SupportSettingIn, acct=Depends(current_account)):
+        """v0.8.15 "Allow verified support release": off at once; on after the wait,
+        partner told first."""
+        return escrow.set_support_release(acct, device_id, body.allowed)
+
+    @app.post("/v1/devices/{device_id}/support-release/redeem")
+    def redeem_support(device_id: str, body: SupportCodeIn, acct=Depends(current_account)):
+        """v0.8.15: a one-time code from Pax support for this device. Partner emailed
+        first (503 support_partner_unreachable otherwise), then the password is
+        released at once, like confirming a finished request."""
+        return escrow.redeem_support(acct, device_id, body.code)
 
     # ------------------------------------------------- blocklist (v0.3)
     @app.get("/v1/blocklist")

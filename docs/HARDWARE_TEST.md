@@ -247,3 +247,22 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
 6. On a Mac set up before 0.8.4, Home › This Mac says Chrome is using the extension list from set-up and
    names Momentum; pax-guard's status (`{"cmd":"status"}`) has `browser_rules.outdated: true`.
    Nothing about the profile changes.
+
+### v0.8.15: verified support release
+
+Use a test device and a test support key only (never redeem on a device you rely on).
+
+1. Set up a test Mac: the wait step shows **Allow verified support release**, on, with one line under it.
+   This Mac's page shows **Details** with a **Support ID** (Copy works) and the switch on.
+2. On a Mac set up with 0.8.14, after the update to 0.8.15: Details shows a Support ID and the switch **off**.
+3. Turn the switch off: it says off straight away. Turn it on: the partner gets an email first and Details
+   says when it turns on (after the wait).
+4. With the switch on, issue a code for the test Mac's Support ID (`tools/pax-support-release.py issue …`)
+   and paste it in Request a change › In an emergency › I have a support code. The partner email arrives,
+   then the Mac shows "Your wait is over" with Remove Pax. Using the same code again gives PAX-ESCROW-016;
+   a code for another Support ID gives PAX-ESCROW-014; with the partner's mail path broken, PAX-ESCROW-018
+   and nothing is released.
+5. iPhone/iPad: the device page's Details shows Support ID and the switch; In an emergency takes a code and
+   shows the removal password after the partner email.
+6. The tamper log (`{"cmd":"tamper.list"}`) shows `support_release_setting`, `support_code_refused` and
+   `support_release_used` entries; no entry contains a code.

@@ -73,6 +73,7 @@ struct HomeView: View {
             // v0.8.14: this Mac's own switches and blocked apps, on its page.
             MacSettingsCard()
             MacBlockedAppsCard()
+            MacDetailsCard()      // v0.8.15: Support ID and "Allow verified support release"
         } else {
             StepHeader(eyebrow: "This Mac", title: mac.deviceState == .pending ? "Setting up" : "Not set up yet",
                        subtitle: "Protect every browser and app on this Mac in a few calm steps.")
@@ -90,6 +91,8 @@ struct PhoneHome: View {
     @EnvironmentObject var model: SetupModel
     let rec: PaxDeviceRecord
     @State private var confirmOff = false
+    @State private var showEmergency = false
+    @State private var supportCode = ""
 
     var body: some View {
         StepHeader(eyebrow: rec.isIPad ? "iPad" : "iPhone",
@@ -166,6 +169,19 @@ struct PhoneHome: View {
                 Text(rec.escrowID == nil ? "Pax is looking for this device on your account…" : "Checking…")
                     .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
             }
+            // v0.8.15: a one-time code from Pax support, for this device only (the server checks it).
+            if model.revealedPhonePassword[rec.id] == nil, rec.escrowID != nil {
+                DisclosureGroup("In an emergency", isExpanded: $showEmergency) {
+                    SupportCodeEntry(code: $supportCode, busy: model.busy,
+                                     allowed: model.phoneStatus[rec.id]?.support_release?.allowed) {
+                        model.redeemPhoneSupportCode(rec, code: supportCode)
+                        supportCode = ""
+                    }
+                    .padding(.top, 6)
+                }
+                .font(Theme.body(13))
+                .foregroundStyle(Theme.mutedText)
+            }
         }
         .alert("Start your wait?", isPresented: $confirmOff) {
             Button("Start my wait", role: .destructive) { model.requestPhoneRemoval(rec) }
@@ -219,6 +235,13 @@ struct PhoneDetailsCard: View {
             Text(DeviceDetails.setUpChoicesNote)
                 .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
+            // v0.8.15 (changeable after set-up): Support ID (with copy) and "Allow verified support release" (kept by the server).
+            if let st = model.phoneStatus[rec.id] {
+                if let id = st.support_id { SupportIDRow(supportID: id) }
+                if let sr = st.support_release {
+                    SupportReleaseRow(state: sr, busy: model.busy) { model.setPhoneSupportRelease(rec, $0) }
+                }
+            }
             HStack(spacing: 12) {
                 Button("Set up again") { model.addPhone() }.buttonStyle(SecondaryButtonStyle())
                 Button("Remove from this list") { confirmForget = true }.buttonStyle(.link).font(Theme.body(12))

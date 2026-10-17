@@ -723,6 +723,26 @@ final class SetupModel: ObservableObject {
         }
     }
 
+    /// v0.8.15: a verified support code for this iPhone or iPad. The server checks it,
+    /// emails the trusted person first, then releases the password at once.
+    func redeemPhoneSupportCode(_ rec: PaxDeviceRecord, code: String) {
+        guard let id = rec.escrowID else { return }
+        run { [self] in
+            revealedPhonePassword[rec.id] = try await coordinator.escrow.redeemSupportCode(deviceID: id, code: code)
+                .removal_password
+            await refreshPhones()
+        }
+    }
+
+    /// v0.8.15 "Allow verified support release" for this iPhone or iPad (kept by the server).
+    func setPhoneSupportRelease(_ rec: PaxDeviceRecord, _ on: Bool) {
+        guard let id = rec.escrowID else { return }
+        run { [self] in
+            phoneStatus[rec.id] = try await coordinator.escrow.setSupportRelease(deviceID: id, allowed: on)
+            phoneStatusFetchedAt = Date()
+        }
+    }
+
     func phoneRemaining(_ rec: PaxDeviceRecord, at now: Date) -> Int {
         guard let rr = phoneStatus[rec.id]?.removal_request else { return 0 }
         return max(0, rr.seconds_remaining - Int(now.timeIntervalSince(phoneStatusFetchedAt)))

@@ -299,6 +299,41 @@ CODES: list[PaxCode] = [
     PaxCode("PAX-ESCROW-011", "Pax can't email your partner with these settings.",
             "Check Settings > Accountability partner email.",
             "partner.py: invalid transport (relay URL/token, SMTP host/From) or partner address."),
+    # v0.8.15: verified support release (guard/support_code.py; docs/PARTNER.md).
+    PaxCode("PAX-ESCROW-012", "That support code isn't complete.",
+            "Paste the whole code from Pax support, including the PAXS- at the start.",
+            "v0.8.15 support_code.parse: not base32, wrong length (91 bytes) or unknown version. Server: "
+            "400 support_code_malformed."),
+    PaxCode("PAX-ESCROW-013", "That support code wasn't issued by Pax support.",
+            "Check you copied it exactly. Only Pax support can issue these codes.",
+            "v0.8.15 support_code.verify: the Ed25519 signature doesn't match a pinned support key "
+            "(SUPPORT_PUBLIC_KEYS_HEX). Server: 403 support_code_unverified."),
+    PaxCode("PAX-ESCROW-014", "That support code is for a different device.",
+            "Check the Support ID on this device's Details card matches the one you gave support.",
+            "v0.8.15: the code's support ID isn't this device's (local escrow state.json support.id, or "
+            "devices.support_id on the server). Server: 403 support_code_wrong_device."),
+    PaxCode("PAX-ESCROW-015", "That support code has expired.",
+            "Ask Pax support for a new code. Codes last at most 24 hours.",
+            "v0.8.15: now (or network time) is at or past expires_at, issued_at is more than 5 minutes in the "
+            "future, or the lifetime is over 24 h. Server: 410 support_code_expired."),
+    PaxCode("PAX-ESCROW-016", "That support code has already been used.",
+            "Each code works once. Ask Pax support if you still need help.",
+            "v0.8.15: the nonce is in local escrow support.used_nonces or the server's support_nonces table "
+            "(kept for good). Server: 409 support_code_used."),
+    PaxCode("PAX-ESCROW-017", "Verified support release is off on this device.",
+            "Nothing was released. Your usual wait still works from Request a change.",
+            "v0.8.15: the device's \"Allow verified support release\" is off (devices set up before 0.8.15 "
+            "start off; turning it on waits the full wait). Every code is refused. Server: 403 "
+            "support_release_off."),
+    PaxCode("PAX-ESCROW-018", "Your partner couldn't be told, so nothing was released.",
+            "Check your internet connection and try the same code again shortly.",
+            "v0.8.15: the partner email for a support release failed. Not queued (unlike PAX-ESCROW-010) and "
+            "the nonce isn't used up; the code works again until it expires. Server: 503 "
+            "support_partner_unreachable."),
+    PaxCode("PAX-ESCROW-019", "Too many support code tries in a short time.",
+            "Wait a little, then try again.",
+            "v0.8.15: pax-guard allows 3 codes a minute; the server allows 10 refused codes an hour per "
+            "device (429 support_rate_limited)."),
     # ---------------------------------------------------------------- PROFILE
     PaxCode("PAX-PROFILE-001", "Pax couldn't prepare your protection settings.",
             "Try again. If it repeats, copy the details and send them to us.",
@@ -371,6 +406,19 @@ def line(code: str, detail: str = "") -> str:
 CODE_IN_TEXT = re.compile(r"PAX-(?:APP|MAC|IOS|GUARD|DNS|ESCROW|PROFILE|NET|UPDATE)-\d{3}")
 
 
+# v0.8.15: the server's error names for verified support release (escrow.SUPPORT_ERRORS).
+SUPPORT_ERRORS = {
+    "support_code_malformed": "PAX-ESCROW-012",
+    "support_code_unverified": "PAX-ESCROW-013",
+    "support_code_wrong_device": "PAX-ESCROW-014",
+    "support_code_expired": "PAX-ESCROW-015",
+    "support_code_used": "PAX-ESCROW-016",
+    "support_release_off": "PAX-ESCROW-017",
+    "support_partner_unreachable": "PAX-ESCROW-018",
+    "support_rate_limited": "PAX-ESCROW-019",
+}
+
+
 def escrow_code(status: int, error: str = "", message: str = "") -> str:
     """Code for an escrow-server error response (used by the server and mirrored
     by the Mac app's PaxError.classify)."""
@@ -380,6 +428,8 @@ def escrow_code(status: int, error: str = "", message: str = "") -> str:
         return "PAX-DNS-016"
     if error == "partner_unreachable":
         return "PAX-ESCROW-010"
+    if error in SUPPORT_ERRORS:                       # v0.8.15 verified support release
+        return SUPPORT_ERRORS[error]
     if status == 401:
         return "PAX-ESCROW-001"
     if status == 400 and "wait time" in message:

@@ -65,11 +65,14 @@ public struct EscrowClient: Sendable {
         let _: [String: AnyDecodable] = try await send("PUT", "v1/accounts/me/partner", body: ["email": email])
     }
 
+    /// v0.8.15: `supportRelease` is the set-up choice "Allow verified support release".
+    /// Left out (an older app), the server keeps it off.
     public func registerDevice(name: String, platform: String, profileIdentifier: String,
-                               removalPassword: String) async throws -> Device {
+                               removalPassword: String, supportRelease: Bool = false) async throws -> Device {
         try await send("POST", "v1/devices", body: [
             "name": name, "platform": platform,
             "profile_identifier": profileIdentifier, "removal_password": removalPassword,
+            "support_release": supportRelease,
         ])
     }
 }

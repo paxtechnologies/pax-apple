@@ -346,6 +346,10 @@ struct MacRequestChangeCard: View {
                     Button("Ask for an emergency release") { mac.emergency() }
                         .buttonStyle(SecondaryButtonStyle())
                         .disabled(mac.emergencyReason.count < 10 || mac.busy)
+                    // v0.8.15: a one-time code from Pax support, for this Mac only.
+                    Divider().overlay(Theme.border).padding(.vertical, 4)
+                    SupportCodeEntry(code: $mac.supportCode, busy: mac.busy,
+                                     allowed: mac.status?.support_release?.allowed) { mac.redeemSupportCode() }
                 }
                 .padding(.top, 6)
             }

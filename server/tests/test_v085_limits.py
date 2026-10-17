@@ -71,8 +71,8 @@ def removal(env, h, dev):
 
 # ------------------------------------------------------------------ version
 def test_version_is_085(env):
-    assert __version__ == "0.8.14"
-    assert env.client.get("/v1/health").json()["version"] == "0.8.14"
+    assert __version__ == "0.8.15"
+    assert env.client.get("/v1/health").json()["version"] == "0.8.15"
 
 
 # ---------------------------------------------------------------- client IP

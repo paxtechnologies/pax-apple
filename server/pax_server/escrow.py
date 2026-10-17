@@ -22,12 +22,24 @@ Rules (see README "How removal works"):
   * Grace requests (v0.8.5): a no-wait request made in the grace period can only
     be confirmed until the grace period ends; then it lapses. Requests past their
     window are lapsed by the sweep too, not only when someone looks.
+  * Verified support release (v0.8.15, guard/support_code.py): a one-time code
+    from Pax support, signed with the support key, for ONE device (its support
+    ID), expiring within 24 hours. Checked: the device's switch, the signature,
+    the device, the expiry, the nonce never used before. Then the partner is
+    emailed FIRST (no email, no release) and the password is released to the
+    owner at once, as confirming a finished request does. The switch is per
+    device: on by default for new set-ups (the app sends the choice), off for
+    devices registered before 0.8.15 (never turned on by a migration), off at
+    once, on only after the account's wait with the partner told first.
 """
 from __future__ import annotations
 
 import logging
+import sqlite3
+import sys
 import time
 import uuid
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 
@@ -38,6 +50,10 @@ from .limits import ACCOUNT, PARTNER, Limits
 from .notify import CRISIS_LINES, Email, EmailSender, crisis_text
 
 log = logging.getLogger("pax.escrow")
+
+_GUARD = Path(__file__).resolve().parents[2] / "guard"
+if str(_GUARD) not in sys.path:
+    sys.path.append(str(_GUARD))   # support_code.py + ed25519.py (standard library only)
 
 
 class Clock:
@@ -94,6 +110,29 @@ class PartnerUnreachable(EscrowError):
     """v0.8.5: the partner alert an action needs couldn't be sent, so the action
     didn't start (fail closed). Support code PAX-ESCROW-010."""
     status, code = 503, "partner_unreachable"
+
+
+class SupportRefused(EscrowError):
+    """v0.8.15: a verified support code that can't be used. `code` is the API
+    error name; pax_errors.escrow_code maps it to PAX-ESCROW-012..019."""
+
+    def __init__(self, pax_code: str, message: str):
+        self.code, self.status = SUPPORT_ERRORS[pax_code]
+        super().__init__(message)
+
+
+# support_code.py's PAX code -> (API error name, HTTP status)
+SUPPORT_ERRORS = {
+    "PAX-ESCROW-012": ("support_code_malformed", 400),
+    "PAX-ESCROW-013": ("support_code_unverified", 403),
+    "PAX-ESCROW-014": ("support_code_wrong_device", 403),
+    "PAX-ESCROW-015": ("support_code_expired", 410),
+    "PAX-ESCROW-016": ("support_code_used", 409),
+    "PAX-ESCROW-017": ("support_release_off", 403),
+    "PAX-ESCROW-018": ("support_partner_unreachable", 503),
+    "PAX-ESCROW-019": ("support_rate_limited", 429),
+}
+SUPPORT_TRIES_PER_HOUR = 10
 
 
 def _id() -> str:
@@ -402,7 +441,7 @@ class Escrow:
 
     # ---------------------------------------------------------------- devices
     def register_device(self, acct, name: str, platform: str, profile_identifier: str,
-                        removal_password: str) -> dict:
+                        removal_password: str, support_release: bool = False) -> dict:
         # "mac" (v0.4) = a self-locked Mac: the escrowed secret is the hidden
         # paxadmin account's password, not a profile removal password.
         if platform not in ("ios", "ipados", "macos", "mac"):
@@ -414,10 +453,13 @@ class Escrow:
         ct = self.box.encrypt(removal_password, aad=device_id)
         self.db.execute(
             "INSERT INTO devices(id, account_id, name, platform, profile_identifier, "
-            "password_ct, installed_at) VALUES (?,?,?,?,?,?,?)",
-            (device_id, acct["id"], name, platform, profile_identifier, ct, now),
+            "password_ct, installed_at, support_id, support_release) VALUES (?,?,?,?,?,?,?,?,?)",
+            (device_id, acct["id"], name, platform, profile_identifier, ct, now,
+             self._new_support_id(), 1 if support_release else 0),
         )
         self._log(acct["id"], "device_registered", device_id, name)
+        self._log(acct["id"], "support_release_setting", device_id,
+                  f"setup {'on' if support_release else 'off'}")
         return self.device_status(acct, device_id)
 
     def _device(self, acct, device_id: str):
@@ -425,7 +467,115 @@ class Escrow:
                           (device_id, acct["id"]))
         if not row:
             raise NotFound("device not found")
-        return row
+        return self._support_materialize(acct, row)
+
+    # ------------------------------------------------ v0.8.15 support release
+    @staticmethod
+    def _new_support_id() -> str:
+        import support_code as sc
+        return sc.new_support_id()
+
+    def _support_materialize(self, acct, d):
+        """Give an older device its support ID (the switch stays as it is: off for
+        devices registered before 0.8.15), and apply a requested "on" whose wait is over."""
+        changed = False
+        if not d["support_id"]:
+            self.db.execute("UPDATE devices SET support_id=? WHERE id=? AND support_id IS NULL",
+                            (self._new_support_id(), d["id"]))
+            changed = True
+        if d["support_pending_on"] is not None and self.clock.now() >= d["support_pending_on"]:
+            self.db.execute("UPDATE devices SET support_release=1, support_pending_on=NULL WHERE id=?", (d["id"],))
+            self._log(acct["id"], "support_release_setting", d["id"], "on (applied after the wait)")
+            changed = True
+        return self.db.one("SELECT * FROM devices WHERE id=?", (d["id"],)) if changed else d
+
+    def set_support_release(self, acct, device_id: str, allowed: bool) -> dict:
+        """Off: at once. On: after the account's current wait, partner told first
+        (fail closed, PAX-ESCROW-010), like shortening the wait. Only the device's
+        owner can change it; nothing turns it on without the wait."""
+        d = self._device(acct, device_id)
+        if not allowed:
+            self.db.execute("UPDATE devices SET support_release=0, support_pending_on=NULL WHERE id=?", (d["id"],))
+            self._log(acct["id"], "support_release_setting", d["id"], "off")
+            return self.device_status(acct, device_id)
+        if d["support_release"] or d["support_pending_on"] is not None:
+            return self.device_status(acct, device_id)
+        wait = acct["wait_seconds"]
+        self._notify(
+            acct, "support_release_on_requested", f"Verified support release requested for {d['name']}",
+            f"You asked to allow verified support release on {d['name']}. It takes effect in "
+            f"{fmt_duration(wait)}.",
+            f"{acct['email']} asked to allow verified support release on {d['name']}: in a genuine "
+            "emergency that Pax support has checked, a one-time code could remove Pax from that device "
+            f"without the wait. You'd be emailed first. This takes effect in {fmt_duration(wait)}.",
+        )
+        self.db.execute("UPDATE devices SET support_pending_on=? WHERE id=?", (self.clock.now() + wait, d["id"]))
+        self._log(acct["id"], "support_release_setting", d["id"], f"on requested (after {wait}s)")
+        return self.device_status(acct, device_id)
+
+    def redeem_support(self, acct, device_id: str, code: str) -> dict:
+        """A verified support code for this device: check everything, email the
+        partner first (no email, no release), then release the password to the
+        owner at once. Every refusal is logged on the server."""
+        import support_code as sc
+        d = self._device(acct, device_id)
+        now = self.clock.now()
+
+        def refuse(pax_code: str, message: str, detail: str = ""):
+            self._log(acct["id"], "support_code_refused", d["id"], f"{pax_code} {detail}".strip())
+            raise SupportRefused(pax_code, message)
+
+        tries = self.db.one("SELECT COUNT(*) AS n FROM events WHERE device_id=? AND kind='support_code_refused' "
+                            "AND at>=?", (d["id"], now - 3600))
+        if tries and tries["n"] >= SUPPORT_TRIES_PER_HOUR:
+            refuse(sc.TOO_MANY_TRIES, "too many support code tries; wait an hour")
+        if not d["support_release"]:
+            refuse(sc.TURNED_OFF, "verified support release is off on this device")
+        try:
+            c = sc.verify(code, d["support_id"], now)
+        except sc.SupportCodeError as exc:
+            refuse(exc.code, exc.message)
+        if self.db.one("SELECT 1 FROM support_nonces WHERE nonce=?", (c["nonce"],)):
+            refuse(sc.USED, "that code has already been used", c["nonce"])
+        if d["released_at"]:
+            raise Conflict("this device's password has already been released")
+        try:
+            self.db.execute("INSERT INTO support_nonces(nonce, device_id, used_at, expires_at, key_id) "
+                            "VALUES (?,?,?,?,?)", (c["nonce"], d["id"], now, c["expires_at"], c["key_id"]))
+        except sqlite3.IntegrityError:
+            refuse(sc.USED, "that code has already been used", c["nonce"])
+        try:
+            if acct["partner_email"]:
+                self._mail_partner(
+                    acct["partner_email"], "support_release_used",
+                    f"[Pax partner] Verified support release used for {d['name']}",
+                    f"Pax support checked an emergency with {acct['email']} and issued a one-time code for "
+                    f"{d['name']}. It has just been used, so the password to remove Pax from {d['name']} is "
+                    "being released now. You might want to check in with them.")
+        except PartnerUnreachable:
+            self.db.execute("DELETE FROM support_nonces WHERE nonce=?", (c["nonce"],))   # the code still works
+            refuse(sc.PARTNER_UNREACHABLE, "Pax couldn't email your partner just now, so nothing was released. "
+                   "The code still works until it expires; try again shortly.", c["nonce"])
+        password = self.box.decrypt(d["password_ct"], aad=d["id"])
+        self.db.execute("UPDATE removal_requests SET status='cancelled', closed_at=? "
+                        "WHERE device_id=? AND status='pending'", (now, d["id"]))
+        self.db.execute(
+            "INSERT INTO removal_requests(id, device_id, kind, status, reason, created_at, unlock_at, "
+            "expires_at, closed_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (_id(), d["id"], "support", "revealed", "verified support code", now, now,
+             now + self.settings.reveal_window_seconds, now))
+        self.db.execute("UPDATE devices SET released_at=? WHERE id=?", (now, d["id"]))
+        self._log(acct["id"], "support_release_used", d["id"], f"nonce={c['nonce']} key={c['key_id']}")
+        self._mail(acct["email"], "support_release_used", f"Verified support release used for {d['name']}",
+                   f"You used a one-time code from Pax support. The password to remove Pax from {d['name']} "
+                   "was released in the Pax app.")
+        return {
+            "device_id": d["id"],
+            "profile_identifier": d["profile_identifier"],
+            "removal_password": password,
+            "revealed_at": now,
+            "support_release": True,
+        }
 
     def _window_over(self, rr, installed_at: int, now: int) -> bool:
         """Has this request's window passed? Every request lapses once its
@@ -504,6 +654,10 @@ class Escrow:
             "in_grace_period": now < grace_until,
             "released_at": d["released_at"],
             "removal_request": self._request_view(self._active_request(d["id"])),
+            # v0.8.15: Details › Support ID, and the "Allow verified support release" switch.
+            "support_id": d["support_id"],
+            "support_release": {"allowed": bool(d["support_release"]),
+                                "pending_on_at": d["support_pending_on"]},
         }
 
     def list_devices(self, acct) -> list[dict]:

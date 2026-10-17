@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.14
+# Pax Peace (Apple), v0.8.15
 
 **Less scrolling. More living.**
 
@@ -27,6 +27,10 @@ It needs no MDM server and no staff in the loop:
    24 hours to 365 days). When it ends you confirm, and the password is released. Your optional
    **accountability partner** is emailed. The first **hour after set-up has no wait**. There's a
    rate-limited **emergency release** with a short cooling-off and crisis-line auto-reply.
+5. **Verified support release** (v0.8.15): in a genuine emergency that Pax support has checked, support
+   can issue a one-time code that removes Pax from **one device** straight away. There is no universal
+   code. Each device has **Allow verified support release** (on by default at set-up, off on devices set
+   up before 0.8.15); with it off, every code is refused. See docs/SUPPORT_RELEASE.md.
 
 The code is open source on purpose. Pax gets its security from the password the server holds and
 the wait it enforces. Keeping the code secret adds nothing.
@@ -58,8 +62,10 @@ pax-dns/      pax_dns/             per-user DoH resolver (FastAPI) + plain DNS (
 guard/        pax_guard.py         v0.4 root daemon for a self-locked Mac (hosts, pf, bypass apps)
               guard_config.py      pure rules: hosts block, pf anchor, app lists, ad list parsing
               org.paxpeace.pax-guard.plist  LaunchDaemon
+              support_code.py      v0.8.15 verified support release codes (also used by the server)
               scripts/             pax-guard-install.sh, pax-uninstall-emergency.sh
               tests/               pytest (fake system; never touches the Mac)
+tools/        pax-support-release.py  v0.8.15: issue (or check) a one-device support code
 mac-app/      Package.swift        SwiftPM: PaxCore (Foundation logic) + Pax (SwiftUI app)
               Sources/PaxCore/     DeviceService protocol, cfgutil backend (Clean), Keep-my-data
                                    supervisor + helper client, escrow client, profile generator
@@ -148,6 +154,11 @@ API (all under `/v1`, Bearer token except the first three): `GET health`, `GET c
 `PUT accounts/me/partner {email|null}`, `POST devices`, `GET devices`, `GET devices/{id}`,
 `POST devices/{id}/removal-request`, `POST devices/{id}/removal-request/cancel`,
 `POST devices/{id}/removal-request/confirm {confirm:true}`, `POST devices/{id}/emergency {reason}`.
+Verified support release (v0.8.15): `POST devices {support_release}` (the set-up choice; left out = off),
+`PUT devices/{id}/support-release {allowed}` (off at once; on after the wait, partner told first),
+`POST devices/{id}/support-release/redeem {code}` (partner emailed first, then the password is returned;
+refusals are `support_*` errors, PAX-ESCROW-012 to 019). `GET devices/{id}` shows `support_id` and
+`support_release`.
 Blocklist (v0.3): `GET blocklist`, `POST blocklist {domain}` (instant), `POST blocklist/remove
 {domain}` (202, waits), `POST allowlist {domain}` (202, waits), `POST allowlist/remove {domain}`
 (instant), `POST blocklist/requests/{id}/cancel`, `GET dns` (your DoH URL; creates the token),
@@ -842,6 +853,9 @@ Moved to [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md).
 | Add first partner | Takes effect immediately (more accountability is never delayed). |
 | Change or remove partner | Takes effect after the current wait. The current partner is emailed and keeps getting notifications until then. |
 | Emergency release | Needs a reason. It's logged, unlocks after 24 h (configurable), and you can use it once every 90 days. The auto-reply includes Samaritans **116 123** (UK & Ireland) and **988** (US). Your partner is emailed. |
+| Verified support code (v0.8.15) | Only when Pax support has checked a genuine emergency. The code names one device (its Support ID), works once and expires within 24 hours. The device must have **Allow verified support release** on. Your partner is emailed first; if that fails, nothing is released (`PAX-ESCROW-018`). Then the password is released at once. |
+| Allow verified support release: off | Takes effect immediately. Every code is refused (`PAX-ESCROW-017`). |
+| Allow verified support release: on | Takes effect after your current wait. Your partner is emailed first (`PAX-ESCROW-010` if they can't be). |
 
 Nothing needs a human at Pax to approve it. Removing the profile itself happens on the phone:
 Settings › General › VPN & Device Management › Pax › Remove Profile, then enter the password.

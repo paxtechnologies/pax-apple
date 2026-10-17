@@ -14,7 +14,9 @@ The partner is told about:
 * an emergency release request;
 * a shorter wait being chosen (longer waits apply at once, without email);
 * the partner being changed or removed (that change itself waits the current wait);
-* blocked-site changes: an unblock or exception request, its cancellation, and when it applies.
+* blocked-site changes: an unblock or exception request, its cancellation, and when it applies;
+* verified support release (v0.8.15): turning **Allow verified support release** on (it then waits the
+  current wait), and a support code being used (`support_release_used`), always before anything is released.
 
 Emails never contain a password or key.
 
@@ -25,6 +27,11 @@ its wait starts**. Until the email has gone out the request shows "telling your 
 and the app shows `PAX-ESCROW-010`; pax-guard retries after 1, 5, 15, 30, 60 minutes, then hourly. A reveal
 needs its email delivered first. Cancelling (which makes Pax stricter) never waits on email; its message is
 queued. With no partner set nothing is sent and everything stays on the Mac.
+
+A verified support code (v0.8.15, docs/SUPPORT_RELEASE.md) is stricter still: its email is **never queued**.
+If it can't be sent right now, the code is refused with `PAX-ESCROW-018`, nothing is released, nothing
+releases later on its own, and the same code can be tried again until it expires. The server does the same
+(HTTP 503 `support_partner_unreachable`).
 
 ## How the email gets there
 

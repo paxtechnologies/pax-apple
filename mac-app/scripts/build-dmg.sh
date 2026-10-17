@@ -41,7 +41,7 @@ for tool in swift codesign hdiutil plutil ditto; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found. Install the Command Line Tools: xcode-select --install"
 done
 
-VERSION="${PAX_VERSION:-0.8.14}"
+VERSION="${PAX_VERSION:-0.8.15}"
 BUNDLE_DEVICE_HELPER="${BUNDLE_DEVICE_HELPER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
@@ -185,7 +185,7 @@ chmod 755 "$APP/Contents/Resources/guard/pax-guard-install.sh" "$APP/Contents/Re
 # v0.8.0: local DNS forwarder, lists, local escrow, partner emails, updates,
 # tamper log, recovery cheap wins, app socket, Ed25519 (all stdlib Python).
 for mod in domain_matcher filter_lists dns_forwarder local_escrow local_blocklist list_sync partner guard_ipc \
-           pax_update pax_signing ed25519 tamper recovery_guard; do
+           pax_update pax_signing ed25519 tamper recovery_guard support_code; do
   cp -X "$REPO/guard/$mod.py" "$APP/Contents/Resources/guard/"
 done
 # v0.8.1: the restricted-content rules, shared with the server and the profile.

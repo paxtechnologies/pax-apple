@@ -17,7 +17,7 @@ enum Brand {
     static let principles = ["Decentralised", "Open source", "Free for everyone", "Power at the local level"]
     /// CFBundleShortVersionString when bundled (build-dmg.sh sets it), else this.
     static var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.8.14"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.8.15"
     }
 }
 

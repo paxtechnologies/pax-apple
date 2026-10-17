@@ -273,12 +273,15 @@ public enum MacLockdownCommands {
     /// is written into the signed app), so set-up needs no Command Line Tools; a build
     /// without it (`swift run` from the repo) uses /usr/bin/python3 as before.
     public static func localEscrowDeposit(guardSource: String, secretFile: String, waitSeconds: Int,
+                                          supportRelease: Bool = VerifiedSupportRelease.setUpDefault,
                                           isExecutable: (String) -> Bool = {
                                               FileManager.default.isExecutableFile(atPath: $0) }) -> (String, [String]) {
         let bundled = URL(fileURLWithPath: guardSource).deletingLastPathComponent()
             .appendingPathComponent(BundledHelper.relativePython).path
         let (python, flags) = isExecutable(bundled) ? (bundled, ["-I", "-B"]) : ("/usr/bin/python3", ["-I"])
         return (python, flags + [guardSource + "/local_escrow.py", "deposit", "--secret-file", secretFile,
+                                 // v0.8.15: the set-up choice for verified support release.
+                                 "--support-release", supportRelease ? "on" : "off",
                                  "--wait-seconds", String(waitSeconds), "--reset"])
     }
 
@@ -395,6 +398,8 @@ public actor MacLockdown {
     let localWaitSeconds: Int
     /// The local mode keeps the FileVault recovery key behind the wait too.
     let rotateRecoveryKey: Bool
+    /// v0.8.15: the set-up choice "Allow verified support release" (on by default).
+    let supportRelease: Bool
 
     /// Steps already done, newest first, so rollback can undo them in order.
     private var completed: [MacLockdownStep] = []
@@ -409,7 +414,8 @@ public actor MacLockdown {
                 },
                 verifyRetryDelayNanos: UInt64 = 1_500_000_000,
                 escrowMode: MacEscrowMode = .server, localWaitSeconds: Int = 72 * 3600,
-                rotateRecoveryKey: Bool = true) {
+                rotateRecoveryKey: Bool = true, supportRelease: Bool = VerifiedSupportRelease.setUpDefault) {
+        self.supportRelease = supportRelease
         self.escrowMode = escrowMode
         self.localWaitSeconds = localWaitSeconds
         self.rotateRecoveryKey = rotateRecoveryKey
@@ -651,7 +657,8 @@ public actor MacLockdown {
                 defer { try? FileManager.default.removeItem(at: secretURL) }
                 let deposit = MacLockdownCommands.localEscrowDeposit(guardSource: paths.guardSource.path,
                                                                      secretFile: secretURL.path,
-                                                                     waitSeconds: localWaitSeconds)
+                                                                     waitSeconds: localWaitSeconds,
+                                                                     supportRelease: supportRelease)
                 let stored = try await asRoot(deposit)
                 completed.append(.escrow)       // rollback empties the safe from here on
                 guard stored.exitCode == 0, LocalEscrowReceipt.matches(stored.combined, password: adminPassword) else {
@@ -667,7 +674,8 @@ public actor MacLockdown {
                 do {
                     device = try await escrow.registerDevice(name: deviceName, platform: "mac",
                                                              profileIdentifier: profileIdentifier,
-                                                             removalPassword: adminPassword)
+                                                             removalPassword: adminPassword,
+                                                             supportRelease: supportRelease)
                 } catch {
                     throw MacLockdownError.escrowFailed(error.localizedDescription)
                 }
@@ -923,6 +931,16 @@ extension EscrowClient {
         public let in_grace_period: Bool
         public let released_at: Int?
         public let removal_request: RemovalRequest?
+        /// v0.8.15: Details › Support ID (nil from an older server or pax-guard).
+        public let support_id: String?
+        /// v0.8.15: "Allow verified support release" (nil from an older server or pax-guard).
+        public let support_release: SupportReleaseState?
+
+        public struct SupportReleaseState: Decodable, Sendable {
+            public let allowed: Bool
+            public let pending_on_at: Int?
+            public let telling_partner: Bool?
+        }
 
         public struct RemovalRequest: Decodable, Sendable {
             public let request_id: String
@@ -973,6 +991,18 @@ extension EscrowClient {
 
     public func accountSummary() async throws -> AccountSummary {
         try await send("GET", "v1/accounts/me")
+    }
+
+    /// v0.8.15 "Allow verified support release": off at once; on after the wait, partner told first.
+    public func setSupportRelease(deviceID: String, allowed: Bool) async throws -> DeviceStatus {
+        try await send("PUT", "v1/devices/\(deviceID)/support-release", body: ["allowed": allowed])
+    }
+
+    /// v0.8.15: a one-time code from Pax support for this device. The server emails the
+    /// partner first, then releases the password at once.
+    public func redeemSupportCode(deviceID: String, code: String) async throws -> Released {
+        try await send("POST", "v1/devices/\(deviceID)/support-release/redeem",
+                       body: ["code": VerifiedSupportRelease.cleaned(code)])
     }
 
     /// Rate-limited emergency release (short cooling-off; partner told).

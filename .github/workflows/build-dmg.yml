@@ -41,7 +41,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PAX_VERSION: "0.8.14"
+  PAX_VERSION: "0.8.15"
 
 jobs:
   dmg:
@@ -97,7 +97,12 @@ jobs:
             security find-identity -v "$KC" || true
             echo "MACOS_CERT_P12 holds no valid Developer ID Application identity"; exit 1
           fi
-          echo "Signing as: $ID"
+          # v0.8.15: the certificate's name stays out of the published logs. Its name goes
+          # to a file the log steps redact with (mac-app/scripts/redact-log.py); the
+          # signature itself is unchanged.
+          NAME="${ID#Developer ID Application: }"; NAME="${NAME% (*}"
+          printf '%s' "$NAME" > "$RUNNER_TEMP/.pax-signer-name"
+          echo "Signing with the Developer ID Application identity (team ${ID##* (}"
           echo "identity=$ID" >> "$GITHUB_OUTPUT"
           echo "keychain=$KC" >> "$GITHUB_OUTPUT"
           for v in APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
@@ -122,7 +127,8 @@ jobs:
         run: |
           set -o pipefail
           codesign --verify --deep --strict --verbose=2 dist/Pax.app
-          codesign -dv --verbose=2 dist/Pax.app 2>&1 | grep -E "^(Authority|TeamIdentifier|Runtime|Timestamp)" || true
+          codesign -dv --verbose=2 dist/Pax.app 2>&1 | grep -E "^(Authority|TeamIdentifier|Runtime|Timestamp)" \
+            | PAX_SIGNER_NAME_FILE="$RUNNER_TEMP/.pax-signer-name" python3 scripts/redact-log.py - - || true
           ARCHS="$(lipo -archs dist/Pax.app/Contents/MacOS/Pax)"
           echo "architectures: $ARCHS"
           [[ "$ARCHS" == *arm64* && "$ARCHS" == *x86_64* ]] || { echo "not universal"; exit 1; }
@@ -391,7 +397,10 @@ jobs:
           LOGDIR="$RUNNER_TEMP/ci-logs"
           rm -rf "$LOGDIR" && mkdir -p "$LOGDIR"
           if [ -f "$RUNNER_TEMP/build.log" ]; then
-            cp "$RUNNER_TEMP/build.log" "$LOGDIR/build.log"
+            # v0.8.15: the signing certificate's name is replaced with "[signing identity]".
+            PAX_SIGNER_NAME_FILE="$RUNNER_TEMP/.pax-signer-name" \
+              python3 mac-app/scripts/redact-log.py "$RUNNER_TEMP/build.log" "$LOGDIR/build.log" \
+              || echo "The build log couldn't be redacted, so it isn't published." > "$LOGDIR/build.log"
           else
             echo "No build log: the job stopped before the Build DMG step." > "$LOGDIR/build.log"
           fi

@@ -312,6 +312,38 @@ public enum PaxErrorCatalog {
                      message: "Pax can't email your partner with these settings.",
                      action: "Check Settings > Accountability partner email.",
                      cause: "partner.py: invalid transport (relay URL/token, SMTP host/From) or partner address."),
+        PaxErrorInfo(code: "PAX-ESCROW-012",
+                     message: "That support code isn't complete.",
+                     action: "Paste the whole code from Pax support, including the PAXS- at the start.",
+                     cause: "v0.8.15 support_code.parse: not base32, wrong length (91 bytes) or unknown version. Server: 400 support_code_malformed."),
+        PaxErrorInfo(code: "PAX-ESCROW-013",
+                     message: "That support code wasn't issued by Pax support.",
+                     action: "Check you copied it exactly. Only Pax support can issue these codes.",
+                     cause: "v0.8.15 support_code.verify: the Ed25519 signature doesn't match a pinned support key (SUPPORT_PUBLIC_KEYS_HEX). Server: 403 support_code_unverified."),
+        PaxErrorInfo(code: "PAX-ESCROW-014",
+                     message: "That support code is for a different device.",
+                     action: "Check the Support ID on this device's Details card matches the one you gave support.",
+                     cause: "v0.8.15: the code's support ID isn't this device's (local escrow state.json support.id, or devices.support_id on the server). Server: 403 support_code_wrong_device."),
+        PaxErrorInfo(code: "PAX-ESCROW-015",
+                     message: "That support code has expired.",
+                     action: "Ask Pax support for a new code. Codes last at most 24 hours.",
+                     cause: "v0.8.15: now (or network time) is at or past expires_at, issued_at is more than 5 minutes in the future, or the lifetime is over 24 h. Server: 410 support_code_expired."),
+        PaxErrorInfo(code: "PAX-ESCROW-016",
+                     message: "That support code has already been used.",
+                     action: "Each code works once. Ask Pax support if you still need help.",
+                     cause: "v0.8.15: the nonce is in local escrow support.used_nonces or the server's support_nonces table (kept for good). Server: 409 support_code_used."),
+        PaxErrorInfo(code: "PAX-ESCROW-017",
+                     message: "Verified support release is off on this device.",
+                     action: "Nothing was released. Your usual wait still works from Request a change.",
+                     cause: "v0.8.15: the device's \"Allow verified support release\" is off (devices set up before 0.8.15 start off; turning it on waits the full wait). Every code is refused. Server: 403 support_release_off."),
+        PaxErrorInfo(code: "PAX-ESCROW-018",
+                     message: "Your partner couldn't be told, so nothing was released.",
+                     action: "Check your internet connection and try the same code again shortly.",
+                     cause: "v0.8.15: the partner email for a support release failed. Not queued (unlike PAX-ESCROW-010) and the nonce isn't used up; the code works again until it expires. Server: 503 support_partner_unreachable."),
+        PaxErrorInfo(code: "PAX-ESCROW-019",
+                     message: "Too many support code tries in a short time.",
+                     action: "Wait a little, then try again.",
+                     cause: "v0.8.15: pax-guard allows 3 codes a minute; the server allows 10 refused codes an hour per device (429 support_rate_limited)."),
         PaxErrorInfo(code: "PAX-PROFILE-001",
                      message: "Pax couldn't prepare your protection settings.",
                      action: "Try again. If it repeats, copy the details and send them to us.",
@@ -470,6 +502,8 @@ public enum PaxErrorClassifier {
             if e.code == "restricted_site" { return PaxError.restrictedSiteCode }
             // v0.8.5: the server couldn't email the partner, so nothing started (fail closed).
             if e.code == "partner_unreachable" { return "PAX-ESCROW-010" }
+            // v0.8.15: a refused verified support code (one code per reason).
+            if let c = VerifiedSupportRelease.apiErrors[e.code] { return c }
             // v0.8.13: pictures and video on X and Bluesky are always blocked.
             if e.code == "media_always_blocked" { return "PAX-DNS-016" }
             return escrowCode(status: e.status, message: e.message)

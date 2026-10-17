@@ -362,6 +362,19 @@ public struct GuardClient: Sendable {
                    key: "device")
     }
 
+    /// v0.8.15 "Allow verified support release" on this Mac: off at once, on after the wait.
+    public func setSupportRelease(_ allowed: Bool) async throws -> EscrowClient.DeviceStatus {
+        try decode(EscrowClient.DeviceStatus.self, try await call(["cmd": "escrow.support_release", "allowed": allowed]),
+                   key: "device")
+    }
+
+    /// v0.8.15: a one-time code from Pax support. pax-guard checks it, emails the partner
+    /// first (refused if it can't), then releases at once, as a finished wait does.
+    public func redeemSupportCode(_ code: String) async throws -> Released {
+        try decode(Released.self, try await call(["cmd": "escrow.redeem_support",
+                                                  "code": VerifiedSupportRelease.cleaned(code)]), key: "released")
+    }
+
     public func reveal() async throws -> Released {
         try decode(Released.self, try await call(["cmd": "escrow.reveal"]), key: "released")
     }

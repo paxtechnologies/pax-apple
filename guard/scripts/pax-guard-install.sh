@@ -77,7 +77,7 @@ install -o root -g wheel -m 0755 "$LAUNCHER" "$DEST/bin/pax-guard-launch.sh"
 # v0.8.0 modules: local DNS forwarder, lists, local escrow, partner emails,
 # updates, tamper log, recovery cheap wins, app socket, Ed25519.
 for mod in domain_matcher filter_lists dns_forwarder local_escrow local_blocklist list_sync partner guard_ipc \
-           pax_update pax_signing ed25519 tamper recovery_guard; do
+           pax_update pax_signing ed25519 tamper recovery_guard support_code; do
   [[ -f "$SRC/$mod.py" ]] || die "PAX-GUARD-001: missing $mod.py"
   install -o root -g wheel -m 0644 "$SRC/$mod.py" "$DEST/bin/"
 done
