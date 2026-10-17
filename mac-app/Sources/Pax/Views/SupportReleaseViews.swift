@@ -62,8 +62,7 @@ struct SupportCodeEntry: View {
                     .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            TextField(VerifiedSupportRelease.codePlaceholder, text: $code, axis: .vertical)
-                .lineLimit(1...4)
+            GrowingTextField(VerifiedSupportRelease.codePlaceholder, text: $code)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12, design: .monospaced))
             Button("Use support code", action: redeem)

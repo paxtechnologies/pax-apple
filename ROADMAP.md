@@ -67,7 +67,7 @@ device through the new pax-dns resolver, and a DMG build. Next, roughly in order
 ## 4. Mac self-lock
 * **Done in v0.4**: standard-user demotion with an escrowed hidden admin, the self-lock profile with
   browser and extension policies, pax-guard (hosts, pf, bypass apps), ad blocking.
-* Next: run it on real Macs (Apple silicon and Intel, macOS 13–26) and record results; port pax-guard
+* Next: run it on real Macs (Apple silicon and Intel, macOS 12–26; a real Monterey Mac is still to test, docs/MONTEREY.md) and record results; port pax-guard
   to Swift (no Command Line Tools dependency); check Chrome/Edge pre-release channels' policy domains
   and manage them instead of blocking; add Vivaldi once it documents a policy for its VPN; an "ads"
   category in pax-dns so iPhone gets the same ad blocking; consider a supervised/MDM path for Safari

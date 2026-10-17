@@ -40,7 +40,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PAX_VERSION: "0.8.19"
+  PAX_VERSION: "0.8.20"
 
 jobs:
   dmg:
@@ -131,6 +131,14 @@ jobs:
           ARCHS="$(lipo -archs dist/Pax.app/Contents/MacOS/Pax)"
           echo "architectures: $ARCHS"
           [[ "$ARCHS" == *arm64* && "$ARCHS" == *x86_64* ]] || { echo "not universal"; exit 1; }
+          # v0.8.20: macOS 12 Monterey or later. Runners can't boot 12, so every Mach-O in the
+          # app (both arches, the bundled Python included) is read: minimum 12.0 or older
+          # (Pax itself exactly 12.0), and nothing that needs macOS 13+ strongly linked.
+          MINVER="$(plutil -extract LSMinimumSystemVersion raw dist/Pax.app/Contents/Info.plist)"
+          echo "LSMinimumSystemVersion: $MINVER"
+          [[ "$MINVER" == "12.0" ]] || { echo "LSMinimumSystemVersion is not 12.0"; exit 1; }
+          python3 scripts/check-macos-min.py --max 12.0 --exact dist/Pax.app/Contents/MacOS/Pax \
+            --require-arch arm64 --require-arch x86_64 dist/Pax.app
           plutil -p dist/Pax.app/Contents/Info.plist
           ls -l dist/Pax.app/Contents/Resources/AppIcon.icns
           ls -l dist/Pax.app/Contents/Resources/lists dist/Pax.app/Contents/Resources/extensions

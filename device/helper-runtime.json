@@ -13,5 +13,5 @@
       "sha256": "fb3187d95334813b88940db0f1ca57b84cedfd552739c3a5771c3ea0e49988c9"
     }
   },
-  "wheel_platform": {"arm64": "macosx_13_0_arm64", "x86_64": "macosx_13_0_x86_64"}
+  "wheel_platform": {"arm64": "macosx_12_0_arm64", "x86_64": "macosx_12_0_x86_64"}
 }

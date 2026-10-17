@@ -177,10 +177,10 @@ struct ProtectMacView: View {
     private var approve: some View {
         VStack(alignment: .leading, spacing: 22) {
             StepHeader(eyebrow: "", title: "One thing for you",
-                       subtitle: "macOS asks you to approve Pax's settings yourself. System Settings is open.")
+                       subtitle: "macOS asks you to approve Pax's settings yourself. "
+                           + "\(SystemSettingsPlace.current.appName) is open.")
             Card {
-                InstructionRow(n: 1, text: "Go to General › Device Management (on older macOS: Privacy & "
-                               + "Security › Profiles).")
+                InstructionRow(n: 1, text: "Go to \(SystemSettingsPlace.current.profilesPath).")
                 InstructionRow(n: 2, text: "Double-click “Pax (this Mac)”, click Install, and enter your password.")
                 InstructionRow(n: 3, text: "Come back here and click “I've installed it”.")
             }

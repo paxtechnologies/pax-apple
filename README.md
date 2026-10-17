@@ -1,6 +1,10 @@
-# Pax Peace (Apple), v0.8.19
+# Pax Peace (Apple), v0.8.20
 
 **Less scrolling. More living.**
+
+**Requirements:** a Mac with **macOS 12 Monterey or later**, Intel or Apple silicon (the iPhone
+or iPad is set up from that Mac). Hardware testing on a real Monterey Mac is still pending; see
+[docs/MONTEREY.md](docs/MONTEREY.md).
 
 Pax (Latin for *peace*) is a free, open-source (GPL-3.0) content blocker for restricted content on
 **iPhone and iPad**, set up from a Mac, and since v0.4 on **the Mac itself** ([Pax for Mac](#pax-for-mac)). It's built for people who choose this for themselves.
@@ -335,8 +339,8 @@ looks for it otherwise. After changing a pin, run `python3 device/lock_bundle.py
 
 ### Mac app
 
-Building it yourself needs macOS 13+ and Xcode 15+ (or the Command Line Tools). Using it needs
-neither: **Keep my data** runs on the helper bundled in Pax.app, so there is no Terminal step (a
+Building it yourself needs macOS 13+ and Xcode 15+ (or the Command Line Tools); the build targets
+macOS 12, so the app runs on **macOS 12 Monterey or later**. Using it needs neither: **Keep my data** runs on the helper bundled in Pax.app, so there is no Terminal step (a
 `swift run` build has no bundle: set `PAX_PYTHON` to a developer venv, see above). **Clean set-up**
 also needs **Apple Configurator** from the Mac App Store, with *Apple Configurator › Install
 Automation Tools…* run (that puts `cfgutil` in `/usr/local/bin`).
@@ -474,7 +478,7 @@ unchanged: changing your blocks later means a removal (with the wait) and runnin
 
 We can't build macOS binaries in this repo's Linux tooling, so the DMG is built on a Mac or by GitHub.
 
-**On your Mac** (macOS 13+, only the Command Line Tools, no Xcode or Apple account):
+**On your Mac** (building needs macOS 13+ with only the Command Line Tools, no Xcode or Apple account; the app it builds runs on macOS 12+):
 
 ```bash
 xcode-select --install            # once, if `swift --version` doesn't work
@@ -813,7 +817,7 @@ Virtualization framework) aren't touched. Quit your VMs before protecting the Ma
 
 What someone else needs to run your DMG on their Mac:
 
-1. **The DMG** from *Actions › Build DMG* (universal, so Apple silicon or Intel, macOS 13+).
+1. **The DMG** from *Actions › Build DMG* (universal, so Apple silicon or Intel, macOS 12 Monterey or later).
 2. **Nothing for Gatekeeper.** Builds from the workflow are signed with a Developer ID
    and notarised, so Pax opens like any downloaded app.
 3. **A Pax server.** By default the app uses Pax's own server, `https://api.paxpeace.com/`, so

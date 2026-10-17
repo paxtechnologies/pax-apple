@@ -69,8 +69,7 @@ struct ChooseBlocksStep: View {
             Card {
                 Text("Your own sites (optional)").font(Theme.body(15, weight: .medium))
                     .foregroundStyle(Theme.primaryText)
-                TextField("For example: reddit.com, example.com", text: $choices.extraSitesText, axis: .vertical)
-                    .lineLimit(1...4)
+                GrowingTextField("For example: reddit.com, example.com", text: $choices.extraSitesText)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.body(14))
                 Text("Anything that pulls you in. Unblocking one later takes your turn-off wait.")

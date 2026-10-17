@@ -24,7 +24,7 @@ import helper_runtime as hr  # noqa: E402
 import lock_bundle  # noqa: E402
 import pax_device  # noqa: E402
 
-VERSION = "0.8.19"
+VERSION = "0.8.20"
 
 
 def macho(filetype=6, cpu=0x0100000C):
@@ -154,7 +154,7 @@ def test_runtime_pins_are_complete():
         assert data["release"] in url and data["python_version"] in url.replace("%2B", "+")
         assert ("aarch64" if arch == "arm64" else "x86_64") + "-apple-darwin-install_only" in url
         assert re.fullmatch(r"[0-9a-f]{64}", sha)
-        assert hr.runtime("wheel_platform", arch) == f"macosx_13_0_{arch}"
+        assert hr.runtime("wheel_platform", arch) == f"macosx_12_0_{arch}"
 
 
 def test_bundle_lock_matches_its_input_and_has_hashes():

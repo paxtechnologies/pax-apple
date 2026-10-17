@@ -104,7 +104,7 @@ for id in $IDS; do
   if /usr/bin/profiles remove -identifier "$id" >/dev/null 2>&1 || /usr/bin/profiles -R -p "$id" >/dev/null 2>&1; then
     say "removed profile $id"
   else
-    say "could not remove profile $id: remove it in System Settings > General > Device Management"
+    say "could not remove profile $id: remove it in System Settings > General > Device Management (macOS 12: System Preferences > Profiles)"
   fi
 done
 

@@ -127,7 +127,7 @@ from it by `python3 common/gen_error_codes.py` (CI runs it with `--check`).
 | Code | What the user sees | What to try | Cause (internal) |
 |---|---|---|---|
 | `PAX-PROFILE-001` | Pax couldn't prepare your protection settings. | Try again. If it repeats, copy the details and send them to us. | make_profile.py exited non-zero (ProfileError or validation failure). |
-| `PAX-PROFILE-002` | The Pax settings weren't approved on this Mac. | Open System Settings > General > Device Management, install "Pax (this Mac)", then try again. | MacLockdownError.profileInstallFailed: the self-lock profile was not installed/approved. |
+| `PAX-PROFILE-002` | The Pax settings weren't approved on this Mac. | Install "Pax (this Mac)" in System Settings > Device Management (macOS 12: System Preferences > Profiles), then retry. | MacLockdownError.profileInstallFailed: the self-lock profile was not installed/approved. |
 | `PAX-PROFILE-003` | Pax couldn't find its settings on your iPhone. | On the iPhone open Settings > Profile Downloaded > Install, then try again. | SetupError.profileNotVerified: profile identifier not in the device's installed profiles. |
 | `PAX-PROFILE-004` | One of the apps you chose can't be blocked on the iPhone. | Remove it from your list: Pax never blocks Apple's own apps or password managers. | make_profile.py (v0.8.7): --block-app refused by profile/app_blocks.py (com.apple., a password manager, not a bundle ID) or more than 200 custom apps. |
 

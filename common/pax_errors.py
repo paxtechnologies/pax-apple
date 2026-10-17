@@ -346,7 +346,7 @@ CODES: list[PaxCode] = [
             "Try again. If it repeats, copy the details and send them to us.",
             "make_profile.py exited non-zero (ProfileError or validation failure)."),
     PaxCode("PAX-PROFILE-002", "The Pax settings weren't approved on this Mac.",
-            "Open System Settings > General > Device Management, install \"Pax (this Mac)\", then try again.",
+            "Install \"Pax (this Mac)\" in System Settings > Device Management (macOS 12: System Preferences > Profiles), then retry.",
             "MacLockdownError.profileInstallFailed: the self-lock profile was not installed/approved."),
     PaxCode("PAX-PROFILE-003", "Pax couldn't find its settings on your iPhone.",
             "On the iPhone open Settings > Profile Downloaded > Install, then try again.",

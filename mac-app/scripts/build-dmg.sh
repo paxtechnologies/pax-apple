@@ -41,7 +41,7 @@ for tool in swift codesign hdiutil plutil ditto; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found. Install the Command Line Tools: xcode-select --install"
 done
 
-VERSION="${PAX_VERSION:-0.8.19}"
+VERSION="${PAX_VERSION:-0.8.20}"
 BUNDLE_DEVICE_HELPER="${BUNDLE_DEVICE_HELPER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
@@ -98,12 +98,12 @@ BUILD_NUMBER="$(git -C "$REPO" rev-list --count HEAD 2>/dev/null || date +%Y%m%d
 step "Building Pax $VERSION (release)"
 cd "$MAC_APP"
 if [[ "$UNIVERSAL" == "1" ]]; then
-  swift build -c release --triple arm64-apple-macosx13.0
-  swift build -c release --triple x86_64-apple-macosx13.0
+  swift build -c release --triple arm64-apple-macosx12.0
+  swift build -c release --triple x86_64-apple-macosx12.0
   BIN="$OUT_DIR/Pax-universal"
   lipo -create \
-    "$(swift build -c release --triple arm64-apple-macosx13.0 --show-bin-path)/Pax" \
-    "$(swift build -c release --triple x86_64-apple-macosx13.0 --show-bin-path)/Pax" \
+    "$(swift build -c release --triple arm64-apple-macosx12.0 --show-bin-path)/Pax" \
+    "$(swift build -c release --triple x86_64-apple-macosx12.0 --show-bin-path)/Pax" \
     -output "$BIN"
 else
   swift build -c release
@@ -160,7 +160,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
   <key>CFBundleIconFile</key><string>${ICON_KEY}</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
-  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>NSHumanReadableCopyright</key><string>Pax Peace (paxpeace.com). GPL-3.0-only.</string>
   <key>NSAppTransportSecurity</key>

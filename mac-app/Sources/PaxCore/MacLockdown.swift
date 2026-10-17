@@ -251,8 +251,9 @@ public enum MacLockdownCommands {
         ("/usr/bin/open", [path])
     }
 
-    public static func openDeviceManagementSettings() -> (String, [String]) {
-        ("/usr/bin/open", ["x-apple.systempreferences:com.apple.Profiles-Settings.extension"])
+    public static func openDeviceManagementSettings(
+        _ place: SystemSettingsPlace = .current) -> (String, [String]) {
+        ("/usr/bin/open", [place.profilesPaneURL])   // v0.8.20: Monterey's pane differs
     }
 
     public static func listProfiles() -> (String, [String]) {
@@ -587,8 +588,8 @@ public actor MacLockdown {
                 try await deletePaxAdminFully()
                 if try await paxAdminRecordExists() {
                     throw MacLockdownError.createAdminFailed(
-                        "an old \(paxAdminUser) account is still on this Mac. Delete it in System Settings › "
-                        + "Users & Groups (or run: sudo dscl . -delete /Users/\(paxAdminUser)) and try again.")
+                        "an old \(paxAdminUser) account is still on this Mac. Delete it in "
+                        + "\(SystemSettingsPlace.current.usersPath) (or run: sudo dscl . -delete /Users/\(paxAdminUser)) and try again.")
                 }
             }
             let create = MacLockdownCommands.createPaxAdmin(password: adminPassword,
@@ -706,7 +707,7 @@ public actor MacLockdown {
             }
 
             // 5. Profile, then pax-guard.
-            report(.installProfile, "Opening the Pax profile: approve it in System Settings")
+            report(.installProfile, "Opening the Pax profile: approve it in \(SystemSettingsPlace.current.appName)")
             let open = MacLockdownCommands.openProfile(path: paths.profileFile.path)
             _ = try await plain.run(URL(fileURLWithPath: open.0), arguments: open.1, stdin: nil)
             let settings = MacLockdownCommands.openDeviceManagementSettings()
@@ -911,7 +912,7 @@ public actor MacLockdown {
         let del = MacLockdownCommands.deletePaxAdmin()
         let deleted = try await runner.runAsRoot(del.0, del.1, stdin: nil)
         done.append(deleted.exitCode == 0 ? "Pax's administrator account deleted"
-                                          : "Delete \(paxAdminUser) in System Settings > Users & Groups")
+                                          : "Delete \(paxAdminUser) in \(SystemSettingsPlace.current.usersPath)")
         return done
     }
 }

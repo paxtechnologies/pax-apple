@@ -22,7 +22,8 @@ products.insert(.executable(name: "Pax", targets: ["Pax"]), at: 0)
 
 let package = Package(
     name: "Pax",
-    platforms: [.macOS(.v13)],
+    // v0.8.20: macOS 12 Monterey or later. Anything newer is behind `if #available`.
+    platforms: [.macOS(.v12)],
     products: products,
     targets: targets
 )

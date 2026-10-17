@@ -354,7 +354,7 @@ public enum PaxErrorCatalog {
                      cause: "make_profile.py exited non-zero (ProfileError or validation failure)."),
         PaxErrorInfo(code: "PAX-PROFILE-002",
                      message: "The Pax settings weren't approved on this Mac.",
-                     action: "Open System Settings > General > Device Management, install \"Pax (this Mac)\", then try again.",
+                     action: "Install \"Pax (this Mac)\" in System Settings > Device Management (macOS 12: System Preferences > Profiles), then retry.",
                      cause: "MacLockdownError.profileInstallFailed: the self-lock profile was not installed/approved."),
         PaxErrorInfo(code: "PAX-PROFILE-003",
                      message: "Pax couldn't find its settings on your iPhone.",

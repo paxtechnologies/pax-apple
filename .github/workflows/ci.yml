@@ -80,7 +80,10 @@ jobs:
       - name: swift build + test
         run: |
           set -o pipefail
-          (cd mac-app && swift build && swift test) 2>&1 | tee "$RUNNER_TEMP/test.log"
+          # v0.8.20: Pax runs on macOS 12 Monterey; the runner can't, so the binary is checked.
+          (cd mac-app && swift build && swift test \
+            && python3 scripts/check-macos-min.py --exact "$(swift build --show-bin-path)/Pax") \
+            2>&1 | tee "$RUNNER_TEMP/test.log"
       - name: Publish the log to the ci-logs-mac branch
         if: always()
         env:

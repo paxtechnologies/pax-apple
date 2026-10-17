@@ -39,7 +39,9 @@ struct PaxApp: App {
                 .frame(minWidth: 760, minHeight: 640)
                 .background(SkyBackground())   // v0.8.16: the soft sky wash
         }
-        .windowResizability(.contentMinSize)
+        // v0.8.20: no .windowResizability (macOS 13+). Its default for a WindowGroup on
+        // 13+ is already contentMinSize, and macOS 12 sizes the window from the same
+        // .frame(minWidth:minHeight:), so the window behaves the same everywhere.
         .commands {
             // v0.8.14: Pax › Settings… (⌘,) opens Settings in this window. There's no
             // separate Settings window any more, so there is one place for settings.
@@ -69,13 +71,39 @@ struct PaxApp: App {
 /// window if it was closed.
 private struct OpenSettingsCommand: View {
     @ObservedObject var model: SetupModel
+
+    var body: some View {
+        if #available(macOS 13, *) {
+            OpenSettingsCommand13(model: model)
+        } else {
+            // v0.8.20, macOS 12: no openWindow environment action. Asking the app for a
+            // new window makes SwiftUI open another window of the WindowGroup.
+            OpenSettingsButton(model: model) {
+                NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
+            }
+        }
+    }
+}
+
+@available(macOS 13, *)
+private struct OpenSettingsCommand13: View {
+    @ObservedObject var model: SetupModel
     @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        OpenSettingsButton(model: model) { openWindow(id: PaxApp.mainWindowID) }
+    }
+}
+
+private struct OpenSettingsButton: View {
+    @ObservedObject var model: SetupModel
+    let reopenWindow: () -> Void
 
     var body: some View {
         Button("Settings…") {
             model.screen = .settings
             let hasWindow = NSApp.windows.contains { $0.isVisible && $0.canBecomeMain }
-            if !hasWindow { openWindow(id: PaxApp.mainWindowID) }
+            if !hasWindow { reopenWindow() }
             NSApp.activate(ignoringOtherApps: true)
         }
         .keyboardShortcut(",", modifiers: .command)

@@ -7,6 +7,8 @@ Before you start: a Time Machine/Finder backup, the FileVault recovery key writt
 into the Mac (another Mac or iPhone for email). Have `guard/scripts/pax-uninstall-emergency.sh` handy
 (README "Remove Pax by hand").
 
+**macOS 12 Monterey:** support is new in v0.8.20 and not yet tried on a real Monterey Mac. Its own checklist is in [MONTEREY.md](MONTEREY.md).
+
 ## Mac (Apple silicon; Intel too if you have one)
 
 1. **Install**: open `Pax-0.8.2.dmg` from the CI artifact, drag to Applications, right-click › Open
