@@ -68,7 +68,6 @@ final class MacProtectModel: ObservableObject {
     @Published var revealedPassword: String?
     @Published var emergencyReason = ""
     /// v0.8.15: "I have a support code" (a one-time code from Pax support).
-    @Published var supportCode = ""
     @Published var statusFetchedAt = Date()
     /// v0.8.0 local escrow: what pax-guard released (the FileVault recovery key
     /// and, on Intel, the firmware password come with paxadmin's password).
@@ -469,9 +468,10 @@ final class MacProtectModel: ObservableObject {
 
     /// v0.8.15: a verified support code. pax-guard (or the server) checks it, tells the
     /// trusted person first, then releases at once, exactly like a finished wait.
-    func redeemSupportCode() {
+    /// v0.8.27: the code is passed in (it used to be a @Published draft here, so every
+    /// keystroke or paste re-rendered every view watching this model).
+    func redeemSupportCode(_ code: String) {
         guard let id = deviceID else { return }
-        let code = supportCode
         perform { [self] in
             if localKey {
                 let r = try await guardClient.redeemSupportCode(code)
@@ -484,7 +484,6 @@ final class MacProtectModel: ObservableObject {
                 revealedPassword = try await escrow.redeemSupportCode(deviceID: id, code: code).removal_password
                 phase = .released
             }
-            supportCode = ""
         }
     }
 
@@ -572,6 +571,14 @@ final class MacProtectModel: ObservableObject {
     }
 
     var canBlockApps: Bool { localKey && deviceID != nil }
+
+    /// v0.8.27: whether this Mac belongs on Blocked Sites / Apps (Pax is on it, in a turn-off
+    /// wait, or still setting up). Not once its wait is over or Pax was removed.
+    var shownOnBlockedPage: Bool {
+        BlockedPage.macShown(hasDevice: deviceID != nil,
+                             released: phase == .released || (status.map(PhoneStatus.isReleased) ?? false),
+                             removed: phase == .removed)
+    }
 
     /// v0.8.6: YouTube Restricted Mode, straight to pax-guard. Both directions are
     /// immediate (no wait, no partner email: the maintainer's decision); pax-guard
@@ -729,6 +736,8 @@ final class MacProtectModel: ObservableObject {
             deviceID = nil
             profileIdentifier = nil
             revealedPassword = nil
+            blockedApps = nil          // v0.8.27: pax-guard is gone; don't keep showing its lists
+            sync = nil
             phase = .removed
         }
     }

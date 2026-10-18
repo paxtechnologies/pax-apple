@@ -280,8 +280,10 @@ struct MacTurnOffCard: View {
                         .disabled(mac.emergencyReason.count < 10 || mac.busy)
                     // v0.8.15: a one-time code from Pax support, for this Mac only.
                     Divider().overlay(Theme.border).padding(.vertical, 4)
-                    SupportCodeEntry(code: $mac.supportCode, busy: mac.busy,
-                                     allowed: mac.status?.support_release?.allowed) { mac.redeemSupportCode() }
+                    // v0.8.27: the draft lives inside SupportCodeEntry, not in MacProtectModel (pasting was slow).
+                    SupportCodeEntry(busy: mac.busy, allowed: mac.status?.support_release?.allowed) { code in
+                        mac.redeemSupportCode(code)
+                    }
                     if mac.isLocal, mac.status?.removal_request == nil {
                         Divider().overlay(Theme.border).padding(.vertical, 4)
                         Button("I'm locked out of this Mac") { mac.requestRemoval(reason: "locked_out") }

@@ -12,7 +12,8 @@ import PaxCore
 ///   3 Turn off: one button; "In an emergency" tucked inside.
 /// Nothing was removed: this Mac's switches (ads, sync, YouTube Restricted Mode, Pax Max,
 /// the X/Bluesky line) and its details (turn-off wait, Support ID, verified support release,
-/// security notices) are in Settings.
+/// security notices) are in Settings. v0.8.27: an iPhone's or iPad's Support ID is on its
+/// Turn off card (only with verified support release on).
 struct HomeView: View {
     @EnvironmentObject var model: SetupModel
     @EnvironmentObject var mac: MacProtectModel
@@ -351,7 +352,6 @@ struct PhoneHome: View {
     @State private var confirmEndTrial = false
     @State private var showEmergency = false
     @State private var showDetails = false
-    @State private var supportCode = ""
     @State private var confirmRemove = false
     @State private var removeMessage = PhoneStatus.removeMessageOff
 
@@ -555,14 +555,19 @@ struct PhoneHome: View {
             // v0.8.15: a one-time code from Pax support, for this device only (the server checks it).
             if model.revealedPhonePassword[rec.id] == nil, rec.escrowID != nil {
                 DisclosureGroup("In an emergency", isExpanded: $showEmergency) {
-                    SupportCodeEntry(code: $supportCode, busy: model.busy, allowed: st?.support_release?.allowed) {
-                        model.redeemPhoneSupportCode(rec, code: supportCode)
-                        supportCode = ""
+                    // v0.8.27: the draft lives inside SupportCodeEntry (pasting was slow).
+                    SupportCodeEntry(busy: model.busy, allowed: st?.support_release?.allowed) { code in
+                        model.redeemPhoneSupportCode(rec, code: code)
                     }
                     .padding(.top, 6)
                 }
                 .font(Theme.body(13))
                 .foregroundStyle(Theme.mutedText)
+            }
+            // v0.8.27: the Support ID, in this device's turn-off area (was in Device details). Only with
+            // verified support release on; hidden once the turn-off wait is over or Pax is off.
+            if let id = SupportIDPlacement.visibleID(st, turnedOff: isOff || model.revealedPhonePassword[rec.id] != nil) {
+                SupportIDRow(supportID: id)
             }
             // v0.8.18: this device's details, folded away (they were a full card on Home).
             DisclosureGroup("Device details", isExpanded: $showDetails) {
@@ -613,9 +618,9 @@ struct PhoneDetailsList: View {
             Text(DeviceDetails.setUpChoicesNote)
                 .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
-            // v0.8.15 (changeable after set-up): Support ID (with copy) and "Allow verified support release" (kept by the server).
+            // v0.8.15 (changeable after set-up): "Allow verified support release" (kept by the server).
+            // v0.8.27: the Support ID moved out of here, onto the Turn off card.
             if let st = model.phoneStatus[rec.id] {
-                if let id = st.support_id { SupportIDRow(supportID: id) }
                 if let sr = st.support_release {
                     SupportReleaseRow(state: sr, busy: model.busy, trialActive: TrialDay.isActive(st.trial)) {
                         model.setPhoneSupportRelease(rec, $0)

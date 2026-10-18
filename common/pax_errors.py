@@ -316,7 +316,7 @@ CODES: list[PaxCode] = [
             "v0.8.15 support_code.verify: the Ed25519 signature doesn't match a pinned support key "
             "(SUPPORT_PUBLIC_KEYS_HEX). Server: 403 support_code_unverified."),
     PaxCode("PAX-ESCROW-014", "That support code is for a different device.",
-            "Check the Support ID on this device's Details card matches the one you gave support.",
+            "Check the Support ID under Turn off for this device matches the one you gave support.",
             "v0.8.15: the code's support ID isn't this device's (local escrow state.json support.id, or "
             "devices.support_id on the server). Server: 403 support_code_wrong_device."),
     PaxCode("PAX-ESCROW-015", "That support code has expired.",

@@ -6,7 +6,8 @@ support can issue a **one-time code** that removes Pax from **one device** strai
 
 There is **no universal code**. Every code:
 
-* names one device, by its **Support ID** (device page › Details › Support ID, with a copy button);
+* names one device, by its **Support ID** (v0.8.27: shown next to the turn-off controls, with a copy button,
+  only while verified support release is on; see docs/HOME_AND_SETTINGS.md);
 * works **once** (its random nonce is recorded on the device and on the server, for good);
 * expires within **24 hours**;
 * is signed with the **support key**, an Ed25519 key separate from the update signing key;
@@ -18,8 +19,11 @@ There is **no universal code**. Every code:
   verified support release (recommended)", with one line under it: "If you ever face a genuine emergency, Pax
   support can check it and give you a one-time code that removes Pax from this device only. Your trusted
   person is told first." Unticking it sets the device up with the switch off (v0.8.18; it was a switch).
-* **Afterwards** (v0.8.18): this Mac's switch is in **Settings › Turning Pax off** and its Support ID in
-  **Settings › Advanced**; an iPhone's or iPad's are under **Turn off › Device details** on its page.
+* **Afterwards** (v0.8.18): this Mac's switch is in **Settings › Turning Pax off**; an iPhone's or iPad's is
+  under **Turn off › Device details** on its page. The Support ID (v0.8.27) shows with the turn-off controls
+  only while the switch is on and the device isn't turned off: under the switch in Settings › Turning Pax off
+  (this Mac), and on each iPhone's or iPad's **Turn off** card. It reads "Support ID: …" with *Copy* and "Share
+  this with Pax support if you can't turn Pax off the usual way."
   * Turning it **off** takes effect straight away.
   * Turning it **on** goes through the normal change path: it takes effect after the current wait, and the
     partner is emailed first (fail closed, `PAX-ESCROW-010`), just like shortening the wait. It loosens

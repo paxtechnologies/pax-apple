@@ -326,7 +326,7 @@ public enum PaxErrorCatalog {
                      cause: "v0.8.15 support_code.verify: the Ed25519 signature doesn't match a pinned support key (SUPPORT_PUBLIC_KEYS_HEX). Server: 403 support_code_unverified."),
         PaxErrorInfo(code: "PAX-ESCROW-014",
                      message: "That support code is for a different device.",
-                     action: "Check the Support ID on this device's Details card matches the one you gave support.",
+                     action: "Check the Support ID under Turn off for this device matches the one you gave support.",
                      cause: "v0.8.15: the code's support ID isn't this device's (local escrow state.json support.id, or devices.support_id on the server). Server: 403 support_code_wrong_device."),
         PaxErrorInfo(code: "PAX-ESCROW-015",
                      message: "That support code has expired.",

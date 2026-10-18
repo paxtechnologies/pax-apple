@@ -41,7 +41,7 @@ struct AppSettingsView: View {
                 DisclosureGroup(isExpanded: $showAdvanced) {
                     VStack(alignment: .leading, spacing: 18) {
                         if mac.deviceID != nil {
-                            MacDetailsSettings()               // v0.8.18: Support ID, filter, security notices
+                            MacDetailsSettings()               // v0.8.18: filter, security notices
                             Divider().overlay(Theme.border)
                         }
                         MacKeySettings()
@@ -183,6 +183,7 @@ private struct BlockingSettings: View {
 
 /// v0.8.18 Settings › Turning Pax off: the turn-off wait, the trial day, and "Allow verified
 /// support release" (was Home's Details card). v0.8.23: the rules are under Details.
+/// v0.8.27: this Mac's Support ID (moved from Advanced), shown only with the switch on.
 private struct TurningOffSettings: View {
     @EnvironmentObject var mac: MacProtectModel
     @State private var confirmEndTrial = false
@@ -204,6 +205,11 @@ private struct TurningOffSettings: View {
             if let sr = mac.status?.support_release {
                 SupportReleaseRow(state: sr, busy: mac.busy, trialActive: mac.trialActive) { mac.setSupportRelease($0) }
             }
+            // v0.8.27: the Support ID sits here, next to the switch (was under Advanced). Only with
+            // verified support release on, and never once this Mac is turned off.
+            if let id = SupportIDPlacement.visibleID(mac.status, turnedOff: mac.phase == .released || mac.phase == .removed) {
+                SupportIDRow(supportID: id)
+            }
             DetailsDisclosure {
                 DetailText(AppSettingsLayout.Line.turnOffWait + " Each iPhone or iPad shows its own on its page.")
                 if let s = mac.status, s.support_id != nil || s.support_release != nil {
@@ -222,18 +228,14 @@ private struct TurningOffSettings: View {
     }
 }
 
-/// v0.8.18 Settings › Advanced: this Mac's Support ID, which filter is answering, and the
-/// security notices (were on Home).
+/// v0.8.18 Settings › Advanced: which filter is answering, and the security notices (were on
+/// Home). v0.8.27: the Support ID moved to Settings › Turning Pax off.
 private struct MacDetailsSettings: View {
     @EnvironmentObject var mac: MacProtectModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("This Mac's details").font(Theme.heading(17)).foregroundStyle(Theme.primaryText)
-            if let id = mac.status?.support_id {
-                SupportIDRow(supportID: id)
-                Text(AppSettingsLayout.Line.supportID).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-            }
             NoteRow(icon: "shield", text: FilterStatusText.line(mac.guardStatus?.dns))
             // v0.8.18: which filter answers, and the backup's reason when it's on.
             if let dns = mac.guardStatus?.dns, dns.filter_mode != nil {

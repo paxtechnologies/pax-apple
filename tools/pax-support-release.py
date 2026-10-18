@@ -3,7 +3,7 @@
 """Issue a verified support release code for ONE device (v0.8.15).
 
 Only for a genuine emergency that Pax support has checked. The code removes Pax
-from the device whose Support ID it names (device page › Details › Support ID),
+from the device whose Support ID it names (shown with the turn-off controls),
 works once, and expires within 24 hours. The partner is emailed before anything
 is released, and a device with "Allow verified support release" off refuses it.
 

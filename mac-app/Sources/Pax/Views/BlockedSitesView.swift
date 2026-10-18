@@ -17,11 +17,36 @@ struct BlockedSitesView: View {
     @State private var showAppPicker = false
 
     /// v0.8.21: the device this page is about (the one picked in the sidebar).
-    private var phone: PaxDeviceRecord? { model.selectedRecord }
+    /// v0.8.27: only a device Pax is still on (server status, as on Home): a turned-off,
+    /// retired or not-found phone is skipped, and this Mac once its wait is over or Pax is
+    /// removed. With none left the page shows a plain empty state.
+    private var subject: BlockedPage.Subject { model.blockedPageSubject(macShown: mac.shownOnBlockedPage) }
+    private var phone: PaxDeviceRecord? { model.record(for: subject) }
+    private var macIsSubject: Bool { subject == .mac }
     private var deviceName: String? { phone?.name ?? Host.current().localizedName ?? "this Mac" }
     private var reach: BlockedPage.SitesReach {
-        BlockedPage.sitesReach(phoneSelected: phone != nil, macLocalList: mac.deviceID != nil && mac.isLocal,
+        BlockedPage.sitesReach(phoneSelected: phone != nil,
+                               macLocalList: mac.shownOnBlockedPage && mac.isLocal,
                                macSyncOn: mac.canSync ? mac.sync?.enabled : nil)
+    }
+
+    /// v0.8.27: no device left, so no stale lines or lists.
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(BlockedPage.emptyTitle).font(Theme.body(15, weight: .medium)).foregroundStyle(Theme.primaryText)
+            Text(BlockedPage.emptyLine).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button("Protect this Mac") { model.screen = mac.deviceID != nil ? .home : .mac }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button("Protect an iPhone or iPad") { model.addPhone() }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Theme.cornerRadius).fill(Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius).stroke(Theme.border))
     }
 
     /// "Blocking on Ruben's MacBook Air", then where sites and apps apply.
@@ -56,7 +81,7 @@ struct BlockedSitesView: View {
                 Text("These were chosen when this \(rec.isIPad ? "iPad" : "iPhone") was set up. To change them, set it up again.")
                     .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if mac.deviceID != nil, mac.canBlockApps {
+            } else if macIsSubject, mac.canBlockApps {
                 let list = mac.blockedApps?.apps ?? []
                 HStack {
                     SectionTitle("Apps (\(list.count))")
@@ -68,7 +93,7 @@ struct BlockedSitesView: View {
                 } else {
                     MacBlockedAppRows()
                 }
-            } else if mac.deviceID != nil {
+            } else if macIsSubject {
                 SectionTitle("Apps")
                 Text("Blocking apps works when this Mac keeps its own key (Settings › Advanced).")
                     .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
@@ -86,36 +111,41 @@ struct BlockedSitesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 BackLink(title: AppNav.backToHome) { model.screen = .home }
-                scopeCard   // v0.8.21: which device, and how far its blocks reach
-                StepHeader(eyebrow: "", title: AppNav.blockedTitle,
-                           subtitle: blocklist.scopeText + " Removing one takes \(blocklist.delayText), "
-                               + "and you can change your mind until then.")
-                addCard
-                if let notice = blocklist.notice {
-                    NoticeBanner(text: notice)
-                }
-                if let error = blocklist.errorMessage {
-                    NoticeBanner(text: error, isError: true)
-                }
-                if let failure = blocklist.failure {
-                    ErrorCard(error: failure, retry: { blocklist.retry() },
-                              details: { Support.details(failure, log: [], extraRedactions: model.privateNames) })
-                }
-                if !blocklist.pendingRemovals.isEmpty || !blocklist.pendingExceptions.isEmpty {
-                    pendingSection
-                }
-                listSection
-                appsSection
-                DisclosureGroup("More options", isExpanded: $showMore) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        exceptionsSection
-                        if blocklist.remoteDesktop != nil {
-                            categoriesSection
-                        }
+                if subject == .noDevice {
+                    StepHeader(eyebrow: "", title: AppNav.blockedTitle, subtitle: nil)
+                    emptyState
+                } else {
+                    scopeCard   // v0.8.21: which device, and how far its blocks reach
+                    StepHeader(eyebrow: "", title: AppNav.blockedTitle,
+                               subtitle: blocklist.scopeText + " Removing one takes \(blocklist.delayText), "
+                                   + "and you can change your mind until then.")
+                    addCard
+                    if let notice = blocklist.notice {
+                        NoticeBanner(text: notice)
                     }
-                    .padding(.top, 10)
+                    if let error = blocklist.errorMessage {
+                        NoticeBanner(text: error, isError: true)
+                    }
+                    if let failure = blocklist.failure {
+                        ErrorCard(error: failure, retry: { blocklist.retry() },
+                                  details: { Support.details(failure, log: [], extraRedactions: model.privateNames) })
+                    }
+                    if !blocklist.pendingRemovals.isEmpty || !blocklist.pendingExceptions.isEmpty {
+                        pendingSection
+                    }
+                    listSection
+                    appsSection
+                    DisclosureGroup("More options", isExpanded: $showMore) {
+                        VStack(alignment: .leading, spacing: 24) {
+                            exceptionsSection
+                            if blocklist.remoteDesktop != nil {
+                                categoriesSection
+                            }
+                        }
+                        .padding(.top, 10)
+                    }
+                    .font(Theme.body(13))
                 }
-                .font(Theme.body(13))
             }
             .padding(.horizontal, 36)
             .padding(.top, 12)
@@ -123,7 +153,13 @@ struct BlockedSitesView: View {
             .frame(maxWidth: 680, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .onAppear { blocklist.refresh() }
+        .onAppear {
+            blocklist.refresh()
+            // v0.8.27: the same quiet server refresh as Home, so turned-off phones drop out here too.
+            if mac.deviceID != nil { mac.refresh() }
+            Task { await model.refreshPhones(quiet: true) }
+        }
+        .onChange(of: subject) { _ in blocklist.refresh() }   // its list follows the device (guard or account)
         .alert(item: $confirmRemoval) { site in
             Alert(title: Text("Remove \(site.display_domain)?"),
                   message: Text("It stays blocked for \(blocklist.delayText). Your trusted person, "

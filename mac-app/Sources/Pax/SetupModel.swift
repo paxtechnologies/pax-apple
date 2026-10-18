@@ -673,6 +673,23 @@ final class SetupModel: ObservableObject {
 
     var selectedRecord: PaxDeviceRecord? { deviceRecords.first { $0.id == selectedDevice } }
 
+    /// v0.8.27: the device the Blocked Sites / Apps page is about, from the server's status
+    /// (v0.8.26): turned-off, retired and not-found phones are left out.
+    func blockedPageSubject(macShown: Bool) -> BlockedPage.Subject {
+        BlockedPage.subject(selectedPhoneID: selectedRecord?.id,
+                            phones: deviceRecords.map { rec in
+                                BlockedPage.PhoneEntry(id: rec.id, settingUp: rec.status != .protected,
+                                                       state: phoneState(rec), missing: phoneMissing(rec))
+                            },
+                            macShown: macShown)
+    }
+
+    /// v0.8.27: the phone record for a page subject (nil for this Mac or none).
+    func record(for subject: BlockedPage.Subject) -> PaxDeviceRecord? {
+        guard case .phone(let id) = subject else { return nil }
+        return deviceRecords.first { $0.id == id }
+    }
+
     // MARK: v0.7.0 iPhone "Request a change" (same server wait as the Mac)
 
     /// Matches each protected iPhone to its device on the server (by name, newest

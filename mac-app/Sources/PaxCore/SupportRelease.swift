@@ -14,6 +14,8 @@ public enum VerifiedSupportRelease {
     public static let setUpDetail = "If you ever face a genuine emergency, Pax support can check it and give you "
         + "a one-time code that removes Pax from this device only. Your trusted person is told first."
     public static let supportIDLabel = "Support ID"
+    /// v0.8.27: the one plain line under "Support ID: XXXX" in the turn-off area.
+    public static let supportIDLine = "Share this with Pax support if you can't turn Pax off the usual way."
     public static let codeFieldTitle = "I have a support code"
     public static let codePlaceholder = "PAXS-…"
     public static let codeExplainer = "Only for a genuine emergency that Pax support has checked. The code works "
@@ -56,14 +58,54 @@ public enum VerifiedSupportRelease {
         "support_rate_limited": "PAX-ESCROW-019",
     ]
 
-    /// The code as typed or pasted, tidied: spaces and line breaks removed, upper case.
+    /// The code as typed or pasted, tidied once (v0.8.27): upper case; ASCII letters, digits and
+    /// dashes kept (typographic dashes read as "-"); everything else dropped, so spaces, tabs,
+    /// line breaks, non-breaking and zero-width spaces, quotes and full stops from an email
+    /// don't matter. pax-guard and the server tidy the same way (support_code._clean), so this
+    /// changes nothing they accept. One pass over the scalars: cheap even for a long paste.
     public static func cleaned(_ code: String) -> String {
-        code.uppercased().filter { !$0.isWhitespace }
+        var out = String.UnicodeScalarView()
+        for u in code.unicodeScalars {
+            switch u.value {
+            case 0x61...0x7A: out.append(Unicode.Scalar(u.value - 0x20) ?? u)       // a-z -> A-Z
+            case 0x41...0x5A, 0x30...0x39, 0x2D: out.append(u)                     // A-Z 0-9 -
+            case 0x2010...0x2015, 0x2212: out.append("-")                          // ‐ ‑ ‒ – — ― −
+            default: continue
+            }
+        }
+        return String(out)
     }
 
-    /// Enough to be worth sending (the guard or server does the real check).
+    /// Enough to be worth sending (the guard or server does the real check, and only on
+    /// "Use support code": nothing is verified while typing or pasting).
     public static func looksComplete(_ code: String) -> Bool {
-        let letters = cleaned(code).filter { $0.isLetter || $0.isNumber }
-        return letters.count >= 140
+        cleaned(code).unicodeScalars.lazy.filter { $0 != "-" }.count >= 140
+    }
+}
+
+/// v0.8.27 (Ruben): the Support ID sits with the turn-off controls (Settings › Turning Pax
+/// off for this Mac; each iPhone's or iPad's Turn off card), not under Advanced or Device
+/// details. It only shows when a support code could actually work on that device: verified
+/// support release is switched on (not off, not still waiting to turn on, and not a device
+/// set up before 0.8.15, whose status has no switch), and the device isn't turned off.
+public enum SupportIDPlacement {
+    /// "Support ID: ABCD-EFGH-IJKL-MNOP"
+    public static func label(_ id: String) -> String { "\(VerifiedSupportRelease.supportIDLabel): \(id)" }
+
+    /// The ID to show, or nil to show nothing.
+    public static func visibleID(supportID: String?, supportRelease: EscrowClient.DeviceStatus.SupportReleaseState?,
+                                 turnedOff: Bool) -> String? {
+        guard !turnedOff, supportRelease?.allowed == true,
+              let id = supportID?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty else { return nil }
+        return id
+    }
+
+    /// From a device status (this Mac's pax-guard or the server's for a phone). Turned off is
+    /// released by any route (PhoneStatus.isReleased); `turnedOff` adds what the caller knows
+    /// (e.g. this Mac's released phase, or a phone whose removal password is showing).
+    public static func visibleID(_ status: EscrowClient.DeviceStatus?, turnedOff: Bool = false) -> String? {
+        guard let s = status else { return nil }
+        return visibleID(supportID: s.support_id, supportRelease: s.support_release,
+                         turnedOff: turnedOff || PhoneStatus.isReleased(s))
     }
 }

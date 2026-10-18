@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.26
+# Pax Peace (Apple), v0.8.27
 
 **Less scrolling. More living.**
 
@@ -374,10 +374,11 @@ Pax turns off after 24 hours instead of your full turn-off wait. You can use it 
 the hours taken from `PAX_EMERGENCY_COOLOFF_SECONDS` and "straight away" in the trial day).
 This Mac's switches and details are in **Settings** (v0.8.23: each card is a title and its state, with
 explanations under *Details*): *Blocking* (ads and trackers, sync, YouTube Restricted Mode; the X/Bluesky
-line under Details), *Turning Pax off* (turn-off wait, trial day, verified support release), *Accountability
+line under Details), *Turning Pax off* (turn-off wait, trial day, verified support release, and its Support ID while that is on),
+*Accountability
 partner email* (their email, one state line and *Change…*; the form is in a sheet), *Updates* (version, last
 check, *Update now*; *About Pax* folded inside), *Pax Max* (folded, off by default: "Blurs pictures and video
-in Firefox. Other browsers aren't covered yet.") and *Advanced* (Support ID, filter and its backup state, the
+in Firefox. Other browsers aren't covered yet.") and *Advanced* (filter and its backup state, the
 *Extra family filter layer* switch, security notices, where the key is kept, server, testers). Security
 notices are plain sentences; a backup-filter episode shorter than 10 minutes (as when pax-guard restarts
 after an update) stays in the tamper log but isn't shown.

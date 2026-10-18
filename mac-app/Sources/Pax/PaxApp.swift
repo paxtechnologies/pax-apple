@@ -21,7 +21,9 @@ struct PaxApp: App {
         _blocklist = StateObject(wrappedValue: BlocklistModel { [weak model, weak mac] () -> BlocklistBackend? in
             // v0.8.0: this Mac on local escrow keeps its own list in pax-guard;
             // iPhones (and a Mac on the server path) use the server's.
-            if let mac, mac.deviceID != nil, mac.isLocal, model?.selectedRecord == nil { return mac.guardClient }
+            // v0.8.27: follows the Blocked Sites / Apps page's device (turned-off phones are skipped).
+            if let mac, mac.deviceID != nil, mac.isLocal, mac.shownOnBlockedPage,
+               model?.blockedPageSubject(macShown: true) == .mac { return mac.guardClient }
             guard let escrow = model?.coordinator.escrow, escrow.token != nil else { return nil }
             return escrow
         })

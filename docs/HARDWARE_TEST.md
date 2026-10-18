@@ -257,8 +257,8 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
 Use a test device and a test support key only (never redeem on a device you rely on).
 
 1. Set up a test Mac: the wait step shows **Allow verified support release**, on, with one line under it.
-   This Mac's page shows **Details** with a **Support ID** (Copy works) and the switch on.
-2. On a Mac set up with 0.8.14, after the update to 0.8.15: Details shows a Support ID and the switch **off**.
+   Settings › Turning Pax off shows the switch on and (v0.8.27) the **Support ID** (Copy works).
+2. On a Mac set up with 0.8.14, after the update to 0.8.15: the switch is **off** (v0.8.27: so no Support ID shows).
 3. Turn the switch off: it says off straight away. Turn it on: the partner gets an email first and Details
    says when it turns on (after the wait).
 4. With the switch on, issue a code for the test Mac's Support ID (`tools/pax-support-release.py issue …`)
@@ -266,7 +266,7 @@ Use a test device and a test support key only (never redeem on a device you rely
    then the Mac shows "Your wait is over" with Remove Pax. Using the same code again gives PAX-ESCROW-016;
    a code for another Support ID gives PAX-ESCROW-014; with the partner's mail path broken, PAX-ESCROW-018
    and nothing is released.
-5. iPhone/iPad: the device page's Details shows Support ID and the switch; In an emergency takes a code and
+5. iPhone/iPad: Device details shows the switch, and (v0.8.27, switch on) the Turn off card shows the Support ID; In an emergency takes a code and
    shows the removal password after the partner email.
 6. The tamper log (`{"cmd":"tamper.list"}`) shows `support_release_setting`, `support_code_refused` and
    `support_release_used` entries; no entry contains a code.
@@ -288,7 +288,7 @@ Use a test device and a test support key only (never redeem on a device you rely
    (under *How Pax sends the email*) the Pax server / own email choice. Changing or removing them still shows
    "Changing to … on …" (after the turn-off wait), on the card and in the sheet. With the relay down after a
    removal request, the card says "1 email waiting to send. Pax keeps trying."
-6. Updates: "Version 0.8.26 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
+6. Updates: "Version 0.8.27 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
    licence and site link.
 7. Security notices: after a pax-guard update (a short backup episode in `{"cmd":"tamper.list"}` as
    `dns:fallback_on` / `dns:fallback_off`), Settings › Advanced and Home show no notice for it. Stop the filter
@@ -311,3 +311,38 @@ Use a test device and a test support key only (never redeem on a device you rely
    been reset or removed.", "Last seen …". Switch it on and use it: "Protected" again after a refresh.
 4. Disconnect the Mac from the network and refresh: the last state stays, with "Last checked … · couldn't
    reach Pax just now". No error card.
+
+### v0.8.27: Support ID next to the turn-off controls
+
+1. On a Mac set up with *Allow verified support release* ticked: Settings › **Turning Pax off** shows
+   "Support ID: XXXX-XXXX-XXXX-XXXX" under the switch, with *Copy* (paste it somewhere: it matches) and
+   "Share this with Pax support if you can't turn Pax off the usual way." Settings › Advanced no longer shows a
+   Support ID.
+2. Turn the switch off: the Support ID disappears straight away. Turn it on again: nothing shows during its
+   turn-off wait; it appears once the switch is on.
+3. A Mac set up before 0.8.15 (switch off, never migrated): no Support ID anywhere in Settings.
+4. iPhone/iPad with the switch on: its Home **Turn off** card shows the same row under *In an emergency*;
+   *Device details* has the switch but no Support ID. With the switch off: no Support ID on the card.
+5. Turn the phone off (trial day, finished wait, or a support code): after a refresh the card is **Turned
+   off** and no Support ID shows. Same on this Mac once its wait is over.
+6. A support code issued for the shown ID still works as before (PAX-ESCROW-014 for another device's ID).
+
+### v0.8.27: support code paste
+
+1. Copy a full support code from an email (grouped in fives, with line breaks; also try it in lower case).
+   Paste it into *In an emergency › I have a support code* on this Mac and on an iPhone's card: it appears at
+   once, with no beachball or typing lag. *Use support code* becomes available straight away.
+2. Click elsewhere: the field shows the code tidied (upper case, no spaces). Return or *Use support code*
+   sends it; a code for another device still gives PAX-ESCROW-014.
+
+### v0.8.27: Blocked Sites / Apps lists only devices Pax is on
+
+1. With a protected iPhone picked, Blocked Sites / Apps says "Blocking on <iPhone>" and lists its apps.
+2. Turn Pax off on that iPhone and remove the profile. After a refresh (switch away and back, open the page
+   or Home, or *Refresh status*), the page no longer names the iPhone or lists its apps: it shows this Mac (if
+   protected) or the next phone still protected.
+3. With no device left (the only phone turned off, or removed from the list, and this Mac not protected), the
+   page shows "No devices are protected right now" and no sites, apps or pending changes.
+4. On this Mac: after its turn-off wait ends, and again after *Remove Pax from this Mac*, the page no longer
+   shows "Blocking on <this Mac>" or this Mac's apps.
+

@@ -15,7 +15,7 @@ public enum AppSettingsLayout {
     /// This Mac's switches: ads and trackers, sync, YouTube Restricted Mode, the X/Bluesky line.
     public static let blocking = "Blocking"
     public static let paxMax = "Pax Max"
-    /// Turn-off wait, the trial day, verified support release.
+    /// Turn-off wait, the trial day, verified support release, and (v0.8.27) the Support ID.
     public static let turningOff = "Turning Pax off"
     public static let partnerEmail = "Accountability partner email"
     /// v0.8.23: Updates and About are one card; About's text is folded inside it.
@@ -23,7 +23,8 @@ public enum AppSettingsLayout {
     public static let about = "About Pax"
     /// Closed by default.
     public static let advanced = "Advanced"
-    public static let advancedItems = ["Support ID", "Security notices", "Filter", "Extra family filter layer", "Where this Mac keeps its key",
+    /// v0.8.27: the Support ID moved to Turning Pax off (shown only with verified support release on).
+    public static let advancedItems = ["Security notices", "Filter", "Extra family filter layer", "Where this Mac keeps its key",
                                        "Pax server", "For testers"]
 
     /// v0.8.23 (Ruben: "only keep what is necessary"): each card shows a title and its
@@ -52,7 +53,6 @@ public enum AppSettingsLayout {
             + "one-time code for this device. Your trusted person is told first."
         public static let supportReleaseRule = "Turning it off is instant. Turning it on takes your turn-off wait "
             + "(instant during your trial day), and your trusted person is told."
-        public static let supportID = "Quote this if you ever contact Pax support."
         /// v0.8.18 Advanced: the extra family filter layer (off by default).
         public static let familyLayer = "Also send every lookup Pax allows through a family filter. "
             + "Stricter, and it can block a few ordinary sites."

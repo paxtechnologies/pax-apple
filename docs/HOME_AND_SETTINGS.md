@@ -1,4 +1,4 @@
-# Home and Settings (v0.8.18; Settings v0.8.23; phone status v0.8.26)
+# Home and Settings (v0.8.18; Settings v0.8.23; phone status v0.8.26; Support ID and Blocked page v0.8.27)
 
 Ruben, 2026-10-17: "simplify, simplify, simplify: 1, 2, 3, not option overwhelm", without removing any
 functionality.
@@ -20,8 +20,25 @@ functionality.
    turn-off wait. You can use it once every 90 days." The hours follow the server's
    `PAX_EMERGENCY_COOLOFF_SECONDS` (sent as `emergency_cooloff_seconds` in device status; 24 hours when an
    older server or pax-guard doesn't send it). In the trial day there is no cooling-off, so it says Pax turns
-   off "straight away, as it's your trial day". On an iPhone or iPad, *Device details* (folded) holds its details,
-   Support ID and support-release switch.
+   off "straight away, as it's your trial day". On an iPhone or iPad, the card also shows its **Support ID**
+   (v0.8.27, see below), and *Device details* (folded) holds its details and the support-release switch.
+
+## Support ID (v0.8.27)
+
+The Support ID sits with the turn-off controls, once per context:
+
+* **This Mac**: Settings › **Turning Pax off**, right under the *Allow verified support release* switch.
+* **Each iPhone or iPad**: its **Turn off** card on Home, under *In an emergency* (above *Device details*).
+
+It reads "Support ID: ABCD-EFGH-IJKL-MNOP" with a **Copy** button, and one line under it: "Share this with Pax
+support if you can't turn Pax off the usual way."
+
+It shows **only** when a support code could work on that device (PaxCore `SupportIDPlacement.visibleID`):
+verified support release is switched **on**. Nothing shows when the switch is off, while it is still waiting to
+turn on, on a device set up before 0.8.15 (no switch in its status), or once the device is **Turned off**
+(released by any route, a phone whose removal password is showing, or this Mac after its wait is over), like
+the other turn-off controls since v0.8.26. It is no longer under Settings › Advanced or *Device details*.
+Nothing about the codes or the server changed.
 
 ## iPhone and iPad status from the server (v0.8.26)
 
@@ -73,7 +90,28 @@ server's device status, in this order:
     phone is picked and this Mac's sync is off.
   * "Apps: this Mac only." or "Apps: this iPhone only, chosen at set-up." Apps are always per device, and
     the page lists them under the sites (with *Add* and *Unblock…* on a Mac that keeps its own key).
+* **Only devices Pax is still on** (v0.8.27): the page uses the same server status as Home (v0.8.26), so it
+  updates when the app opens or becomes active, when the page or Home appears, and from *Refresh status*.
+  Shown: devices that are Protected (or in their trial day), in a turn-off wait, Not checking in (Pax may still
+  be on them) or still setting up. Left out: a phone that is **Turned off**, removed from the list, retired or
+  no longer on the account, and this Mac once its wait is over or Pax was removed from it. If the picked phone
+  is left out, the page shows this Mac (when Pax is on it), else the next phone still on. With none left, a
+  plain empty state: "No devices are protected right now" / "When Pax is on a device, its blocked sites and
+  apps show here." with *Protect this Mac* and *Protect an iPhone or iPad*. Until the server first answers,
+  the last known state stands (nothing disappears just because the network is down). PaxCore
+  `BlockedPage.subject`. Before 0.8.27 the page followed the sidebar's set-up record, so a turned-off phone
+  kept its "Blocking on …" line and its apps from set-up.
 * Settings has no device header: it is this Mac's settings plus app-wide ones, as before.
+
+## Support code field (v0.8.27)
+
+*In an emergency › I have a support code* (this Mac and each iPhone or iPad): pasting a code (`PAXS-…`, about
+150 letters in groups of five) is instant. The draft is kept in the field's own view, not in a model every
+screen watches, and the field is a plain one-line AppKit text field with spell checking, autocorrect and smart
+dashes off. The code is tidied once, when the field is left or the code is sent: upper case, ASCII letters,
+digits and dashes kept (typographic dashes read as "-"), and spaces, tabs, line breaks, non-breaking and
+zero-width spaces, quotes and full stops dropped. Nothing is checked while typing; the guard or server checks
+the code only on *Use support code* (or Return), exactly as before.
 
 ## Settings (sidebar › Settings, ⌘,) (v0.8.23)
 
@@ -86,21 +124,22 @@ Order (PaxCore `AppSettingsLayout.sections`):
   Restricted Mode, with no line under each. *Details*: what each one does (incl. the sync state line) and
   "Pictures and video on X and Bluesky are always off" (no switch).
 * **Turning Pax off**: Turn-off wait row · trial day line and "Start my wait now" (in the trial) · the
-  *Allow verified support release* switch with its one state line. *Details*: what the wait applies to, what
+  *Allow verified support release* switch with its one state line · (v0.8.27, switch on only) "Support ID: …"
+  with *Copy* and "Share this with Pax support if you can't turn Pax off the usual way." *Details*: what the wait applies to, what
   support release is, and its rule (off instant; on takes the turn-off wait, instant in the trial day).
 * **Accountability partner email**: their email (or "Not set"), one state line ("Told before any turn-off
   wait starts.", "Changing to … on …", "Being removed on …", "N emails waiting to send. Pax keeps trying.") and
   one button, *Add…* / *Change…*. The sheet holds the rule, the partner and your own email, and under *How Pax
   sends the email* the Pax server / own email account choice with its fields. Rules unchanged (told first,
   fail closed; changing or removing them waits; pax-guard enforces both).
-* **Updates**: "Version 0.8.26 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
+* **Updates**: "Version 0.8.27 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
   line, wordmark, tagline, principles, licence and site link (About was its own card before).
 * **Pax Max** (folded like Advanced, closed by default, just above it; off by default for everyone): the row
   shows *On* / *Off* / *Turning off* and "Blurs pictures and video in Firefox. Other browsers aren't covered
   yet." Opening it shows the explanation, the "isn't perfect" note, the rule and the switch (unchanged
   behaviour: on instant; off partner first, then 1 hour, cancellable). Pax Max is only installed in Firefox
   (Pax Image Blur); Chrome and Safari aren't covered.
-* **Advanced** (folded, unchanged): this Mac's Support ID (copy), which filter is answering (and the backup's
+* **Advanced** (folded; v0.8.27: the Support ID moved to *Turning Pax off*): which filter is answering (and the backup's
   reason and time while it's on), filter lists, the **Extra family filter layer** switch (off by default; on
   is immediate, off waits like a removal), security notices, where this Mac keeps its key, Pax server, for
   testers.
