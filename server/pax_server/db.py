@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS devices (
     support_release    INTEGER NOT NULL DEFAULT 0,  -- v0.8.15: "Allow verified support release"
     support_pending_on INTEGER,                     -- v0.8.15: when a requested "on" takes effect
     trial_until        INTEGER,                     -- v0.8.18: end of the trial day (NULL: none)
-    trial_ended_at     INTEGER                      -- v0.8.18: "Start my wait now"
+    trial_ended_at     INTEGER,                     -- v0.8.18: "Start my wait now"
+    retired_at         INTEGER                      -- v0.8.26: removed from the owner's list (released only)
 );
 
 CREATE TABLE IF NOT EXISTS removal_requests (
@@ -234,6 +235,10 @@ class Database:
         for col in ("trial_until", "trial_ended_at"):
             if col not in dcols:
                 self._conn.execute(f"ALTER TABLE devices ADD COLUMN {col} INTEGER")
+        # v0.8.26: a released device the owner removed from their list. Only ever set on
+        # a device whose password was already released; it never turns anything off.
+        if "retired_at" not in dcols:
+            self._conn.execute("ALTER TABLE devices ADD COLUMN retired_at INTEGER")
         if "trial_started_at" not in cols:
             self._conn.execute("ALTER TABLE accounts ADD COLUMN trial_started_at INTEGER")
         # v0.8.13 (project decision): pictures and video on X and Bluesky are always

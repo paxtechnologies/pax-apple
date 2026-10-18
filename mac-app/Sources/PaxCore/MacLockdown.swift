@@ -954,6 +954,14 @@ extension EscrowClient {
         /// v0.8.21: the emergency release cooling-off in seconds (nil from an older
         /// server or pax-guard; the app then says the default, 24 hours).
         public let emergency_cooloff_seconds: Int?
+        /// v0.8.26: whether the password was released, by any route (nil from an older
+        /// server or pax-guard; `released_at` says the same).
+        public let released: Bool?
+        /// v0.8.26 (iPhone/iPad): the last UTC day ("2026-10-15") the account's Pax DNS
+        /// address was used, and whether it is still checking in (false: 48 hours or more
+        /// with no traffic; nil: unknown or an older server).
+        public let last_seen: String?
+        public let checking_in: Bool?
 
         /// v0.8.18: {"active", "until", "ended_at"}. `active` is as of when it was read;
         /// the app also checks `until` against the clock for its countdown.
@@ -1002,6 +1010,17 @@ extension EscrowClient {
         struct Wrapper: Decodable { let devices: [DeviceStatus] }
         let w: Wrapper = try await send("GET", "v1/devices")
         return w.devices
+    }
+
+    public struct Retired: Decodable, Sendable {
+        public let device_id: String
+        public let retired: Bool
+    }
+
+    /// v0.8.26 "Remove from list" for a device Pax is already off on: the account forgets
+    /// it. The server refuses (409) any device whose password wasn't released.
+    public func retireDevice(deviceID: String) async throws -> Retired {
+        try await send("POST", "v1/devices/\(deviceID)/retire")
     }
 
     public func requestRemoval(deviceID: String) async throws -> DeviceStatus {

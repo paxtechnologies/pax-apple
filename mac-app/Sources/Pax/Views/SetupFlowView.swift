@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import SwiftUI
+import AppKit
+import Combine
 import PaxCore
 
 /// The whole app (v0.7.0): a device switcher on the left (This Mac, each iPhone or
@@ -49,7 +51,12 @@ struct SetupFlowView: View {
                 model.screen = .home
             }
         }
-        .task { await model.refreshPhones() }
+        // v0.8.26: phones' server status when the app opens and whenever it becomes active
+        // (one request for all phones; no timer). Home and "Refresh status" do the rest.
+        .task { await model.refreshPhones(quiet: true) }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.refreshPhones(quiet: true) }
+        }
     }
 
     @ViewBuilder private var main: some View {
@@ -68,14 +75,19 @@ struct SetupFlowView: View {
 }
 
 /// Status of one entry in the switcher.
-enum DeviceState {
+enum DeviceState: Equatable {
     case protected, pending, notSetUp
+    /// v0.8.26 (iPhone/iPad, from the server): a turn-off wait, Pax off, or gone quiet.
+    case turningOff, turnedOff, notCheckingIn
 
     var label: String {
         switch self {
         case .protected: return "Protected"
         case .pending: return "Setting up"
         case .notSetUp: return "Not set up"
+        case .turningOff: return PhoneStatus.sidebarLabel(.turningOff(secondsLeft: 0, notifying: false))
+        case .turnedOff: return PhoneStatus.sidebarLabel(.turnedOff)
+        case .notCheckingIn: return PhoneStatus.sidebarLabel(.notCheckingIn(lastSeen: nil))
         }
     }
 }
@@ -97,7 +109,16 @@ extension SetupModel {
         screen = .iphone
     }
 
-    func state(of rec: PaxDeviceRecord) -> DeviceState { rec.status == .protected ? .protected : .pending }
+    /// v0.8.26: from the server once it has answered (never from the set-up record alone).
+    func state(of rec: PaxDeviceRecord) -> DeviceState {
+        guard rec.status == .protected else { return .pending }
+        switch phoneState(rec) {
+        case .turnedOff?: return .turnedOff
+        case .turningOff?: return .turningOff
+        case .notCheckingIn?: return .notCheckingIn
+        default: return .protected
+        }
+    }
 }
 
 extension MacProtectModel {

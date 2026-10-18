@@ -47,6 +47,9 @@ _PLATFORM = {"ios": "iphone", "ipados": "ipad", "mac": "mac", "macos": "mac"}
 _VERSION_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 KEEP_ACTIVITY_DAYS = 35      # a device unseen this long drops out of the table
+# v0.8.26: an iPhone/iPad is "not checking in" when its last day is this many UTC days
+# back (so at least 48 hours with no Pax DNS traffic, at most 72).
+QUIET_DAYS = 3
 MAX_HISTORY_DAYS = 400
 BACKFILL_DAYS = 90
 
@@ -203,6 +206,29 @@ class Stats:
                 self.mark_device(d)
         return n
 
+    def device_seen(self, device_row, account_id: str) -> dict:
+        """v0.8.26, for the owner's own Mac only (GET /v1/devices): an iPhone's or iPad's
+        last UTC day of Pax DNS traffic and whether it is still checking in. All of an
+        account's iPhones and iPads share one DNS address, so this is "some phone on the
+        account used it": a quiet phone shows only when all of them are quiet. checking_in
+        is None (unknown) unless the account's address has been used since this was kept
+        (a phone set up with another filter never looks quiet). No time of day, address
+        or lookup is kept or returned."""
+        out = {"last_seen": None, "checking_in": None}
+        if (self.db is None or device_row["released_at"] is not None
+                or platform_of(device_row["platform"]) not in ("iphone", "ipad")):
+            return out
+        row = self.db.one("SELECT last_day FROM activity WHERE subject=?", (f"device:{device_row['id']}",))
+        if row is None:
+            return out
+        out["last_seen"] = row["last_day"]
+        if self.db.one("SELECT 1 FROM activity WHERE subject=?", (f"dns-account:{account_id}",)) is None:
+            return out
+        today = datetime.strptime(utc_day(self.clock.now()), "%Y-%m-%d")
+        gap = (today - datetime.strptime(row["last_day"], "%Y-%m-%d")).days
+        out["checking_in"] = gap < QUIET_DAYS
+        return out
+
     def add_queries(self, n: int) -> None:
         if self.db is None or n <= 0:
             return
@@ -277,7 +303,13 @@ class Stats:
                        (t["accounts_total"], new, t["devices_total"], t["by_platform"]["mac"],
                         t["by_platform"]["iphone"], t["by_platform"]["ipad"], now, day))
             # Keep the table small: a device unseen for KEEP_ACTIVITY_DAYS is dropped.
-            db.execute("DELETE FROM activity WHERE last_day < ?", (_shift(day, -KEEP_ACTIVITY_DAYS),))
+            # v0.8.26: except an unreleased iPhone/iPad and its account's DNS row, so the
+            # owner's "Not checking in · last seen" stays true for a phone gone quiet long ago.
+            db.execute("DELETE FROM activity WHERE last_day < ? AND subject NOT IN ("
+                       "SELECT 'device:' || id FROM devices WHERE released_at IS NULL "
+                       "AND platform IN ('ios','ipados') UNION "
+                       "SELECT 'dns-account:' || account_id FROM devices WHERE released_at IS NULL "
+                       "AND platform IN ('ios','ipados'))", (_shift(day, -KEEP_ACTIVITY_DAYS),))
 
     def _backfill(self) -> None:
         """Once, on a database with no history: rebuild each past day's totals from

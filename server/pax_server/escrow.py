@@ -50,7 +50,7 @@ import time
 import uuid
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from .config import Settings
 from .crypto import SecretBox, hash_token, new_token, token_matches
@@ -169,6 +169,9 @@ class Escrow:
     settings: Settings
     clock: Clock
     sender: EmailSender
+    # v0.8.26: (device row, account id) -> {"last_seen", "checking_in"} for iPhones and
+    # iPads (pax_server/stats.py Stats.device_seen); None: not known on this server.
+    seen: Optional[Callable] = None
 
     def __post_init__(self):
         self.box = SecretBox(self.settings.server_key_b64)
@@ -478,7 +481,7 @@ class Escrow:
         return self.device_status(acct, device_id)
 
     def _device(self, acct, device_id: str):
-        row = self.db.one("SELECT * FROM devices WHERE id=? AND account_id=?",
+        row = self.db.one("SELECT * FROM devices WHERE id=? AND account_id=? AND retired_at IS NULL",
                           (device_id, acct["id"]))
         if not row:
             raise NotFound("device not found")
@@ -758,12 +761,60 @@ class Escrow:
             "trial": self._trial_view(d, now),
             # v0.8.21: the emergency release cooling-off, for "turns off after 24 hours".
             "emergency_cooloff_seconds": self.settings.emergency_cooloff_seconds,
+            # v0.8.26: plainly whether the password was released (by a finished turn-off
+            # wait, an emergency or trial-day turn-off, or a support code), so the app
+            # never shows "Protected" for a device Pax no longer holds.
+            "released": d["released_at"] is not None,
+            # v0.8.26 (iPhone/iPad, owner only): the last UTC day the account's Pax DNS
+            # address was used, and whether it has been used in the last 48 hours or so
+            # (None: Pax can't tell). Day granularity; no time, address or lookup.
+            **self._seen_view(d),
         }
 
+    def _seen_view(self, d) -> dict:
+        out = {"last_seen": None, "checking_in": None}
+        if self.seen is None:
+            return out
+        try:
+            got = self.seen(d, d["account_id"]) or {}
+        except Exception:  # noqa: BLE001 - a status read never fails on this
+            log.exception("last-seen lookup failed")
+            return out
+        out["last_seen"] = got.get("last_seen")
+        out["checking_in"] = got.get("checking_in")
+        return out
+
     def list_devices(self, acct) -> list[dict]:
-        rows = self.db.all("SELECT id FROM devices WHERE account_id=? ORDER BY installed_at",
-                           (acct["id"],))
+        rows = self.db.all("SELECT id FROM devices WHERE account_id=? AND retired_at IS NULL "
+                           "ORDER BY installed_at", (acct["id"],))
         return [self.device_status(acct, r["id"]) for r in rows]
+
+    def retire_device(self, acct, device_id: str) -> dict:
+        """v0.8.26 "Remove from list" for a device Pax is already off on: the owner's
+        list forgets it. Allowed ONLY when the device's password was already released,
+        so it can never turn protection off or shorten a wait. Logged either way; the
+        row stays (retired_at) for the event history."""
+        row = self.db.one("SELECT * FROM devices WHERE id=? AND account_id=?", (device_id, acct["id"]))
+        if not row:
+            raise NotFound("device not found")
+        if row["retired_at"] is not None:
+            return {"device_id": row["id"], "retired": True, "retired_at": row["retired_at"]}
+        if row["released_at"] is None:
+            self._log(acct["id"], "device_retire_refused", device_id, "not released")
+            raise Conflict("Pax is still on this device, so it stays on your account. "
+                           "Use the turn-off wait first.")
+        now = self.clock.now()
+        cur = self.db.execute("UPDATE devices SET retired_at=? WHERE id=? AND account_id=? "
+                              "AND released_at IS NOT NULL AND retired_at IS NULL",
+                              (now, device_id, acct["id"]))
+        if cur.rowcount != 1:
+            raise Conflict("this device changed; try again")
+        try:   # its last-seen day goes too (v0.8.24 activity table, when this server keeps one)
+            self.db.execute("DELETE FROM activity WHERE subject=?", (f"device:{device_id}",))
+        except sqlite3.OperationalError:
+            pass
+        self._log(acct["id"], "device_retired", device_id)
+        return {"device_id": device_id, "retired": True, "retired_at": now}
 
     # ---------------------------------------------------------------- removal
     def request_removal(self, acct, device_id: str) -> dict:

@@ -183,6 +183,13 @@ final class SetupModel: ObservableObject {
     @Published var phoneStatus: [String: EscrowClient.DeviceStatus] = [:]
     @Published var phoneStatusFetchedAt = Date()
     @Published var revealedPhonePassword: [String: String] = [:]
+    /// v0.8.26: when the phones' server status was last fetched successfully, whether the
+    /// latest try failed (the last known status stays, with "Last checked …"), and whether
+    /// a fetch is running (the Refresh status spinner).
+    @Published var phoneStatusCheckedAt: Date?
+    @Published var phoneStatusFailed = false
+    @Published var phoneStatusRefreshing = false
+    private var lastRefreshTap: Date?
 
     let deviceService: DeviceService
     let coordinator: SetupCoordinator
@@ -670,8 +677,16 @@ final class SetupModel: ObservableObject {
 
     /// Matches each protected iPhone to its device on the server (by name, newest
     /// first) and fetches its status.
-    func refreshPhones() async {
+    ///
+    /// v0.8.26: one request (GET /v1/devices) for all of the account's phones. Called when
+    /// the app opens or becomes active, when Home appears, after an action, and from
+    /// "Refresh status" (at most once every 10 s). No timer. `quiet`: a failure keeps the
+    /// last known status and shows "couldn't reach Pax" under it instead of an error card.
+    func refreshPhones(quiet: Bool = false) async {
         guard hasAccount, !deviceRecords.isEmpty else { return }
+        if quiet && phoneStatusRefreshing { return }      // one at a time for the automatic ones
+        phoneStatusRefreshing = true
+        defer { phoneStatusRefreshing = false }
         do {
             let server = try await coordinator.escrow.devices()
                 .filter { $0.platform != "mac" && $0.platform != "macos" }
@@ -690,9 +705,52 @@ final class SetupModel: ObservableObject {
             }
             phoneStatus = map
             phoneStatusFetchedAt = Date()
+            phoneStatusCheckedAt = phoneStatusFetchedAt
+            phoneStatusFailed = false
         } catch {
-            failure = PaxErrorClassifier.classify(error)
-            lastAction = { [weak self] in Task { await self?.refreshPhones() } }
+            phoneStatusFailed = true
+            if !quiet {
+                failure = PaxErrorClassifier.classify(error)
+                lastAction = { [weak self] in Task { await self?.refreshPhones() } }
+            }
+        }
+    }
+
+    /// v0.8.26 "Refresh status": at most once every 10 seconds.
+    func refreshPhonesNow() {
+        let now = Date()
+        guard PhoneStatus.canRefresh(lastTap: lastRefreshTap, now: now) else { return }
+        lastRefreshTap = now
+        Task { await refreshPhones(quiet: true) }
+    }
+
+    /// v0.8.26: the phone's state from the server (nil: no server status yet).
+    func phoneState(_ rec: PaxDeviceRecord, at now: Date = Date()) -> PhoneStatus.State? {
+        guard let s = phoneStatus[rec.id] else { return nil }
+        return PhoneStatus.state(s, secondsLeft: phoneRemaining(rec, at: now), usesPaxFilter: rec.usesPaxFilter, now: now)
+    }
+
+    /// v0.8.26: the server answered, but this phone isn't on the account any more.
+    func phoneMissing(_ rec: PaxDeviceRecord) -> Bool {
+        rec.status == .protected && rec.escrowID != nil && phoneStatusCheckedAt != nil
+            && !phoneStatusFailed && phoneStatus[rec.id] == nil
+    }
+
+    /// v0.8.26 "Remove from list" on the card. Always removes it from this Mac's list; when
+    /// Pax is already off on it, the account forgets it too (the server allows that only for
+    /// a released device, so this can never turn anything off). Best effort: offline, the
+    /// server keeps its released record, which changes nothing.
+    func removePhoneFromList(_ rec: PaxDeviceRecord) {
+        let released = phoneStatus[rec.id].map(PhoneStatus.isReleased) ?? false
+        let escrowID = rec.escrowID
+        phoneStatus[rec.id] = nil
+        revealedPhonePassword[rec.id] = nil
+        forgetRecord(rec.id)
+        if released, let escrowID {
+            Task { [weak self] in
+                guard let self else { return }
+                _ = try? await self.coordinator.escrow.retireDevice(deviceID: escrowID)
+            }
         }
     }
 

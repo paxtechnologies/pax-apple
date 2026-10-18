@@ -1,4 +1,4 @@
-# Home and Settings (v0.8.18; Settings v0.8.23)
+# Home and Settings (v0.8.18; Settings v0.8.23; phone status v0.8.26)
 
 Ruben, 2026-10-17: "simplify, simplify, simplify: 1, 2, 3, not option overwhelm", without removing any
 functionality.
@@ -22,6 +22,40 @@ functionality.
    older server or pax-guard doesn't send it). In the trial day there is no cooling-off, so it says Pax turns
    off "straight away, as it's your trial day". On an iPhone or iPad, *Device details* (folded) holds its details,
    Support ID and support-release switch.
+
+## iPhone and iPad status from the server (v0.8.26)
+
+The card for an iPhone or iPad shows what the Pax server says, not what this Mac remembers from set-up
+(before 0.8.26 it kept saying "Protected" after Pax was turned off). PaxCore `PhoneStatus` maps the
+server's device status, in this order:
+
+| Server says | Card says |
+| --- | --- |
+| `released` (or `released_at`, or a request with status `revealed`): a finished turn-off wait with the password shown, an emergency or trial-day turn-off, or a support code | **Turned off** · "Pax is off on Ruben's iPhone." · "If Pax's settings are still on the iPhone, remove them there in Settings › General › VPN & Device Management." (plus the password while the server still offers it) |
+| a removal request `pending` / `notifying` | the turn-off wait countdown, as before |
+| `checking_in: false` (no Pax DNS traffic for 48 hours or more; phones on Pax's own filter only) | **Not checking in** · "It may have been reset or removed." · "Last seen Thu 15 Oct" |
+| trial day / nothing else | Trial day / **Protected**, as before |
+| the server answered but the phone isn't on the account | "Pax can't find this device on your account any more." |
+
+* **Turned off** hides *What's blocked* and *Turn off* (turn-off, emergency and support controls). The card
+  has a prominent **Remove from list** and **Set up again**. The confirm reads "This removes it from the list on
+  this Mac." Removing also asks the server to forget the device (`POST /v1/devices/{id}/retire`), which the server
+  allows only for a device whose password was already released. It never turns anything off, and it's logged.
+  If the server can't be reached, the device still leaves this Mac's list.
+* **Not checking in** keeps the Turn off card (Pax may still be on the phone). Its *Remove from list* is local
+  only: "This removes it from the list on this Mac. If Pax is still on it, Pax stays on." All of an account's
+  iPhones and iPads share one Pax DNS address, so the server can't tell them apart: a phone shows as not
+  checking in only when none of the account's phones has used Pax DNS for 48 hours or more. The owner sees this
+  on their own Mac. The partner isn't emailed.
+* A protected phone keeps *Remove from this list* inside *Device details*, with its honest text: "This only
+  tidies the list on this Mac. Pax stays on the device."
+* **When it refreshes**: one request for all of the account's phones (`GET /v1/devices`) when the app opens,
+  whenever it becomes active, when Home appears, and from a small **Refresh status** link on the Status card (at
+  most once every 10 seconds, with a small spinner). There is no timer. Under the status: "Checked just now" or
+  "Last checked 12 min ago". If Pax can't be reached, the last known state stays, with "· couldn't reach Pax just
+  now" added, so an old "Protected" never looks fresh. Nothing fails open.
+* The sidebar label under each phone follows the same states: Protected · Turn-off wait · Turned off · Not
+  checking in · Setting up.
 
 ## Sidebar and Blocked Sites / Apps (v0.8.21)
 
@@ -59,7 +93,7 @@ Order (PaxCore `AppSettingsLayout.sections`):
   one button, *Add…* / *Change…*. The sheet holds the rule, the partner and your own email, and under *How Pax
   sends the email* the Pax server / own email account choice with its fields. Rules unchanged (told first,
   fail closed; changing or removing them waits; pax-guard enforces both).
-* **Updates**: "Version 0.8.25 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
+* **Updates**: "Version 0.8.26 · last checked …" and *Update now*; *About Pax* (folded) holds the auto-update
   line, wordmark, tagline, principles, licence and site link (About was its own card before).
 * **Pax Max** (folded like Advanced, closed by default, just above it; off by default for everyone): the row
   shows *On* / *Off* / *Turning off* and "Blurs pictures and video in Firefox. Other browsers aren't covered

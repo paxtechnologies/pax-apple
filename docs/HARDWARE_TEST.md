@@ -288,10 +288,26 @@ Use a test device and a test support key only (never redeem on a device you rely
    (under *How Pax sends the email*) the Pax server / own email choice. Changing or removing them still shows
    "Changing to … on …" (after the turn-off wait), on the card and in the sheet. With the relay down after a
    removal request, the card says "1 email waiting to send. Pax keeps trying."
-6. Updates: "Version 0.8.25 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
+6. Updates: "Version 0.8.26 · last checked …" and *Update now*; *About Pax* opens to the wordmark, principles,
    licence and site link.
 7. Security notices: after a pax-guard update (a short backup episode in `{"cmd":"tamper.list"}` as
    `dns:fallback_on` / `dns:fallback_off`), Settings › Advanced and Home show no notice for it. Stop the filter
    for 10+ minutes (block the upstream): one line "Pax used its backup family filter for N minutes on …". No
    notice shows a code like `dns:fallback` or `changed:admins`; adding an admin shows "The list of
    administrators on this Mac changed (…)".
+
+### v0.8.26: iPhone/iPad status from the server
+
+1. With a protected iPhone, its Status card says "Protected" and, under it, "Checked just now" with a small
+   *Refresh status* link. Click it: a brief spinner, then "Checked just now". Clicking again within 10 seconds
+   does nothing.
+2. Turn Pax off on the iPhone (trial day, or a finished turn-off wait with the password shown, or a support
+   code). Within a refresh (switch away from Pax and back, open Home, or *Refresh status*) the card says
+   "Turned off" and "Pax is off on <name>.", the sidebar says "Turned off", and *What's blocked* and *Turn off*
+   are gone. *Remove from list* (prominent) and *Set up again* are on the card. *Remove from list* asks
+   "Remove <name> from the list?" / "This removes it from the list on this Mac." and the phone leaves the
+   sidebar. A second Mac on the same account no longer lists it either (server: device retired).
+3. Leave a phone on Pax DNS switched off (or in flight mode) for 3 UTC days: "Not checking in", "It may have
+   been reset or removed.", "Last seen …". Switch it on and use it: "Protected" again after a refresh.
+4. Disconnect the Mac from the network and refresh: the last state stays, with "Last checked … · couldn't
+   reach Pax just now". No error card.

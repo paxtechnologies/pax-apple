@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.25
+# Pax Peace (Apple), v0.8.26
 
 **Less scrolling. More living.**
 
@@ -175,6 +175,10 @@ Verified support release (v0.8.15): `POST devices {support_release}` (the set-up
 `POST devices/{id}/support-release/redeem {code}` (partner emailed first, then the password is returned;
 refusals are `support_*` errors, PAX-ESCROW-012 to 019). `GET devices/{id}` shows `support_id` and
 `support_release`.
+Device state (v0.8.26): `GET devices` / `GET devices/{id}` add `released` and, for iPhones and iPads,
+`last_seen` (a UTC day) and `checking_in` (false after 48 hours or more with no Pax DNS traffic; null =
+unknown). `POST devices/{id}/retire` forgets a device on the owner's list, only once its password was
+released (409 otherwise, 404 for another account's device; logged; never turns anything off).
 Blocklist (v0.3): `GET blocklist`, `POST blocklist {domain}` (instant), `POST blocklist/remove
 {domain}` (202, waits), `POST allowlist {domain}` (202, waits), `POST allowlist/remove {domain}`
 (instant), `POST blocklist/requests/{id}/cancel`, `GET dns` (your DoH URL; creates the token),

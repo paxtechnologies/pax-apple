@@ -308,6 +308,7 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     from . import doh as _doh_mod
     _doh_mod.install_log_filter()     # also drops /v1/stats lines (the key can be in the URL)
     stats = stats_mod.Stats(escrow.db, escrow.clock, doh, role="all", server=settings.api_host)
+    escrow.seen = stats.device_seen          # v0.8.26: last_seen / checking_in on device status
     caddy = None
     if settings.caddy_sync and settings.doh_enabled:
         from .caddy_sync import CaddySync
@@ -490,6 +491,13 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.get("/v1/devices/{device_id}")
     def get_device(device_id: str, acct=Depends(current_account)):
         return escrow.device_status(acct, device_id)
+
+    @app.post("/v1/devices/{device_id}/retire")
+    def retire_device(device_id: str, acct=Depends(current_account)):
+        """v0.8.26 "Remove from list": forget a device on the owner's account. Only
+        for a device whose password was already released (409 otherwise); it never
+        turns anything off. Logged."""
+        return escrow.retire_device(acct, device_id)
 
     @app.post("/v1/devices/{device_id}/removal-request", status_code=201)
     def request_removal(device_id: str, acct=Depends(current_account)):

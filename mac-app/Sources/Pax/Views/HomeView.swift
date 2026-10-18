@@ -30,7 +30,7 @@ struct HomeView: View {
         .onAppear {
             if mac.deviceID != nil { mac.refresh() }
             if blocklist.signedIn { blocklist.refresh() }
-            Task { await model.refreshPhones() }
+            Task { await model.refreshPhones(quiet: true) }     // v0.8.26: one request, quiet
         }
     }
 
@@ -341,6 +341,9 @@ struct WhatsBlockedCard: View {
 }
 
 /// Home for one iPhone or iPad: the same three cards.
+/// v0.8.26: the state comes from the Pax server (PhoneStatus), not from the set-up record.
+/// Turned off: one card that says so, with "Remove from list" and "Set up again"; the
+/// What's blocked and Turn off cards (turn-off, emergency, support) are hidden.
 struct PhoneHome: View {
     @EnvironmentObject var model: SetupModel
     let rec: PaxDeviceRecord
@@ -349,16 +352,22 @@ struct PhoneHome: View {
     @State private var showEmergency = false
     @State private var showDetails = false
     @State private var supportCode = ""
+    @State private var confirmRemove = false
+    @State private var removeMessage = PhoneStatus.removeMessageOff
 
     private var st: EscrowClient.DeviceStatus? { model.phoneStatus[rec.id] }
     private var trialActive: Bool { TrialDay.isActive(st?.trial) }
+    private var isOff: Bool {
+        if case .turnedOff? = model.phoneState(rec) { return true }
+        return false
+    }
 
     var body: some View {
         statusCard
         if let failure = model.failure, model.screen == .home {
             ErrorCard(error: failure, retry: { model.retry() }, details: { model.supportDetails(failure) })
         }
-        if rec.status == .protected {
+        if rec.status == .protected && !isOff {
             WhatsBlockedCard(apps: .phone(rec.blockedAppNames))
             turnOffCard
         }
@@ -380,30 +389,45 @@ struct PhoneHome: View {
                     .buttonStyle(PrimaryButtonStyle(accent: true))
             } else if let s = st {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    let state = HomeLayout.status(removalStatus: s.removal_request?.status,
-                                                  secondsLeft: model.phoneRemaining(rec, at: ctx.date),
-                                                  trial: s.trial, now: ctx.date)
+                    let state = PhoneStatus.state(s, secondsLeft: model.phoneRemaining(rec, at: ctx.date),
+                                                  usesPaxFilter: rec.usesPaxFilter, now: ctx.date)
                     VStack(alignment: .leading, spacing: 8) {
-                        StatusHeadline(status: state,
-                                       cancel: s.removal_request?.status == "pending" ? { model.cancelPhoneRemoval(rec) } : nil)
                         switch state {
-                        case .protected:
-                            Text(rec.name + (rec.iosVersion.map { " · iOS \($0)" } ?? ""))
-                                .font(Theme.body(14)).foregroundStyle(Theme.mutedText)
-                            if s.in_grace_period {
-                                Text(TurnOffWait.firstHour).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
-                            }
-                        case .trial:
-                            TrialDayLines(trial: s.trial, now: ctx.date) { confirmEndTrial = true }
+                        case .turnedOff:
+                            turnedOffLines(s)
+                        case .notCheckingIn(let lastSeen):
+                            notCheckingInLines(lastSeen)
                         default:
-                            EmptyView()
+                            if let home = PhoneStatus.homeStatus(state) {
+                                StatusHeadline(status: home,
+                                               cancel: s.removal_request?.status == "pending"
+                                                   ? { model.cancelPhoneRemoval(rec) } : nil)
+                                switch home {
+                                case .protected:
+                                    Text(rec.name + (rec.iosVersion.map { " · iOS \($0)" } ?? ""))
+                                        .font(Theme.body(14)).foregroundStyle(Theme.mutedText)
+                                    if s.in_grace_period {
+                                        Text(TurnOffWait.firstHour).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                                    }
+                                case .trial:
+                                    TrialDayLines(trial: s.trial, now: ctx.date) { confirmEndTrial = true }
+                                default:
+                                    EmptyView()
+                                }
+                            }
                         }
                     }
                 }
+            } else if model.phoneMissing(rec) {
+                Text(PhoneStatus.notFoundLine)
+                    .font(Theme.body(14)).foregroundStyle(Theme.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                removeButtons(message: PhoneStatus.removeMessageQuiet, prominent: false)
             } else {
                 Text(rec.escrowID == nil ? "Pax is looking for this device on your account…" : "Checking…")
                     .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
             }
+            if rec.status == .protected { refreshRow }
         }
         .alert(TrialDay.confirmTitle, isPresented: $confirmEndTrial) {
             Button(TrialDay.startWaitButton, role: .destructive) { model.endPhoneTrial(rec) }
@@ -411,6 +435,92 @@ struct PhoneHome: View {
         } message: {
             Text(TrialDay.confirmMessage)
         }
+        .background(Color.clear.alert(PhoneStatus.removeTitle(name: rec.name), isPresented: $confirmRemove) {
+            Button("Remove", role: .destructive) { model.removePhoneFromList(rec) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(removeMessage)
+        })
+    }
+
+    /// v0.8.26 Turned off: says so plainly; the password stays reachable while the server
+    /// still offers it, so Pax's settings can be taken off the phone.
+    @ViewBuilder private func turnedOffLines(_ s: EscrowClient.DeviceStatus) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(Theme.mutedText).frame(width: 11, height: 11)
+            Text(PhoneStatus.headline(.turnedOff)).font(Theme.heading(30)).foregroundStyle(Theme.primaryText)
+        }
+        Text(PhoneStatus.offLine(name: rec.name))
+            .font(Theme.body(14, weight: .medium)).foregroundStyle(Theme.primaryText)
+            .fixedSize(horizontal: false, vertical: true)
+        if let pw = model.revealedPhonePassword[rec.id] {
+            Text("To remove Pax from the \(rec.isIPad ? "iPad" : "iPhone"): Settings › General › "
+                 + "VPN & Device Management › Pax › Remove Management, then enter this password:")
+                .font(Theme.body(13)).foregroundStyle(Theme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(pw).font(.system(size: 18, design: .monospaced)).textSelection(.enabled)
+        } else {
+            Text(PhoneStatus.offHint(isIPad: rec.isIPad))
+                .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            if s.removal_request?.status == "revealed" {
+                Button("Show the removal password again") { model.revealPhonePassword(rec) }
+                    .buttonStyle(.link).font(Theme.body(13))
+                    .disabled(model.busy)
+            }
+        }
+        removeButtons(message: PhoneStatus.removeMessageOff, prominent: true)
+    }
+
+    /// v0.8.26 Not checking in: no Pax DNS traffic for 48 hours or more.
+    @ViewBuilder private func notCheckingInLines(_ lastSeen: String?) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(Theme.border).frame(width: 11, height: 11)
+            Text(PhoneStatus.headline(.notCheckingIn(lastSeen: lastSeen)))
+                .font(Theme.heading(30)).foregroundStyle(Theme.primaryText)
+        }
+        Text(PhoneStatus.quietLine).font(Theme.body(14)).foregroundStyle(Theme.mutedText)
+            .fixedSize(horizontal: false, vertical: true)
+        if let line = PhoneStatus.lastSeenLine(lastSeen) {
+            Text(line).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+        }
+        removeButtons(message: PhoneStatus.removeMessageQuiet, prominent: false)
+    }
+
+    private func removeButtons(message: String, prominent: Bool) -> some View {
+        HStack(spacing: 12) {
+            if prominent {
+                Button(PhoneStatus.removeButton) { removeMessage = message; confirmRemove = true }
+                    .buttonStyle(PrimaryButtonStyle(accent: true))
+            } else {
+                Button(PhoneStatus.removeButton) { removeMessage = message; confirmRemove = true }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+            Button(PhoneStatus.setUpAgainButton) { model.addPhone() }
+                .buttonStyle(SecondaryButtonStyle())
+        }
+        .padding(.top, 4)
+    }
+
+    /// v0.8.26 "Checked just now / Last checked …" and a small "Refresh status" (at most
+    /// once every 10 s; one request for all phones).
+    private var refreshRow: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            HStack(spacing: 8) {
+                if model.phoneStatusRefreshing {
+                    ProgressView().controlSize(.small)
+                }
+                if let line = PhoneStatus.freshness(lastChecked: model.phoneStatusCheckedAt,
+                                                    failed: model.phoneStatusFailed, now: ctx.date) {
+                    Text(line).font(Theme.body(12)).foregroundStyle(Theme.mutedText)
+                }
+                Spacer(minLength: 8)
+                Button(PhoneStatus.refreshButton) { model.refreshPhonesNow() }
+                    .buttonStyle(.link).font(Theme.body(12))
+                    .disabled(model.phoneStatusRefreshing)
+            }
+        }
+        .padding(.top, 2)
     }
 
     // MARK: 3 Turn off
@@ -482,7 +592,9 @@ struct PhoneDetailsList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            detail("Status", rec.status == .protected ? "Protected" : "Setting up")
+            // v0.8.26: the server's state, not the set-up record's.
+            detail("Status", rec.status != .protected ? "Setting up"
+                   : model.phoneState(rec).map(PhoneStatus.sidebarLabel) ?? "Protected")
             if let w = model.phoneStatus[rec.id]?.wait_seconds {          // v0.8.16
                 detail(TurnOffWait.label, TurnOffWait.duration(seconds: w))
             }
@@ -519,7 +631,7 @@ struct PhoneDetailsList: View {
             Button("Remove", role: .destructive) { model.forgetRecord(rec.id) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This only tidies the list on this Mac. Pax stays on the device.")
+            Text(PhoneStatus.removeMessageProtected)
         }
     }
 
