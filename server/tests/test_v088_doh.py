@@ -184,10 +184,16 @@ def test_lists_not_loaded_is_servfail(env):
 
 
 def test_rate_limit_per_client(env):
-    env.doh.limiter = doh_mod.RateLimiter(rate=0.001, burst=3)
-    codes = [env.doh.answer(query("example.net"), env.token, "198.51.100.9")[0] for _ in range(5)]
+    # v0.8.25: no token / an unknown token is limited per client address; a known
+    # token per token (test_v0825_doh_limits.py has the carrier-NAT cases).
+    env.doh.limits = doh_mod.RateLimits(ip_rate=0.001, ip_burst=3, token_rate=0.001, token_burst=3)
+    unknown = "z" * 32
+    codes = [env.doh.answer(query("example.net"), unknown, "198.51.100.9")[0] for _ in range(5)]
     assert codes[:3] == [200, 200, 200] and codes[3:] == [429, 429]
-    assert env.doh.answer(query("example.net"), env.token, "198.51.100.10")[0] == 200
+    assert env.doh.answer(query("example.net"), unknown, "198.51.100.10")[0] == 200
+    env.doh.sync_once()
+    codes = [env.doh.answer(query("example.net"), env.token, f"198.51.100.{20 + i}")[0] for i in range(5)]
+    assert codes[:3] == [200, 200, 200] and codes[3:] == [429, 429]   # same token, any address
 
 
 # ---------------------------------------------------------------- settings

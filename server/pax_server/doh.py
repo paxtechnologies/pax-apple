@@ -43,7 +43,9 @@ truth and no split brain.
 Privacy: no query is logged. The uvicorn access log line for any /dns-query
 path is dropped in-process (the path holds the token and a GET holds the name),
 Caddy writes no access log, and nothing here records names or client addresses
-except a per-address request counter for rate limiting, kept in memory only.
+except the rate-limit buckets, kept in memory only: per account token hash for
+known tokens, and per client address (v0.8.25, see RateLimits). Neither is
+logged or written to disk.
 """
 from __future__ import annotations
 
@@ -147,6 +149,37 @@ class RateLimiter:
             return ok
 
 
+class RateLimits:
+    """v0.8.25: DoH rate limits that survive carrier-grade NAT.
+
+    UK mobile carriers put many phones behind one IPv4 address, so a limit keyed
+    only on the client address throttles a few hundred Pax phones on one carrier
+    IP. Now:
+      * a query with a KNOWN account token (Policies.known_hash) is limited per
+        token hash (all of one account's devices share it), and then by a much
+        looser per-address flood ceiling, so thousands of phones on one carrier
+        address are fine but one address still can't flood the box. The token is
+        checked first, so a flooding token doesn't use up its neighbours' ceiling;
+      * a query with no token, or an unknown or retired one, keeps the strict
+        per-address limit (fail closed: before the first policy sync every token
+        is unknown, so every query gets the strict limit).
+    Each bucket set is a bounded LRU; keys are token hashes and addresses, kept
+    in memory only and never logged. A rate of 0 switches that bucket set off."""
+
+    def __init__(self, ip_rate: float = 25.0, ip_burst: float = 400.0,
+                 token_rate: float = 25.0, token_burst: float = 400.0,
+                 ceiling_rate: float = 2000.0, ceiling_burst: float = 4000.0,
+                 max_keys: int = 50_000, clock: Callable[[], float] = time.monotonic):
+        self.per_ip = RateLimiter(ip_rate, ip_burst, max_keys, clock)
+        self.per_token = RateLimiter(token_rate, token_burst, max_keys, clock)
+        self.ip_ceiling = RateLimiter(ceiling_rate, ceiling_burst, max_keys, clock)
+
+    def allow(self, client: str, token_hash: Optional[str]) -> bool:
+        if token_hash is None:
+            return self.per_ip.allow(client)
+        return self.per_token.allow(token_hash) and self.ip_ceiling.allow(client)
+
+
 # --------------------------------------------------------- user policies
 def _settings_of(acct: dict) -> dict:
     s = acct.get("settings") or {}
@@ -234,16 +267,29 @@ class Policies:
     def lookup(self, token: Optional[str]) -> "dnsf.Policy":
         """The user's policy, or the default (everything on, no own lists) for
         an unknown or retired token: still filtered, never open."""
+        return self.resolve(token)[0]
+
+    def resolve(self, token: Optional[str]) -> tuple:
+        """v0.8.25: (policy, token hash) for a known, unretired token whose
+        account has a policy; (default policy, None) otherwise."""
         if not token or not TOKEN_RE.match(token):
-            return self.default
+            return self.default, None
+        h = hash_token(token)
         with self._lock:
-            hit = self._tokens.get(hash_token(token))
+            hit = self._tokens.get(h)
             if not hit:
-                return self.default
+                return self.default, None
             aid, retire_at = hit
             if retire_at is not None and self.clock() >= retire_at:
-                return self.default
-            return self._policies.get(aid, self.default)
+                return self.default, None
+            pol = self._policies.get(aid)
+            if pol is None:
+                return self.default, None
+            return pol, h
+
+    def known_hash(self, token: Optional[str]) -> Optional[str]:
+        """v0.8.25: the token's hash when it is a known account token, else None."""
+        return self.resolve(token)[1]
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -312,6 +358,8 @@ class DohService:
 
     def __init__(self, feed, state_dir: str, role: str = "all", forwarder=None,
                  filter_store=None, rate: float = 25.0, burst: float = 400.0,
+                 token_rate: float = 25.0, token_burst: float = 400.0,
+                 ceiling_rate: float = 2000.0, ceiling_burst: float = 4000.0,
                  poll_seconds: float = 3.0, full_sync_seconds: float = 600.0,
                  clock: Callable[[], float] = time.time):
         self.role = role
@@ -321,7 +369,12 @@ class DohService:
         self.policies = Policies(clock=clock)
         self.forwarder = forwarder or self._default_forwarder()
         self.filter_store = filter_store
-        self.limiter = RateLimiter(rate, burst)
+        # v0.8.25: per token for known tokens (+ a loose per-address ceiling),
+        # strict per address for no/unknown token. See RateLimits.
+        self.limits = RateLimits(ip_rate=rate, ip_burst=burst, token_rate=token_rate,
+                                 token_burst=token_burst, ceiling_rate=ceiling_rate,
+                                 ceiling_burst=ceiling_burst)
+        self.limiter = self.limits.per_ip     # unknown-token bucket (pre-0.8.25 name)
         self.poll_seconds = poll_seconds
         self.full_sync_seconds = full_sync_seconds
         self.seq = 0
@@ -469,14 +522,14 @@ class DohService:
     # ----------------------------------------------------------- answer
     def answer(self, wire: bytes, token: Optional[str], client: str) -> tuple[int, bytes, dict]:
         """(HTTP status, body, headers)."""
-        if not self.limiter.allow(client):
+        policy, token_hash = self.policies.resolve(token)
+        if not self.limits.allow(client, token_hash):
             self.stats["rate_limited"] += 1
             return 429, b"slow down", {"Retry-After": "2", "Content-Type": "text/plain"}
         if not wire or len(wire) < 12 or len(wire) > MAX_MESSAGE:
             self.stats["bad"] += 1
             return 400, b"bad DNS message", {"Content-Type": "text/plain"}
         self.stats["queries"] += 1
-        policy = self.policies.lookup(token)
         try:
             resp = self.forwarder.handle(wire, policy)
         except Exception:  # noqa: BLE001 - fail closed

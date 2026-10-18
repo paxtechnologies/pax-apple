@@ -226,7 +226,11 @@ def _make_doh(settings: Settings, blocklist=None):
     else:
         feed = doh_mod.LocalFeed(blocklist)
     return doh_mod.DohService(feed, state, role=settings.role, rate=settings.doh_rate_per_ip,
-                              burst=settings.doh_burst_per_ip)
+                              burst=settings.doh_burst_per_ip,
+                              token_rate=settings.doh_rate_per_token,        # v0.8.25
+                              token_burst=settings.doh_burst_per_token,
+                              ceiling_rate=settings.doh_ip_ceiling_rate,
+                              ceiling_burst=settings.doh_ip_ceiling_burst)
 
 
 def create_dns_app(settings: Settings, doh=None) -> FastAPI:

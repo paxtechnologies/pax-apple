@@ -190,12 +190,25 @@ asks Caddy to reload the same configuration at most every 20 minutes so a fresh 
 
 **Privacy**: no query logging. Caddy has no access log; the primary drops uvicorn access-log lines for any
 `dns-query` or replica path in-process, and the second server runs uvicorn with `--no-access-log`. Nothing
-stores names or client addresses; the per-address rate-limit counters live in memory only.
+stores names or client addresses; the rate-limit buckets (per account token hash and per client
+address) live in memory only and are never logged.
 Since 0.8.24 the server also notes, per account, the last day (UTC) its DNS address was used, so it can
 count active iPhones and iPads; it never notes what was looked up (docs/USAGE_STATS.md).
 
-**Abuse limits and sizing (cx23: 2 vCPU, 4 GB)**: 25 queries/s per client address with a burst of 400
-(`PAX_DOH_RATE_PER_IP`, `PAX_DOH_BURST_PER_IP`; over it: HTTP 429), messages up to 4 KB, at most 48
+**Abuse limits and sizing (cx23: 2 vCPU, 4 GB)**: since 0.8.25 the limit follows the account, not
+the address, so many phones behind one mobile-carrier address (carrier-grade NAT) aren't throttled:
+
+| query | limit | env (default) |
+|---|---|---|
+| known account token | per token (all of that account's devices): 25 queries/s, burst 400 | `PAX_DOH_RATE_PER_TOKEN` (25), `PAX_DOH_BURST_PER_TOKEN` (400) |
+| known account token | then a flood ceiling per client address: 2,000 queries/s, burst 4,000 (~20,000 phones at 0.1 qps) | `PAX_DOH_IP_CEILING_RATE` (2000), `PAX_DOH_IP_CEILING_BURST` (4000) |
+| no token, or an unknown or retired one | per client address: 25 queries/s, burst 400 (as before) | `PAX_DOH_RATE_PER_IP` (25), `PAX_DOH_BURST_PER_IP` (400) |
+
+Over a limit: HTTP 429 with `Retry-After: 2` (unchanged). The token is checked before the ceiling, so one
+flooding account doesn't use up its neighbours' share of a carrier address; an unknown-token flood from an
+address has its own bucket and doesn't touch real phones there. Right after a restart, before the first
+policy sync, every token counts as unknown, so the strict limit applies (fail closed). Each bucket set is a
+bounded LRU (50,000 keys); a rate of 0 switches that limit off. Messages up to 4 KB, at most 48
 queries resolving at once (`PAX_DOH_MAX_INFLIGHT`), answers cached (50,000 entries, TTLs capped). The lists
 take ~60 MB of memory. One phone sends a few thousand queries a day, mostly answered from its own cache,
 so one cx23 should carry a few thousand phones; above that, add servers behind the same name (estimate,
@@ -208,8 +221,9 @@ not load-tested).
 * **Primary down**: DoH keeps working from the second server with the last known lists; adding/removing
   sites, removal requests and partner emails wait for the primary.
 * **Privacy**: every name an iPhone looks up passes through Pax's servers (not stored). Users should know.
-* **Load**: a busy day or abuse could hit the per-address limits or the box's CPU. The limits protect the
-  box; a client over them gets errors.
+* **Load**: a busy day or abuse could hit the limits or the box's CPU. The limits protect the box; a
+  client over them gets errors. Since 0.8.25 many phones behind one carrier address share only the loose
+  per-address ceiling, not the strict per-address limit.
 * **Upstream**: unknown names still go to CleanBrowsing Family (then AdGuard Family). If both refuse Pax's
   servers, every answer is SERVFAIL.
 * **Single DNS provider**: paxpeace.com's own DNS (Namecheap BasicDNS) has no health checks; a dead server

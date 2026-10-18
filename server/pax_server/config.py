@@ -90,7 +90,14 @@ class Settings:
     doh_enabled: bool = False          # Settings(): off (tests); from_env: on
     doh_state_dir: str = ""            # default: <db dir>/dns
     doh_rate_per_ip: float = 25.0      # queries per second, sustained
-    doh_burst_per_ip: float = 400.0
+    doh_burst_per_ip: float = 400.0    # (per-IP: queries with no or an unknown token)
+    # v0.8.25: queries with a known account token are limited per token (all of
+    # the account's devices), then by a loose per-IP ceiling so many phones behind
+    # one carrier-NAT address aren't throttled. 0 = that limit off.
+    doh_rate_per_token: float = 25.0
+    doh_burst_per_token: float = 400.0
+    doh_ip_ceiling_rate: float = 2000.0
+    doh_ip_ceiling_burst: float = 4000.0
     doh_max_inflight: int = 48         # worker threads answering at once
     replica_primary_url: str = "https://api.paxpeace.com"
     replica_key: str = ""              # role "dns": the shared key (secret)
@@ -131,6 +138,10 @@ class Settings:
             doh_state_dir=os.environ.get("PAX_DOH_STATE_DIR", ""),
             doh_rate_per_ip=float(os.environ.get("PAX_DOH_RATE_PER_IP", d.doh_rate_per_ip)),
             doh_burst_per_ip=float(os.environ.get("PAX_DOH_BURST_PER_IP", d.doh_burst_per_ip)),
+            doh_rate_per_token=float(os.environ.get("PAX_DOH_RATE_PER_TOKEN", d.doh_rate_per_token)),
+            doh_burst_per_token=float(os.environ.get("PAX_DOH_BURST_PER_TOKEN", d.doh_burst_per_token)),
+            doh_ip_ceiling_rate=float(os.environ.get("PAX_DOH_IP_CEILING_RATE", d.doh_ip_ceiling_rate)),
+            doh_ip_ceiling_burst=float(os.environ.get("PAX_DOH_IP_CEILING_BURST", d.doh_ip_ceiling_burst)),
             doh_max_inflight=_env_int("PAX_DOH_MAX_INFLIGHT", d.doh_max_inflight),
             replica_primary_url=os.environ.get("PAX_REPLICA_PRIMARY_URL", d.replica_primary_url),
             replica_key=os.environ.get("PAX_REPLICA_KEY", ""),

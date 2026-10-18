@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.24
+# Pax Peace (Apple), v0.8.25
 
 **Less scrolling. More living.**
 
