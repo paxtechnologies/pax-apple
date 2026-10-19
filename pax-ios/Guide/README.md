@@ -7,7 +7,7 @@ waits for Apple's Family Controls (Distribution) entitlement. Same bundle id
 
 What it does:
 
-* **The guide is the home screen.** What you'll need (a Mac with macOS 13 or later, a cable,
+* **The guide is the home screen.** What you'll need (a Mac with macOS 12 Monterey or later, a cable,
   a backup), then nine numbered steps that follow Pax for Mac's iPhone path: get Pax on the
   Mac, choose "iPhone or iPad", plug in, choose what to block, choose the turn-off wait, turn
   off Find My, click "Protect my iPhone", turn Find My back on, check you're protected.

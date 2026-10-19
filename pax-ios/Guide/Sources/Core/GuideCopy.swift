@@ -8,8 +8,8 @@ public enum PaxLinks {
     /// The Mac download paxpeace.com links to (latest signed, notarised release).
     public static let macDownload = URL(string: "https://github.com/paxtechnologies/pax-apple/releases/latest/download/Pax.dmg")!
     public static let site = URL(string: "https://paxpeace.com")!
-    /// The "Your data" section of paxpeace.com (there is no separate privacy policy page yet).
-    public static let privacy = URL(string: "https://paxpeace.com/#privacy")!
+    /// The Pax Peace privacy policy.
+    public static let privacy = URL(string: "https://paxpeace.com/privacy")!
     public static let supportEmail = "hello@paxpeace.com"
     public static let support = URL(string: "mailto:hello@paxpeace.com")!
     public static let source = URL(string: "https://github.com/paxtechnologies/pax-apple")!
@@ -28,7 +28,8 @@ public enum GuideCopy {
     public static func device(isPad: Bool) -> String { isPad ? "iPad" : "iPhone" }
 
     public static func tagline(isPad: Bool) -> String {
-        "Pax blocks restricted content. Your Mac sets it up on this \(device(isPad: isPad))."
+        "Pax keeps adult and explicit content off this \(device(isPad: isPad)), for you or your family. "
+            + "Your Mac sets it up."
     }
 
     public static func title(isPad: Bool) -> String { "Protect this \(device(isPad: isPad))" }
@@ -38,7 +39,7 @@ public enum GuideCopy {
     public static func needs(isPad: Bool) -> [String] {
         let d = device(isPad: isPad)
         return [
-            "A Mac (macOS 13 or later)",
+            "A Mac (macOS 12 Monterey or later)",
             "A cable to connect this \(d) to the Mac",
             "A backup of this \(d) (Pax for Mac can make one)",
         ]
@@ -55,7 +56,7 @@ public enum GuideCopy {
             GuideStep(id: 4, title: "Choose what to block.",
                       detail: "Sensible choices are already made."),
             GuideStep(id: 5, title: "Choose your turn-off wait.",
-                      detail: "How long turning Pax off takes after you ask."),
+                      detail: "How long Pax takes to turn off after anyone asks."),
             GuideStep(id: 6, title: "Turn off Find My for now.",
                       detail: "Settings › your name › Find My. You'll turn it back on at the end."),
             GuideStep(id: 7, title: "On the Mac, click “Protect my \(d)”.",
@@ -76,7 +77,9 @@ public enum GuideCopy {
         return [
             "Setting up needs a Mac. After that, this \(d) stays protected on its own.",
             "“Keep my data” is the default: your apps, photos and Apple Account stay.",
-            "If you add someone you trust, they're told when you ask to turn Pax off. They never have to approve anything.",
+            "On your first day, you can change your mind instantly.",
+            "You can add someone you trust: a friend, a partner or a parent. They're emailed if anyone asks to turn Pax off. They never have to approve anything.",
+            "For your family: set Pax up on your child's \(d), choose a long turn-off wait and add yourself as the trusted person. No browsing history is kept, so it protects without spying.",
             "A full restore from a computer erases the \(d) and removes Pax.",
         ]
     }
@@ -106,8 +109,8 @@ public enum GuideCopy {
         case .protected:
             return "This \(d) is looking up websites through Pax's filter."
         case .notProtected:
-            return "This \(d) isn't using Pax's filter. Follow the steps above. "
-                + "If you chose a different filter under Advanced in Pax for Mac, this check can't confirm it."
+            return "This \(d) isn't using Pax's filter yet. Follow the steps above. "
+                + "If you picked a different filter under Advanced in Pax for Mac, this check can't see it."
         case .couldNotCheck(.offline):
             return "Connect to Wi-Fi or mobile data, then check again."
         case .couldNotCheck(.unclear):

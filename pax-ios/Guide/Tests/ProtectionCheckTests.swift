@@ -101,6 +101,26 @@ final class ProtectionCheckTests: XCTestCase {
         }
     }
 
+    func testCopyRules() {
+        for isPad in [false, true] {
+            var words = [GuideCopy.tagline(isPad: isPad), GuideCopy.title(isPad: isPad), GuideCopy.subtitle,
+                         GuideCopy.comingBody, GuideCopy.checkPrivacy]
+            words += GuideCopy.needs(isPad: isPad) + GuideCopy.goodToKnow(isPad: isPad)
+            words += GuideCopy.steps(isPad: isPad).flatMap { [$0.title, $0.detail ?? ""] }
+            words += [ProtectionCheck.Outcome.protected, .notProtected, .couldNotCheck(.offline), .couldNotCheck(.unclear)]
+                .map { GuideCopy.resultDetail($0, isPad: isPad) }
+            for w in words {
+                XCTAssertFalse(w.lowercased().contains("restricted"), w)
+                XCTAssertFalse(w.lowercased().contains("porn"), w)
+            }
+            XCTAssertTrue(GuideCopy.tagline(isPad: isPad).contains("adult and explicit content"))
+            XCTAssertTrue(GuideCopy.needs(isPad: isPad).contains { $0.contains("macOS 12 Monterey") })
+            XCTAssertTrue(GuideCopy.goodToKnow(isPad: isPad).contains { $0.contains("someone you trust") })
+            XCTAssertTrue(GuideCopy.goodToKnow(isPad: isPad).contains { $0.contains("erases the \(isPad ? "iPad" : "iPhone") and removes Pax") })
+        }
+        XCTAssertEqual(PaxLinks.privacy.absoluteString, "https://paxpeace.com/privacy")
+    }
+
     func testMacDownloadLink() {
         XCTAssertEqual(PaxLinks.macDownload.absoluteString,
                        "https://github.com/paxtechnologies/pax-apple/releases/latest/download/Pax.dmg")
