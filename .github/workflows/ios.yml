@@ -80,14 +80,14 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/guide-test.log"
       - name: Screenshots (simulator)
         continue-on-error: true
+        timeout-minutes: 12
         run: |
           set -x
           mkdir -p "$RUNNER_TEMP/shots"
           APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -path '*iphonesimulator*' -name 'Pax.app' | head -1)
           shoot() {  # udid name args...
             local U=$1 N=$2; shift 2
-            xcrun simctl terminate "$U" org.paxpeace.pax || true
-            xcrun simctl launch "$U" org.paxpeace.pax "$@"
+            xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax "$@"
             sleep 9
             xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/$N.png"
           }
