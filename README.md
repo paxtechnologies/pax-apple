@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.28
+# Pax Peace (Apple), v0.8.29
 
 **Less scrolling. More living.**
 
@@ -545,11 +545,16 @@ grace period and the emergency release.
 ### What it does
 
 1. **Preflight**: checks your password (`dscl . -authonly`), that you are an administrator and the
-   *only* one (another admin would be a way around the wait, so Pax refuses), that no `paxadmin`
-   exists yet, and reads FileVault's state. It asks you to save the FileVault recovery key outside
+   *only* one (another admin would be a way around the wait, so Pax refuses), and reads FileVault's
+   state. An old `paxadmin` from an earlier set-up only gets a warning (v0.8.29; see step 2). It asks you to save the FileVault recovery key outside
    the Mac and to have a backup.
 2. **Creates `paxadmin`**, a hidden administrator with a random 32-character password generated on the
-   Mac (`sysadminctl -addUser … -admin`, then `IsHidden 1`).
+   Mac (`sysadminctl -addUser … -admin`, then `IsHidden 1`). A leftover `paxadmin` is deleted first
+   (`sysadminctl -deleteUser` with your credentials, then `dscl . -delete`, rechecked for directory
+   lag). v0.8.29: if macOS won't delete it, Pax reuses it: a new random password
+   (`sysadminctl -resetPasswordFor` with your credentials, else `dscl . -passwd`), proven with
+   `dscl . -authonly`, then made an administrator and hidden. If neither works, Pax stops with
+   `PAX-MAC-004` and each command's result in Copy details.
 3. **Gives it a SecureToken** (`sysadminctl -secureTokenOn`), so FileVault, updates and Recovery keep
    working. With FileVault on, a missing token stops everything.
 4. **Verifies the password works** (`dscl . -authonly paxadmin …`). Nothing is escrowed or locked
@@ -565,8 +570,12 @@ grace period and the emergency release.
    in `admin`.
 
 If any step fails, Pax undoes the finished steps newest first (re-promoting you with paxadmin if the
-demotion already happened, then removing pax-guard and the profile, then deleting paxadmin) and tells
-you where it stopped. Root steps run through `osascript` (`do shell script … user name … password …
+demotion already happened, then removing pax-guard and the profile, then deleting paxadmin, or, if
+macOS keeps it, leaving it hidden with no admin rights and a forgotten password) and tells you where it
+stopped. **Remove Pax** re-promotes you, checks you really are an administrator, removes pax-guard and
+the profile, then deletes paxadmin with every route in one root shell (v0.8.29: before, a lone
+`sysadminctl -deleteUser` could take paxadmin out of the admin group without deleting it). If macOS
+still keeps it, Pax takes away its admin rights and says so; setting Pax up again reuses it. Root steps run through `osascript` (`do shell script … user name … password …
 with administrator privileges`), with the script on stdin so your password isn't in any process's
 arguments. The paxadmin password is never written to disk or logged.
 
@@ -645,7 +654,7 @@ Terminal as yourself:
 su paxadmin                                     # type the paxadmin password
 sudo /Library/PaxGuard/bin/pax-uninstall-emergency.sh --user alex
 exit
-sudo sysadminctl -deleteUser paxadmin           # you're an admin again
+sudo sysadminctl -deleteUser paxadmin -adminUser "$USER" -adminPassword -   # you're an admin again
 ```
 
 The script re-promotes you **first**, then stops pax-guard, removes the hosts block and the pf anchor,

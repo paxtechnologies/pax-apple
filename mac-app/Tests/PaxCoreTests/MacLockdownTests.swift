@@ -23,6 +23,21 @@ final class LockdownWorld: @unchecked Sendable {
     var safeLies = false
     var enrollment = "Enrolled via DEP: No\nMDM enrollment: No\n"
     var stickyAdmins: Set<String> = []   // v0.8.10: dseditgroup -d "works" but they stay admins
+    // v0.8.29: macOS keeps the paxadmin record: sysadminctl -deleteUser only takes it out
+    // of the admin group (exit 0), dscl -delete fails. Seen on macOS 26 after a removal.
+    var undeletablePaxadmin = false
+    var resetPasswordFails = false     // sysadminctl -resetPasswordFor does nothing (exit 0)
+    var dsclPasswdFails = false
+    var lingeringReads = 0             // directory lag: reads that still find a deleted record
+
+    /// Deleting paxadmin by any route, as the mock's macOS would.
+    func deletePaxadminRecord() -> Bool {
+        admins.removeAll { $0 == "paxadmin" }
+        if undeletablePaxadmin { leftoverPaxadmin = true; return false }
+        leftoverPaxadmin = false
+        paxadminPassword = nil
+        return true
+    }
 
     func record(_ who: String, _ exe: String, _ args: [String]) {
         lock.lock(); defer { lock.unlock() }
@@ -42,12 +57,20 @@ final class LockdownWorld: @unchecked Sendable {
                 if args[2] == "paxadmin" { return args[3] == paxadminPassword ? ok() : fail() }
             }
             if args.count >= 3, args[1] == "-read", args[2] == "/Users/paxadmin" {
+                if lingeringReads > 0 && !(admins.contains("paxadmin") || leftoverPaxadmin) {
+                    lingeringReads -= 1
+                    return ok("UniqueID: 502\n")
+                }
                 return (admins.contains("paxadmin") || leftoverPaxadmin) ? ok("UniqueID: 502\n")
                     : CommandResult(exitCode: 56, stdout: Data(), stderr: Data("eDSRecordNotFound".utf8))
             }
-            if args.count >= 3, args[1] == "-delete", args[2] == "/Users/paxadmin" {
-                leftoverPaxadmin = false
-                admins.removeAll { $0 == "paxadmin" }
+            if args.count == 3, args[1] == "-delete", args[2] == "/Users/paxadmin" {
+                return deletePaxadminRecord() ? ok()
+                    : CommandResult(exitCode: 1, stdout: Data(), stderr: Data("<main> delete status: eDSPermissionError".utf8))
+            }
+            if args.count >= 4, args[1] == "-passwd", args[2] == "/Users/paxadmin" {
+                guard admins.contains("paxadmin") || leftoverPaxadmin, !dsclPasswdFails else { return fail("eDSAuthFailed") }
+                paxadminPassword = args[3]
                 return ok()
             }
             if args.count >= 2, args[1] == "-read" {
@@ -62,8 +85,14 @@ final class LockdownWorld: @unchecked Sendable {
                 paxadminPassword = args[args.firstIndex(of: "-password")! + 1]
                 admins.append("paxadmin")
             } else if args.contains("-deleteUser") {
+                if undeletablePaxadmin { _ = deletePaxadminRecord(); return ok() }   // exits 0, record stays
                 admins.removeAll { $0 == "paxadmin" }
                 paxadminPassword = nil
+            } else if args.contains("-resetPasswordFor") {
+                if (admins.contains("paxadmin") || leftoverPaxadmin) && !resetPasswordFails {
+                    paxadminPassword = args[args.firstIndex(of: "-newPassword")! + 1]
+                }
+                return ok()
             } else if args.contains("-secureTokenStatus") {
                 return CommandResult(exitCode: 0, stdout: Data(),
                                      stderr: Data("Secure token is \(tokenEnabled ? "ENABLED" : "DISABLED") for user paxadmin".utf8))
@@ -80,6 +109,13 @@ final class LockdownWorld: @unchecked Sendable {
             }
             if let i = args.firstIndex(of: "-a"), !admins.contains(args[i + 1]) { admins.append(args[i + 1]) }
             _ = user
+            return ok()
+        case ("/bin/sh", "-c"):
+            // v0.8.29 removal: every delete route in one root shell.
+            if args.count == 2, args[1].contains("-deleteUser paxadmin") {
+                return ok(deletePaxadminRecord() ? "sysadminctl exit 0\nrecord gone\n"
+                                                 : "sysadminctl exit 0\ndscl delete exit 1\nrecord still there\n")
+            }
             return ok()
         case ("/usr/bin/profiles", "show"):
             return ok(profileInstalled ? "profileIdentifier: org.paxpeace.pax.macos-selflock.test\n" : "")
@@ -269,19 +305,23 @@ final class MacLockdownTests: XCTestCase {
         XCTAssertFalse(pre.problems.joined().contains("rmsvc"))
     }
 
-    func testTestModeStillBlocksExistingPaxadmin() async throws {
+    // v0.8.29: an old paxadmin no longer blocks (set-up deletes or reuses it); see V0829Tests.
+    func testTestModeTreatsExistingPaxadminAsLeftover() async throws {
         let world = LockdownWorld()
         world.admins = ["root", "alex", "rmsvc", "paxadmin"]
         let pre = try await makeLockdown(world, allowExtraAdmins: true).preflight(password: world.userPassword)
-        XCTAssertFalse(pre.ok)
+        XCTAssertTrue(pre.ok)
+        XCTAssertEqual(pre.otherAdmins, [])
+        XCTAssertTrue(pre.warnings.contains { $0.contains("old Pax administrator account") })
     }
 
-    func testExistingPaxadminBlocksSetUp() async throws {
+    func testExistingPaxadminIsALeftoverWarningNotABlock() async throws {
         let world = LockdownWorld()
         world.admins = ["root", "alex", "paxadmin"]
         let pre = try await makeLockdown(world).preflight(password: world.userPassword)
         XCTAssertTrue(pre.paxadminExists)
-        XCTAssertFalse(pre.ok)
+        XCTAssertTrue(pre.ok)
+        XCTAssertTrue(pre.warnings.contains { $0.contains("old Pax administrator account") })
     }
 
     func testNonAdminUserBlocked() async throws {

@@ -103,7 +103,7 @@ def test_socket_handler_local_escrow_and_blocklist(tmp_path):
     assert r["request"]["seconds_remaining"] == 24 * 3600
     assert g.handle_request({"cmd": "nope"}, 501)["code"] == "PAX-GUARD-012"
     summary = g.handle_request({"cmd": "status"}, 501)
-    assert summary["ok"] and summary["escrow_mode"] == "local" and summary["version"] == "0.8.28"
+    assert summary["ok"] and summary["escrow_mode"] == "local" and summary["version"] == "0.8.29"
     # after the wait, the released flag pauses enforcement (removal does the rest)
     for _ in range(49):
         s.t += 1800

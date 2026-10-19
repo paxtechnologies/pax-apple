@@ -53,9 +53,14 @@ CODES: list[PaxCode] = [
             "can't be changed safely, or demoting/verifying one failed (rolled back). Testing only: "
             "defaults write org.paxmobile.pax pax.testing.allowExtraAdmins -bool true leaves them as "
             "admins with a warning."),
-    PaxCode("PAX-MAC-004", "Pax was set up on this Mac before and didn't finish leaving.",
-            "Remove Pax properly first (Pax > Remove, or the emergency uninstaller), then try again.",
-            "A leftover paxadmin account exists (preflight paxadminExists)."),
+    PaxCode("PAX-MAC-004", "An old Pax administrator account is still on this Mac and couldn't be removed.",
+            "In Terminal run: sudo sysadminctl -deleteUser paxadmin -adminUser <you> -adminPassword - then try again.",
+            "v0.8.29: a leftover paxadmin (an earlier set-up, or a removal macOS only half finished) could be "
+            "neither deleted (sysadminctl -deleteUser with the user's credentials, then dscl -delete, rechecked "
+            "for directory lag) nor reused (sysadminctl -resetPasswordFor with the user's credentials, else "
+            "dscl -passwd, proven with dscl -authonly, then made admin). Technical lists each command's exit "
+            "status and output. Rolled back: the user stays admin, the leftover is left without admin rights. "
+            "Before 0.8.29 this was the preflight block on an admin paxadmin, which now only warns."),
     PaxCode("PAX-MAC-005", "Pax couldn't create the key it keeps for you.",
             "Restart the Mac and try again. Nothing was changed.",
             "MacLockdownError.createAdminFailed: sysadminctl/dscl failed creating the hidden paxadmin."),

@@ -237,6 +237,33 @@ public enum MacLockdownCommands {
         return (sysadminctl, args)
     }
 
+    /// v0.8.29 removal: every delete route in ONE root shell. sysadminctl can take
+    /// paxadmin out of the admin group and then fail to delete the record; after that
+    /// paxadmin's own password can't start another root command, so a second,
+    /// separate attempt (dscl) would never run. No password is in the script.
+    public static func deletePaxAdminInOneShell() -> (String, [String]) {
+        let u = paxAdminUser
+        let read = "\(dscl) . -read /Users/\(u) UniqueID >/dev/null 2>&1"
+        let script = "\(sysadminctl) -deleteUser \(u) 2>&1; echo \"sysadminctl exit $?\"; "
+            + "if \(read); then \(dscl) . -delete /Users/\(u) 2>&1; echo \"dscl delete exit $?\"; fi; "
+            + "if \(read); then echo \"record still there\"; "
+            + "else /bin/rm -rf /Users/\(u) 2>&1; echo \"record gone\"; fi"
+        return ("/bin/sh", ["-c", script])
+    }
+
+    /// v0.8.29: take over a leftover paxadmin that macOS won't delete. A SecureToken
+    /// holder's credentials (the user's) keep its FileVault password in step.
+    public static func resetPaxAdminPassword(newPassword: String, adminUser: String,
+                                             adminPassword: String) -> (String, [String]) {
+        (sysadminctl, ["-resetPasswordFor", paxAdminUser, "-newPassword", newPassword,
+                       "-adminUser", adminUser, "-adminPassword", adminPassword])
+    }
+
+    /// v0.8.29: fallback when sysadminctl won't reset it (a half-deleted record, as root).
+    public static func setPaxAdminPasswordDirectly(newPassword: String) -> (String, [String]) {
+        (dscl, [".", "-passwd", "/Users/\(paxAdminUser)", newPassword])
+    }
+
     public static func demote(user: String) -> (String, [String]) {
         (dseditgroup, ["-o", "edit", "-d", user, "-t", "user", "admin"])
     }
@@ -448,14 +475,96 @@ public actor MacLockdown {
         return try await plain.run(URL(fileURLWithPath: cmd.0), arguments: cmd.1, stdin: nil).exitCode == 0
     }
 
-    /// sysadminctl first (cleans up properly), then the raw record and home folder.
-    func deletePaxAdminFully() async throws {
-        let del = MacLockdownCommands.deletePaxAdmin(adminUser: userName, adminPassword: userPassword ?? "")
-        _ = try await asRoot(del)
-        if try await paxAdminRecordExists() {
-            _ = try await asRoot(MacLockdownCommands.deletePaxAdminRecord())
+    /// v0.8.29: whether a paxadmin record is still there, asked a few times, because
+    /// directory services can keep answering for a record for a moment after a delete.
+    /// A check that can't run counts as "still there" (the safe answer).
+    func paxAdminStillThere(checks: Int = 3) async -> Bool {
+        for i in 0..<max(1, checks) {
+            if i > 0 { try? await Task.sleep(nanoseconds: verifyRetryDelayNanos) }
+            if (try? await paxAdminRecordExists()) == false { return false }
         }
-        _ = try await asRoot(MacLockdownCommands.removePaxAdminHome())
+        return true
+    }
+
+    /// One line per command for "Copy details": exit status and the tail of its output,
+    /// with the passwords Pax holds taken out.
+    func detail(_ label: String, _ result: CommandResult?, hiding secrets: [String?] = []) -> String {
+        guard let result else { return "\(label): couldn't run" }
+        var tail = result.combinedTail
+        for case let secret? in secrets + [userPassword] where !secret.isEmpty {
+            tail = tail.replacingOccurrences(of: secret, with: "•••")
+        }
+        return "\(label): exit \(result.exitCode)" + (tail.isEmpty ? "" : " (\(tail))")
+    }
+
+    /// Delete paxadmin with the user's credentials: sysadminctl first (cleans up
+    /// properly), then the raw record, rechecked for directory lag; the home folder
+    /// only once the record is gone. v0.8.29: every result is kept, not discarded.
+    func deletePaxAdminFully() async -> (gone: Bool, details: [String]) {
+        var details: [String] = []
+        let del = MacLockdownCommands.deletePaxAdmin(adminUser: userName, adminPassword: userPassword ?? "")
+        details.append(detail("sysadminctl -deleteUser", try? await asRoot(del)))
+        if await paxAdminStillThere(checks: 1) {
+            details.append(detail("dscl -delete", try? await asRoot(MacLockdownCommands.deletePaxAdminRecord())))
+        }
+        let gone = !(await paxAdminStillThere())
+        if gone {
+            let home = try? await asRoot(MacLockdownCommands.removePaxAdminHome())
+            if home?.exitCode != 0 { details.append(detail("rm home folder", home)) }
+        } else {
+            details.append("record still there after deleting")
+        }
+        return (gone, details)
+    }
+
+    /// v0.8.29: macOS kept an old paxadmin (often one an earlier removal only half
+    /// deleted). Take it over instead of failing: new random password, set with the
+    /// user's credentials and proven with dscl -authonly, then an administrator again.
+    /// `completed` gets .createAdmin before anything changes, so rollback undoes it (the
+    /// account ends up a standard one again with a forgotten password if it still can't go).
+    func adoptLeftoverPaxAdmin(newPassword: String, details: inout [String]) async throws {
+        completed.append(.createAdmin)
+
+        func works() async -> Bool {
+            let auth = MacLockdownCommands.authOnly(user: paxAdminUser, password: newPassword)
+            for i in 0..<3 {
+                if i > 0 { try? await Task.sleep(nanoseconds: verifyRetryDelayNanos) }
+                let r = try? await plain.run(URL(fileURLWithPath: auth.0), arguments: auth.1, stdin: nil)
+                if r?.exitCode == 0 { return true }
+            }
+            return false
+        }
+        let reset = MacLockdownCommands.resetPaxAdminPassword(newPassword: newPassword, adminUser: userName,
+                                                              adminPassword: userPassword ?? "")
+        details.append(detail("sysadminctl -resetPasswordFor", try? await asRoot(reset), hiding: [newPassword]))
+        // sysadminctl can exit 0 without changing anything: the password itself is the test.
+        var ok = await works()
+        if !ok {
+            let direct = MacLockdownCommands.setPaxAdminPasswordDirectly(newPassword: newPassword)
+            details.append(detail("dscl -passwd", try? await asRoot(direct), hiding: [newPassword]))
+            ok = await works()
+        }
+        guard ok else {
+            details.append("the new password didn't work")
+            throw MacLockdownError.createAdminFailed(Self.leftoverMessage(user: userName, details: details))
+        }
+        let promote = MacLockdownCommands.promote(user: paxAdminUser)
+        let promoted = try? await asRoot(promote)
+        let chk = MacLockdownCommands.isMember(user: paxAdminUser)
+        let isAdmin = try? await plain.run(URL(fileURLWithPath: chk.0), arguments: chk.1, stdin: nil)
+        guard MacLockdownParse.isMemberYes(isAdmin?.stdoutString ?? "") else {
+            details.append(detail("dseditgroup -a paxadmin admin", promoted))
+            details.append("it isn't an administrator")
+            throw MacLockdownError.createAdminFailed(Self.leftoverMessage(user: userName, details: details))
+        }
+    }
+
+    /// PAX-MAC-004 (v0.8.29): a leftover paxadmin that could be neither deleted nor reused.
+    static func leftoverMessage(user: String, details: [String]) -> String {
+        "PAX-MAC-004: an old \(paxAdminUser) account from an earlier set-up is still on this Mac, and macOS "
+            + "wouldn't let Pax delete it or reuse it. To delete it, run in Terminal: sudo sysadminctl "
+            + "-deleteUser \(paxAdminUser) -adminUser \(user) -adminPassword - and then try again. Details: "
+            + details.joined(separator: "; ")
     }
 
     // MARK: Preflight
@@ -500,9 +609,14 @@ public actor MacLockdown {
             }
             toDemote = others
         }
+        // v0.8.29: an old paxadmin (an earlier set-up, or a removal macOS only half
+        // finished) no longer blocks: set-up deletes it, or takes it over with a new
+        // password if macOS won't delete it. Only reachable while this user is an admin,
+        // so Pax isn't protecting the Mac right now and nothing opens up.
         let paxadminExists = admins.contains(paxAdminUser)
-        if paxadminExists {
-            problems.append("A \(paxAdminUser) account already exists. Remove Pax properly first.")
+        if paxadminExists && userIsAdmin {
+            warnings.append("An old Pax administrator account from an earlier set-up is still on this Mac. "
+                            + "Pax will remove it, or reuse it with a new password.")
         }
 
         let fvCmd = MacLockdownCommands.fileVaultStatus()
@@ -579,34 +693,39 @@ public actor MacLockdown {
 
         do {
             // 1. Hidden admin account. A leftover paxadmin record from an earlier
-            // attempt (not an admin, or preflight would have stopped) makes
-            // sysadminctl -addUser do nothing while still exiting 0, so the new
-            // password never lands. Clear it first.
+            // set-up or removal makes sysadminctl -addUser do nothing while still
+            // exiting 0, so the new password never lands. Clear it first; v0.8.29: if
+            // macOS won't delete it, take it over with the new password instead.
             report(.createAdmin, "Creating Pax's administrator account")
+            var reused = false
             if try await paxAdminRecordExists() {
                 report(.createAdmin, "Removing a leftover Pax administrator account from an earlier try")
-                try await deletePaxAdminFully()
-                if try await paxAdminRecordExists() {
-                    throw MacLockdownError.createAdminFailed(
-                        "an old \(paxAdminUser) account is still on this Mac. Delete it in "
-                        + "\(SystemSettingsPlace.current.usersPath) (or run: sudo dscl . -delete /Users/\(paxAdminUser)) and try again.")
+                let cleared = await deletePaxAdminFully()
+                if !cleared.gone {
+                    report(.createAdmin, "macOS kept the old account, so Pax is reusing it with a new password")
+                    var details = cleared.details
+                    try await adoptLeftoverPaxAdmin(newPassword: adminPassword, details: &details)
+                    reused = true
                 }
             }
-            let create = MacLockdownCommands.createPaxAdmin(password: adminPassword,
-                                                            adminUser: userName, adminPassword: password)
-            let created = try await asRoot(create)
-            guard created.exitCode == 0 else {
-                throw MacLockdownError.createAdminFailed(created.combinedTail)
+            if !reused {
+                let create = MacLockdownCommands.createPaxAdmin(password: adminPassword,
+                                                                adminUser: userName, adminPassword: password)
+                let created = try await asRoot(create)
+                guard created.exitCode == 0 else {
+                    throw MacLockdownError.createAdminFailed(created.combinedTail)
+                }
+                // sysadminctl can exit 0 without creating anything.
+                guard try await paxAdminRecordExists() else {
+                    throw MacLockdownError.createAdminFailed(created.combinedTail.isEmpty
+                        ? "macOS didn't create the account" : created.combinedTail)
+                }
+                completed.append(.createAdmin)
             }
-            // sysadminctl can exit 0 without creating anything.
-            guard try await paxAdminRecordExists() else {
-                throw MacLockdownError.createAdminFailed(created.combinedTail.isEmpty
-                    ? "macOS didn't create the account" : created.combinedTail)
-            }
-            completed.append(.createAdmin)
             let hide = MacLockdownCommands.hidePaxAdmin()
             _ = try await asRoot(hide)
-            report(.createAdmin, "Administrator account created", finished: true)
+            report(.createAdmin, reused ? "Administrator account ready (reused)" : "Administrator account created",
+                   finished: true)
 
             // 2. SecureToken, so FileVault and updates keep working.
             report(.secureToken, "Giving it a SecureToken (FileVault)")
@@ -794,6 +913,8 @@ public actor MacLockdown {
             if case MacLockdownError.escrowFailed = error { failedAt = .escrow }
             // v0.8.10: likewise .demoteOthers is marked before the accounts change.
             if case MacLockdownError.otherAdminFailed = error { failedAt = .demoteOthers }
+            // v0.8.29: reusing a leftover paxadmin marks .createAdmin before it can fail.
+            if case MacLockdownError.createAdminFailed = error { failedAt = .createAdmin }
             await rollback(paths: paths, profileIdentifier: profileIdentifier, paxAdminPassword: adminPassword)
             if let known = error as? MacLockdownError {
                 throw MacLockdownError.rolledBack(failedAt, known.errorDescription ?? "\(known)")
@@ -844,13 +965,15 @@ public actor MacLockdown {
                 let rm = MacLockdownCommands.removeLocalEscrow()
                 _ = try? await root.runAsRoot(rm.0, rm.1, stdin: nil)
             case .createAdmin, .secureToken:
-                let del = MacLockdownCommands.deletePaxAdmin(adminUser: userName, adminPassword: userPassword)
-                _ = try? await root.runAsRoot(del.0, del.1, stdin: nil)
-                if (try? await paxAdminRecordExists()) == true {
-                    let rec = MacLockdownCommands.deletePaxAdminRecord()
-                    _ = try? await root.runAsRoot(rec.0, rec.1, stdin: nil)
-                    let home = MacLockdownCommands.removePaxAdminHome()
-                    _ = try? await root.runAsRoot(home.0, home.1, stdin: nil)
+                // Once is enough (.secureToken and .createAdmin both land here).
+                guard (try? await paxAdminRecordExists()) != false else { continue }
+                let cleared = await deletePaxAdminFully()
+                // v0.8.29: macOS kept it (a new account, or a leftover Pax reused). Its
+                // password was random and is forgotten now; it stays as a hidden account
+                // with no admin rights, which can do nothing, and the next set-up reuses it.
+                if !cleared.gone {
+                    let demote = MacLockdownCommands.demote(user: paxAdminUser)
+                    _ = try? await root.runAsRoot(demote.0, demote.1, stdin: nil)
                 }
             default:
                 continue
@@ -902,6 +1025,14 @@ public actor MacLockdown {
         guard promoted.exitCode == 0 else {
             throw MacLockdownError.demotionFailed(promoted.combinedTail)
         }
+        // v0.8.29: positive proof before paxadmin goes, so the user is never left
+        // without an administrator.
+        let check = MacLockdownCommands.isMember(user: userName)
+        let checked = try await plain.run(URL(fileURLWithPath: check.0), arguments: check.1, stdin: nil)
+        guard MacLockdownParse.isMemberYes(checked.stdoutString) else {
+            throw MacLockdownError.demotionFailed("\(userName) isn't an administrator yet, so Pax kept its "
+                                                  + "administrator account and changed nothing else")
+        }
         done.append("\(userName) is an administrator again")
 
         let un = MacLockdownCommands.uninstallGuard(
@@ -909,10 +1040,29 @@ public actor MacLockdown {
         let unResult = try await runner.runAsRoot(un.0, un.1, stdin: nil)
         done.append(unResult.exitCode == 0 ? "Pax guard and profile removed"
                                            : "Guard removal reported: \(unResult.combinedTail)")
-        let del = MacLockdownCommands.deletePaxAdmin()
-        let deleted = try await runner.runAsRoot(del.0, del.1, stdin: nil)
-        done.append(deleted.exitCode == 0 ? "Pax's administrator account deleted"
-                                          : "Delete \(paxAdminUser) in \(SystemSettingsPlace.current.usersPath)")
+        // v0.8.29: before, a lone `sysadminctl -deleteUser` (authorised as paxadmin) could
+        // take paxadmin out of the admin group, fail to delete it and still exit 0, so
+        // the next set-up met a leftover. Every route now runs in one root shell, and
+        // the record itself is checked afterwards (with time for directory lag).
+        let del = MacLockdownCommands.deletePaxAdminInOneShell()
+        let deleted = try? await runner.runAsRoot(del.0, del.1, stdin: nil)
+        if !(await paxAdminStillThere()) {
+            done.append("Pax's administrator account deleted")
+        } else {
+            // macOS kept it. Take away its admin rights if it still has them (the user
+            // was proven an administrator above); the next set-up reuses or deletes it.
+            let chk = MacLockdownCommands.isMember(user: paxAdminUser)
+            let out = try? await plain.run(URL(fileURLWithPath: chk.0), arguments: chk.1, stdin: nil)
+            if !MacLockdownParse.isMemberNo(out?.stdoutString ?? "") {
+                let demote = MacLockdownCommands.demote(user: paxAdminUser)
+                _ = try? await runner.runAsRoot(demote.0, demote.1, stdin: nil)
+            }
+            done.append("macOS wouldn't delete Pax's administrator account (\(paxAdminUser)), so Pax took away "
+                        + "its admin rights. It's harmless, and setting Pax up again reuses it. To delete it now, "
+                        + "run in Terminal: sudo sysadminctl -deleteUser \(paxAdminUser) -adminUser \(userName) "
+                        + "-adminPassword -")
+            done.append(detail("Details", deleted, hiding: [paxAdminPassword]))
+        }
         return done
     }
 }
