@@ -123,7 +123,7 @@ struct DownloadButtons: View {
         VStack(spacing: 10) {
             ShareLink(item: PaxLinks.macDownload,
                       subject: Text("Pax for Mac"),
-                      message: Text(GuideCopy.shareText)) {
+                      message: Text(PaxLinks.shareText)) {
                 Label(GuideCopy.sendToMac, systemImage: "square.and.arrow.up")
             }
             .buttonStyle(PaxPrimaryButton())
