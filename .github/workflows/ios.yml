@@ -80,7 +80,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/guide-test.log"
       - name: Screenshots (simulator)
         continue-on-error: true
-        timeout-minutes: 12
+        timeout-minutes: 8
         run: |
           set -x
           mkdir -p "$RUNNER_TEMP/shots"
@@ -103,14 +103,7 @@ jobs:
           xcrun simctl ui "$U" appearance dark
           shoot "$U" iphone-4-dark
           shoot "$U" iphone-5-dark-check -PaxScrollToStep 7 -PaxRunCheck
-          # iPad: the same simulator build runs on an iPad simulator.
-          P=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for k,v in sorted(d.items(),reverse=True) if 'iOS' in k for x in v if x['name'].startswith('iPad')))")
-          xcrun simctl boot "$P" || true
-          xcrun simctl bootstatus "$P" -b
-          xcrun simctl status_bar "$P" override --time 9:41 --batteryState charged --batteryLevel 100 || true
-          xcrun simctl install "$P" "$APP"
-          xcrun simctl ui "$P" appearance light
-          shoot "$P" ipad-1-top
+          # No iPad shot: a cold iPad simulator boot hung the step on the runner (2026-10-20).
           ls -la "$RUNNER_TEMP/shots"
       - name: Keep the screenshots
         if: always()
