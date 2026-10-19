@@ -47,15 +47,6 @@ struct AppSettingsView: View {
                         MacKeySettings()
                         Divider().overlay(Theme.border)
                         ServerSettingsView(current: model.coordinator.escrow.baseURL)
-                        Divider().overlay(Theme.border)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("For testers").font(Theme.body(13, weight: .semibold))
-                                .foregroundStyle(Theme.primaryText)
-                            Text("Error codes and what they mean are listed in docs/ERROR_CODES.md. "
-                                 + "\"Copy details\" on any error copies what support needs, with no personal data.")
-                                .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
                     }
                     .padding(.top, 12)
                 } label: {

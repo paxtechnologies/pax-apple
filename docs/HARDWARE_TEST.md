@@ -244,8 +244,7 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
    "Your blocked apps: N apps" (click to see the names, wrapped), the set-up note, *Set up again* and
    *Remove from this list*. Nothing is cut off at the window's narrowest width.
 4. Click *Settings*: Blocking, Turning Pax off, Accountability partner email, Updates (About folded inside),
-   a closed *Pax Max* and a closed *Advanced* (where this Mac keeps its key, the server address, the testers'
-   note). No device is highlighted in the sidebar.
+   a closed *Pax Max* and a closed *Advanced* (where this Mac keeps its key, the server address). No device is highlighted in the sidebar.
 5. Pax › Settings… (⌘,) opens that same screen in the main window (and reopens the window if it was closed).
    No separate Settings window appears.
 6. On a Mac set up before 0.8.4, Home › This Mac says Chrome is using the extension list from set-up and

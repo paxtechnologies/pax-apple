@@ -9,8 +9,9 @@ final class V0823Tests: XCTestCase {
         XCTAssertEqual(Array(AppSettingsLayout.sections.suffix(2)), AppSettingsLayout.foldedSections)
         XCTAssertEqual(AppSettingsLayout.foldedInUpdates, AppSettingsLayout.about)
         XCTAssertEqual(AppSettingsLayout.details, "Details")
-        // v0.8.27: the Support ID moved to Turning Pax off (V0827Tests); nothing else left Advanced.
-        XCTAssertEqual(AppSettingsLayout.advancedItems.count, 6)
+        // v0.8.27: the Support ID moved to Turning Pax off (V0827Tests).
+        // v0.8.28: "For testers" removed; nothing else left Advanced.
+        XCTAssertEqual(AppSettingsLayout.advancedItems.count, 5)
     }
 
     func testPaxMaxCopyIsHonestAboutBrowsers() {

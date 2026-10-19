@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.27
+# Pax Peace (Apple), v0.8.28
 
 **Less scrolling. More living.**
 
@@ -379,7 +379,7 @@ line under Details), *Turning Pax off* (turn-off wait, trial day, verified suppo
 partner email* (their email, one state line and *Change…*; the form is in a sheet), *Updates* (version, last
 check, *Update now*; *About Pax* folded inside), *Pax Max* (folded, off by default: "Blurs pictures and video
 in Firefox. Other browsers aren't covered yet.") and *Advanced* (filter and its backup state, the
-*Extra family filter layer* switch, security notices, where the key is kept, server, testers). Security
+*Extra family filter layer* switch, security notices, where the key is kept, server). Security
 notices are plain sentences; a backup-filter episode shorter than 10 minutes (as when pax-guard restarts
 after an update) stays in the tamper log but isn't shown.
 

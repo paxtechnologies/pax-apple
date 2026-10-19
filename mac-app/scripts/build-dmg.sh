@@ -41,7 +41,7 @@ for tool in swift codesign hdiutil plutil ditto; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found. Install the Command Line Tools: xcode-select --install"
 done
 
-VERSION="${PAX_VERSION:-0.8.27}"
+VERSION="${PAX_VERSION:-0.8.28}"
 BUNDLE_DEVICE_HELPER="${BUNDLE_DEVICE_HELPER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"

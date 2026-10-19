@@ -24,8 +24,9 @@ public enum AppSettingsLayout {
     /// Closed by default.
     public static let advanced = "Advanced"
     /// v0.8.27: the Support ID moved to Turning Pax off (shown only with verified support release on).
+    /// v0.8.28: "For testers" removed (Ruben); "Copy details" on error cards is unchanged.
     public static let advancedItems = ["Security notices", "Filter", "Extra family filter layer", "Where this Mac keeps its key",
-                                       "Pax server", "For testers"]
+                                       "Pax server"]
 
     /// v0.8.23 (Ruben: "only keep what is necessary"): each card shows a title and its
     /// current state; explanations and rare actions sit behind a "Details" disclosure.

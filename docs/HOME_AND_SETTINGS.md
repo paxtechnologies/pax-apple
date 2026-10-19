@@ -141,8 +141,8 @@ Order (PaxCore `AppSettingsLayout.sections`):
   (Pax Image Blur); Chrome and Safari aren't covered.
 * **Advanced** (folded; v0.8.27: the Support ID moved to *Turning Pax off*): which filter is answering (and the backup's
   reason and time while it's on), filter lists, the **Extra family filter layer** switch (off by default; on
-  is immediate, off waits like a removal), security notices, where this Mac keeps its key, Pax server, for
-  testers.
+  is immediate, off waits like a removal), security notices, where this Mac keeps its key, Pax server
+  (v0.8.28: the "For testers" note was removed).
 
 ### Security notices (v0.8.23)
 

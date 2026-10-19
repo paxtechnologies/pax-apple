@@ -11,8 +11,10 @@ final class V0814Tests: XCTestCase {
                        ["Blocking", "Turning Pax off", "Accountability partner email", "Updates", "Pax Max",
                         "Advanced"])
         XCTAssertEqual(AppSettingsLayout.sections.last, AppSettingsLayout.advanced)
-        XCTAssertEqual(Array(AppSettingsLayout.advancedItems.suffix(3)),
-                       ["Where this Mac keeps its key", "Pax server", "For testers"])
+        // v0.8.28: "For testers" removed from Advanced.
+        XCTAssertEqual(Array(AppSettingsLayout.advancedItems.suffix(2)),
+                       ["Where this Mac keeps its key", "Pax server"])
+        XCTAssertFalse(AppSettingsLayout.advancedItems.contains("For testers"))
     }
 
     func testMediaIsOneAlwaysBlockedRow() {
