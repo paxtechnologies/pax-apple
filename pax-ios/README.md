@@ -2,6 +2,10 @@
 
 Work in progress on a branch. Not released, not submitted to Apple.
 
+**Interim app:** `Guide/` is a small guide app with no entitlements (how to set up Pax Strict from
+a Mac, plus a "Check you're protected" test) that can ship first under the same bundle id. See
+[Guide/README.md](Guide/README.md).
+
 Plug-and-play Pax: install from the App Store, set up on the phone in about five minutes, no Mac.
 It uses Apple's Screen Time APIs with individual authorization:
 

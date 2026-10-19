@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax for iPhone and iPad: the interim guide app (v1.0.0). It shows how to protect the
+# device with Pax Strict from a Mac and checks whether the device is protected. No
+# entitlements, no extensions, no accounts, no tracking, so it can ship now; the full
+# Screen Time app (../project.yml) replaces it later under the same bundle id.
+#   brew install xcodegen && xcodegen generate     (the .xcodeproj is not committed)
+# CI: .github/workflows/ios.yml (job "guide").
+name: PaxGuide
+options:
+  bundleIdPrefix: org.paxpeace
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: Z94GSK7JA8
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+targets:
+  Pax:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+        excludes:
+          - PrivacyInfo.xcprivacy
+          - Fonts/OFL.txt
+      - path: Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: Resources/Fonts/OFL.txt
+        buildPhase: resources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Pax
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIAppFonts:
+          - PaxFrauncesSoft-Regular.ttf
+          - PaxAccent-Italic.ttf
+          - PaxInter-Regular.ttf
+          - PaxInter-Medium.ttf
+          - PaxInter-SemiBold.ttf
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax
+        PRODUCT_NAME: Pax
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+
+  PaxGuideTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+      - Sources/Core
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax.guide-tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Pax:
+    build:
+      targets:
+        Pax: all
+        PaxGuideTests: [test]
+    test:
+      targets: [PaxGuideTests]
