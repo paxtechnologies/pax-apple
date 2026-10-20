@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # arm64 macOS runners were out of capacity on 2026-10-20
     timeout-minutes: 40
     defaults:
       run:
@@ -51,7 +51,7 @@ jobs:
   # The interim guide app (pax-ios/Guide): no entitlements, ships first under the same
   # bundle id. Build for the simulator, run its tests, and keep a few screenshots.
   guide:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # arm64 macOS runners were out of capacity on 2026-10-20
     timeout-minutes: 40
     defaults:
       run:
