@@ -39,8 +39,35 @@ jobs:
         run: |
           set -o pipefail
           UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for k,v in sorted(d.items(),reverse=True) if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "IPHONE_UDID=$UDID" >> "$GITHUB_ENV"
           xcodebuild -project Pax.xcodeproj -scheme Pax -destination "id=$UDID" \
-            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/test.log"
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/test.log"
+      - name: Screenshot of the welcome screen (simulator)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -path '*iphonesimulator*' -name 'Pax.app' | head -1)
+          U=$IPHONE_UDID
+          xcrun simctl boot "$U" || true
+          xcrun simctl bootstatus "$U" -b
+          xcrun simctl status_bar "$U" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl install "$U" "$APP"
+          xcrun simctl ui "$U" appearance light
+          xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax
+          sleep 10
+          xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/full-welcome-light.png"
+          xcrun simctl ui "$U" appearance dark
+          xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax
+          sleep 10
+          xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/full-welcome-dark.png"
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: ${{ runner.temp }}/shots/*.png
+          if-no-files-found: ignore
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4
