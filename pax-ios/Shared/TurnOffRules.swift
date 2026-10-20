@@ -3,6 +3,18 @@
 // the app never clears anything until the server releases the escrowed secret.
 import Foundation
 
+/// Where a turn-off stands, read from the server's device status.
+enum TurnOffPhase: Equatable {
+    /// Nothing asked for.
+    case none
+    /// Asked for; the wait runs until this date (on the server's clock).
+    case waiting(until: Date)
+    /// The wait is over: confirming now releases the secret.
+    case ready
+    /// The server couldn't be read. Pax stays on and shows nothing new.
+    case unknown
+}
+
 enum TurnOffRules {
     static func clampWait(days: Int) -> Int { min(max(days, Pax.minWaitDays), Pax.maxWaitDays) }
 
@@ -10,10 +22,43 @@ enum TurnOffRules {
         now >= setUpAt && now.timeIntervalSince(setUpAt) < Pax.graceSeconds
     }
 
-    /// When a turn-off asked for at `requestedAt` can be confirmed.
+    /// When a turn-off asked for at `requestedAt` can be confirmed (the server decides; this
+    /// is only for what the app expects to show).
     static func unlockDate(setUpAt: Date, waitDays: Int, requestedAt: Date) -> Date {
         if inGrace(setUpAt: setUpAt, now: requestedAt) { return requestedAt }
         return requestedAt.addingTimeInterval(TimeInterval(clampWait(days: waitDays)) * 86_400)
+    }
+
+    /// The phase from the server's answer. `secondsRemaining` is used rather than the
+    /// server's absolute time, so a wrong clock on the phone can't shorten anything.
+    /// `requestStatus` nil means no open request.
+    static func phase(requestStatus: String?, secondsRemaining: Double?, canReveal: Bool?,
+                      now: Date) -> TurnOffPhase {
+        guard let status = requestStatus else { return .none }
+        switch status {
+        case "pending", "revealed":
+            if canReveal == true { return .ready }
+            guard let left = secondsRemaining else { return .unknown }
+            if left <= 0 { return canReveal == false ? .unknown : .ready }
+            return .waiting(until: now.addingTimeInterval(left))
+        default:
+            return .none     // cancelled or lapsed
+        }
+    }
+
+    /// Server waits are seconds; the app shows whole days, rounded up (never shorter).
+    static func days(fromSeconds s: Int) -> Int { max(1, Int((Double(s) / 86_400).rounded(.up))) }
+
+    /// "3 days", "1 week", "2 weeks", "30 days", "3 months", "6 months", "1 year".
+    static func waitLabel(days d: Int) -> String {
+        switch d {
+        case 7: return "1 week"
+        case 14: return "2 weeks"
+        case 90: return "3 months"
+        case 180: return "6 months"
+        case 365: return "1 year"
+        default: return d == 1 ? "1 day" : "\(d) days"
+        }
     }
 
     /// Calm wording for what's left: "3 days, 4 hours", "2 hours", "less than a minute".

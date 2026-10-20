@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Applies the person's choices through Managed Settings. Only `clearAll()` removes
 // anything, and the app calls it only after the server has released the escrowed
-// secret (TurnOffController). Everything else only ever adds: never fail open.
+// secret (AppModel.confirmTurnOff). Everything else only ever adds: never fail open.
 import Foundation
 import ManagedSettings
 import FamilyControls
@@ -40,4 +40,5 @@ enum PaxSelection {
     static func save(_ s: FamilyActivitySelection, to d: UserDefaults = Pax.shared) {
         if let data = try? JSONEncoder().encode(s) { d.set(data, forKey: key) }
     }
+    static func clear(from d: UserDefaults = Pax.shared) { d.removeObject(forKey: key) }
 }

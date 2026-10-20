@@ -15,13 +15,21 @@ It uses Apple's Screen Time APIs with individual authorization:
 - optional encrypted DNS through Pax's own filter (`dns.paxpeace.com`),
 - an optional Screen Time passcode that Pax keeps until your turn-off wait ends.
 
-Turning it off works like Pax Strict: you ask, your partner (if you have one) is emailed first, the
-wait you chose runs on the Pax server, then everything is removed. The first hour after set-up has
-no wait. If anything fails, Pax stays on.
+Set-up happens on the phone: who it's for (you, or your child's device), your email and the code
+the Pax server sends, someone you trust (optional; they're only ever told, they never approve),
+your turn-off wait (3 days to 1 year), Screen Time access (once), apps to keep closed, the Pax
+Screen Time passcode (recommended), then encrypted DNS.
 
-Honest limits: a computer restore or full erase removes it, and iPhone lets anyone switch the DNS
-layer off in Settings (Pax notices and tells your partner). The stronger option is **Pax Strict**:
-the Mac app that sets up a supervised iPhone over USB.
+Turning it off works like on a Mac: you ask, your trusted person (if you have one) is emailed
+first, the wait you chose runs on the Pax server, then everything is removed and the Screen Time
+passcode is shown. The first hour after set-up has no wait. If anything fails, Pax stays on.
+
+Honest limits: a computer restore or full erase removes it, and anyone can switch the DNS layer
+off in Settings (Pax notices and tells your trusted person). For the strongest protection, set
+Pax up from a Mac: the Mac app sets up a supervised iPhone or iPad over a cable.
+
+Account deletion is in the app (Account › Delete my account). The server has no delete route yet,
+so the app sends a deletion request by email to Pax support until it does.
 
 ## Build
 
@@ -32,5 +40,6 @@ cd pax-ios && xcodegen generate && open Pax.xcodeproj
 
 Targets: `Pax` (app), `PaxShieldConfiguration`, `PaxShieldAction`, `PaxMonitor`
 (Device Activity Monitor), `PaxTests`. Development signing works without Apple's approval;
-App Store builds need the Family Controls (Distribution) entitlement for all four bundle IDs.
+App Store builds need the Family Controls (Distribution) entitlement for all four bundle IDs
+(granted). Unit tests (`Tests/`) cover the policy logic and the app's wording.
 CI builds for the simulator, unsigned: `.github/workflows/ios.yml`.

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Pax for iPhone and iPad (App Store build). Generate the Xcode project with
+# Pax for iPhone and iPad (App Store build): on-phone set-up with Screen Time
+# (FamilyControls .individual), encrypted DNS and the Pax server's turn-off wait. Generate the Xcode project with
 #   brew install xcodegen && xcodegen generate
 # (the .xcodeproj is not committed). CI: .github/workflows/ios.yml
 name: Pax
@@ -12,7 +13,7 @@ settings:
   base:
     DEVELOPMENT_TEAM: Z94GSK7JA8
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Automatic
@@ -21,13 +22,31 @@ targets:
     type: application
     platform: iOS
     sources:
-      - App
+      - path: App
+        excludes:
+          - Resources/PrivacyInfo.xcprivacy
+          - Resources/Fonts/OFL.txt
+      - path: App/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: App/Resources/Fonts/OFL.txt
+        buildPhase: resources
       - Shared
+      # The "set up from a Mac" steps and links, shared with the guide app.
+      - Guide/Sources/Core
     info:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Pax
-        UILaunchScreen: {}
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIAppFonts:
+          - PaxFrauncesSoft-Regular.ttf
+          - PaxAccent-Italic.ttf
+          - PaxInter-Regular.ttf
+          - PaxInter-Medium.ttf
+          - PaxInter-SemiBold.ttf
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UISupportedInterfaceOrientations~ipad:
@@ -45,6 +64,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax
         PRODUCT_NAME: Pax
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
     dependencies:
       - target: PaxShieldConfiguration
       - target: PaxShieldAction
@@ -140,6 +163,10 @@ targets:
       - Shared/PaxPolicy.swift
       - Shared/TurnOffRules.swift
       - Shared/EscrowSecret.swift
+      - Shared/Watchers.swift
+      - Shared/SetupRules.swift
+      - Shared/PaxCopy.swift
+      - Guide/Sources/Core
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.paxpeace.pax.tests
