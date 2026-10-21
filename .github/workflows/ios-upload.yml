@@ -85,10 +85,41 @@ jobs:
           set +x
           umask 077
           mkdir -p "$KEY_DIR" "$HOME/.appstoreconnect/private_keys"
-          printf '%s\n' "$ASC_KEY_P8" > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          # The secret may hold the .p8 file as-is, base64 of the file, the key body without the
+          # BEGIN/END lines, or text with literal "\n" or CRLF. Normalise to a PEM file; only the
+          # form found and lengths are printed, never the key.
+          OUT="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" python3 - <<'PY'
+          import os, re, base64, binascii
+          raw = os.environ["ASC_KEY_P8"]
+          s = raw.strip().strip('"').strip("'").replace("\\r\\n", "\n").replace("\\n", "\n").replace("\r", "")
+          form = "pem"
+          if "BEGIN PRIVATE KEY" not in s:
+              compact = re.sub(r"\s+", "", s)
+              dec = b""
+              try:
+                  dec = base64.b64decode(compact + "=" * (-len(compact) % 4), validate=False)
+              except (binascii.Error, ValueError):
+                  pass
+              if b"BEGIN PRIVATE KEY" in dec:
+                  s, form = dec.decode("ascii", "ignore").replace("\r", "").strip(), "base64 of the .p8 file"
+              elif dec[:1] == b"\x30" and len(dec) > 100:
+                  body = "\n".join(compact[i:i + 64] for i in range(0, len(compact), 64))
+                  s, form = "-----BEGIN PRIVATE KEY-----\n" + body + "\n-----END PRIVATE KEY-----", "key body without BEGIN/END lines"
+              else:
+                  print(f"::error::ASC_KEY_P8 isn't a .p8 key in any known form (length {len(raw)}, {raw.count(chr(10)) + 1} lines, starts with '-----': {raw.lstrip().startswith('-----')}). Paste the whole AuthKey_8G4S3TUCV5.p8 file, BEGIN and END lines included.")
+                  raise SystemExit(1)
+          m = re.search(r"-----BEGIN PRIVATE KEY-----(.*?)-----END PRIVATE KEY-----", s, re.S)
+          if not m:
+              print("::error::ASC_KEY_P8 has a BEGIN line but no matching END PRIVATE KEY line")
+              raise SystemExit(1)
+          body = re.sub(r"\s+", "", m.group(1))
+          pem = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(body[i:i + 64] for i in range(0, len(body), 64)) + "\n-----END PRIVATE KEY-----\n"
+          open(os.environ["OUT"], "w").write(pem)
+          print(f"ASC key: form = {form}; secret length {len(raw)}; key body {len(body)} chars")
+          PY
           # altool looks for the key here by its ID.
           cp "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" "$HOME/.appstoreconnect/private_keys/"
-          grep -q 'BEGIN PRIVATE KEY' "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" || { echo "::error::ASC_KEY_P8 doesn't look like a .p8 key"; exit 1; }
+          openssl pkey -in "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" -noout 2>/dev/null && echo "key parses (openssl)" || { echo "::error::ASC_KEY_P8 doesn't parse as a private key"; exit 1; }
 
       - run: brew install xcodegen
       - run: xcodegen generate
