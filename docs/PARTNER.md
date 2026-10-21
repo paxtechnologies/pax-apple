@@ -20,6 +20,11 @@ The partner is told about:
 
 Emails never contain a password or key.
 
+**How the emails name the person (branch, for the iPhone app 1.2):** by the first name they gave when adding
+you (`from_name`), else by their email, else as "Someone using Pax" (an iPhone set up with one tap has a
+private account with no email). The name is one line of at most 40 characters with no links. See
+docs/PRIVATE_ACCOUNTS.md.
+
 ## Fail closed
 
 When a partner is set, anything that would notify them must be **delivered (or queued and retried) before

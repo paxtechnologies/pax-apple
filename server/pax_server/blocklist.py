@@ -271,7 +271,7 @@ class Blocklist:
                 # The partner was told when it was requested; this is news only.
                 self._notify(acct, f"blocklist_{r['action']}_applied", "Pax: change now in effect",
                              f"As you asked {fmt_duration(now - r['created_at'])} ago, {what}.",
-                             f"For {acct['email']}: {what}.", required=False)
+                             f"For {self.escrow.who(acct, mid=True)}: {what}.", required=False)
             applied += 1
         return applied
 
@@ -453,7 +453,7 @@ class Blocklist:
             acct, f"blocklist_{action}_requested", "Pax: change requested",
             f"You asked to {what_user}. It takes effect in {fmt_duration(delay)} and you can "
             "cancel it any time before then.",
-            f"{acct['email']} asked to {what_partner}. It takes effect in "
+            f"{self.escrow.who(acct)} asked to {what_partner}. It takes effect in "
             f"{fmt_duration(delay)}. You might want to check in with them.",
         )
 
@@ -482,7 +482,7 @@ class Blocklist:
                      r["action"], r["action"]))
         self._notify(acct, f"blocklist_{r['action']}_cancelled", "Pax: change cancelled",
                      f"You cancelled the pending change for {shown}. Well done.",
-                     f"{acct['email']} cancelled their pending change for {shown}.",
+                     f"{self.escrow.who(acct)} cancelled their pending change for {shown}.",
                      required=False)
         return self.view(acct)
 

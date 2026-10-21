@@ -192,6 +192,18 @@ tries in an hour. Kept by design: the hashed hardware code (`trial_hardware`, no
 support codes (`support_nonces`, a code works once); `mail_log`/`signup_attempts` hashes go within two days.
 The DNS feed carries the account once with `"deleted": true` so both DNS servers drop it at their next
 poll; that `dns_changes` row (random ID, sequence number, time) is pruned after an hour.
+Private accounts (branch, for the iPhone app 1.2 one-tap set-up; not released yet): `POST accounts/device
+{label?}` (no token; the same per-client sign-up limit as `POST accounts`) answers 201 `{account_id, token,
+private: true}`: an account with **no email**, so nothing is ever mailed to its holder (no welcome, no code,
+no deletion confirmation) and the token, kept in that device's Keychain, is the only way in. `GET accounts/me`
+adds `private` and `display_name` (`email` is null for a private account). `PUT accounts/me/partner` takes an
+optional `from_name` (one line, at most 40 characters, no control characters or links; 422 otherwise), and every
+email to the trusted person names the holder by it, else by their email, else "Someone using Pax". `PUT
+devices/{id}/escrow {removal_password}` (20-256 characters, owner's token) replaces the secret Pax holds for a
+device: 200 device status; 409 `conflict` with `reason` `released` | `retired` | `removal_request_open` |
+`emergency_open` while it can't; 404 `not_found` for another account's device; logged, never loosens anything.
+`accounts.email` becomes nullable through a one-time, checked table rebuild at start-up. Details, the
+migration and the design for adding an email later: [docs/PRIVATE_ACCOUNTS.md](docs/PRIVATE_ACCOUNTS.md).
 Blocklist (v0.3): `GET blocklist`, `POST blocklist {domain}` (instant), `POST blocklist/remove
 {domain}` (202, waits), `POST allowlist {domain}` (202, waits), `POST allowlist/remove {domain}`
 (instant), `POST blocklist/requests/{id}/cancel`, `GET dns` (your DoH URL; creates the token),

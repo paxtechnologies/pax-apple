@@ -18,14 +18,14 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from . import __version__
 from .config import HOUR, Settings
 from .blocklist import Blocklist
 from .sync import ListSync
 from .db import Database
-from .escrow import Clock, Escrow, EscrowError, NotFound, RateLimited
+from .escrow import DISPLAY_NAME_MAX, Clock, Escrow, EscrowError, NotFound, RateLimited, clean_display_name
 from .limits import client_ip
 from . import replica as replica_mod
 from . import stats as stats_mod
@@ -63,8 +63,33 @@ class WaitIn(BaseModel):
     wait_days: Optional[int] = Field(None, ge=1)
 
 
+class PrivateAccountIn(BaseModel):
+    """v0.8.31 POST /v1/accounts/device: a private account (no email)."""
+    label: str = Field("", max_length=100)
+
+
 class PartnerIn(BaseModel):
     email: Optional[EmailStr] = None  # null removes the partner (after the wait)
+    # v0.8.31: the holder's first name for the trusted person's emails (accounts.display_name).
+    # Left out or null: unchanged. "" (after stripping): cleared. One line, at most 40 characters,
+    # no control/format characters, no links; anything else is refused with 422.
+    from_name: Optional[str] = Field(None, max_length=200)
+
+    @field_validator("from_name")
+    @classmethod
+    def _one_line_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = clean_display_name(v)
+        if cleaned is None:
+            raise ValueError(f"from_name must be one line of at most {DISPLAY_NAME_MAX} characters, "
+                             "with no control characters or links")
+        return cleaned
+
+
+class EscrowIn(BaseModel):
+    """v0.8.31 PUT /v1/devices/{id}/escrow: same rules as registration."""
+    removal_password: str = Field(..., min_length=20, max_length=256)
 
 
 class DeviceIn(BaseModel):
@@ -428,6 +453,21 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         account_id, token = escrow.register_account(str(body.email))
         return {"account_id": account_id, "token": token}
 
+    @app.post("/v1/accounts/device", status_code=201)
+    def register_private_account(request: Request, body: Optional[PrivateAccountIn] = None,
+                                 x_forwarded_for: Optional[str] = Header(None)):
+        """v0.8.31: a private account with no email, for the iPhone app's one-tap
+        set-up. No token needed, so it shares POST /v1/accounts's per-IP sign-up
+        limit (429 rate_limited). No email of any kind is ever sent to it. The token
+        is the only way into the account: lose it and the account can't be reached
+        (the turn-off wait still releases nothing without it)."""
+        ip = client_ip(request.client.host if request.client else None, x_forwarded_for)
+        why = escrow.limits.check_signup(ip)
+        if why:
+            raise RateLimited(why)
+        account_id, token = escrow.register_private_account(body.label if body else "")
+        return {"account_id": account_id, "token": token, "private": True}
+
     @app.get("/v1/accounts/me")
     def me(acct=Depends(current_account)):
         return escrow.account_status(acct)
@@ -453,7 +493,7 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
 
     @app.put("/v1/accounts/me/partner")
     def set_partner(body: PartnerIn, acct=Depends(current_account)):
-        return escrow.set_partner(acct, str(body.email) if body.email else None)
+        return escrow.set_partner(acct, str(body.email) if body.email else None, from_name=body.from_name)
 
     @app.put("/v1/accounts/me/adblock")
     def set_adblock(body: AdblockIn, acct=Depends(current_account)):
@@ -507,6 +547,14 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.get("/v1/devices/{device_id}")
     def get_device(device_id: str, acct=Depends(current_account)):
         return escrow.device_status(acct, device_id)
+
+    @app.put("/v1/devices/{device_id}/escrow")
+    def replace_escrow(device_id: str, body: EscrowIn, acct=Depends(current_account)):
+        """v0.8.31: replace the secret Pax holds for this device (20-256 characters,
+        re-encrypted for this device). 200 device status. 404 not_found for another
+        account's (or no) device; 409 conflict with `reason` released | retired |
+        removal_request_open | emergency_open. Never loosens anything; logged."""
+        return escrow.replace_escrow(acct, device_id, body.removal_password)
 
     @app.post("/v1/devices/{device_id}/retire")
     def retire_device(device_id: str, acct=Depends(current_account)):

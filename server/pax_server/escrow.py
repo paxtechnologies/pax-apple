@@ -155,6 +155,29 @@ def _id() -> str:
     return uuid.uuid4().hex
 
 
+DISPLAY_NAME_MAX = 40
+
+
+def clean_display_name(value: Optional[str], limit: int = DISPLAY_NAME_MAX) -> Optional[str]:
+    """v0.8.31: a holder's first name for emails, or None when it isn't one. One
+    line, stripped, at most `limit` characters, no control or format characters
+    (that includes newlines and bidi overrides) and no links. main.py refuses a bad
+    from_name with 422 before it gets here; this is the second line of defence for
+    stored values."""
+    import unicodedata
+    if value is None:
+        return None
+    v = str(value).strip()
+    if not v:
+        return ""
+    if len(v) > limit or any(unicodedata.category(c)[0] in ("C", "Z") and c != " " for c in v):
+        return None
+    low = v.lower()
+    if "://" in low or "www." in low:
+        return None
+    return v
+
+
 def fmt_duration(seconds: int) -> str:
     seconds = max(0, int(seconds))
     d, rem = divmod(seconds, 86400)
@@ -235,7 +258,39 @@ class Escrow:
                                partner_body or user_body, required=required)
         self._mail(acct["email"], kind, subject, user_body)
 
+    # v0.8.31: how emails to a trusted person name the account holder.
+    ANONYMOUS_HOLDER = "Someone using Pax"
+
+    @classmethod
+    def who(cls, acct, mid: bool = False) -> str:
+        """The account holder as emails to their trusted person name them: the first
+        name they gave (display_name), else their email, else "Someone using Pax"
+        (a private account that gave no name). Never "None"."""
+        keys = acct.keys() if hasattr(acct, "keys") else ()
+        name = (acct["display_name"] if "display_name" in keys else None) or ""
+        name = clean_display_name(name) or ""
+        if name:
+            return name
+        email = (acct["email"] if "email" in keys else None) or ""
+        if email.strip():
+            return email.strip()
+        return "someone using Pax" if mid else cls.ANONYMOUS_HOLDER   # mid-sentence
+
     # --------------------------------------------------------------- accounts
+    def register_private_account(self, label: str = "") -> tuple[str, str]:
+        """v0.8.31 POST /v1/accounts/device: an account with no email, for the iPhone
+        app's one-tap set-up. The token is the device's secret (the app keeps it in
+        that device's Keychain only). No welcome email, no code; nothing is ever
+        mailed to the holder of a private account (they have no address)."""
+        account_id, token = _id(), new_token()
+        self.db.execute(
+            "INSERT INTO accounts(id, email, token_hash, created_at, wait_seconds) VALUES (?,?,?,?,?)",
+            (account_id, None, hash_token(token), self.clock.now(), self.settings.default_wait_seconds),
+        )
+        tag = clean_display_name(label or "", limit=40) or ""
+        self._log(account_id, "account_registered", detail=("private: " + tag) if tag else "private")
+        return account_id, token
+
     def register_account(self, email: str) -> tuple[str, str]:
         email = email.strip().lower()
         if self.db.one("SELECT 1 FROM accounts WHERE email=?", (email,)):
@@ -294,7 +349,7 @@ class Escrow:
             self._log(acct["id"], "partner_change_applied", detail=new or "(removed)")
             if new:
                 self._mail_partner(new, "partner_added", "You are now a Pax accountability partner",
-                                   f"{acct['email']} has made you their Pax accountability partner. "
+                                   f"{self.who(acct)} has made you their Pax accountability partner. "
                                    "You will be told when they ask to remove their blocker.",
                                    required=False)
             changed = True
@@ -305,7 +360,9 @@ class Escrow:
     def account_status(self, acct) -> dict:
         return {
             "account_id": acct["id"],
-            "email": acct["email"],
+            "email": acct["email"],                      # v0.8.31: null for a private account
+            "private": acct["email"] is None,            # v0.8.31
+            "display_name": acct["display_name"],        # v0.8.31: null unless given (from_name)
             "wait_seconds": acct["wait_seconds"],
             "pending_wait_seconds": acct["pending_wait_seconds"],
             "pending_wait_effective_at": acct["pending_wait_effective"],
@@ -349,7 +406,7 @@ class Escrow:
                 f"You asked to shorten your turn-off wait (how long turning Pax off takes after you ask) "
                 f"from {fmt_duration(current)} to {fmt_duration(wait_seconds)}. It takes effect in "
                 f"{fmt_duration(current)}.",
-                f"{acct['email']} asked to shorten their Pax turn-off wait (how long turning Pax off "
+                f"{self.who(acct)} asked to shorten their Pax turn-off wait (how long turning Pax off "
                 f"takes after they ask) from {fmt_duration(current)} to {fmt_duration(wait_seconds)}. "
                 f"It takes effect in {fmt_duration(current)}.",
             )
@@ -387,10 +444,20 @@ class Escrow:
         return {"relayed": True, "to_partner": bool(partner)}
 
     # ---------------------------------------------------------------- partner
-    def set_partner(self, acct, partner_email: Optional[str]) -> dict:
+    def set_partner(self, acct, partner_email: Optional[str], from_name: Optional[str] = None) -> dict:
+        """from_name (v0.8.31, optional): the first name the trusted person's emails
+        use for the holder (accounts.display_name, via who()). None leaves it as it
+        is; "" clears it. Stored before any email below goes out."""
         new = (partner_email or "").strip().lower() or None
-        if new and new == acct["email"]:
+        own = (acct["email"] or "").strip().lower()
+        if new and own and new == own:     # only an account with an email can be its own partner
             raise EscrowError("you cannot be your own accountability partner")
+        if from_name is not None:
+            name = clean_display_name(from_name)
+            if (name or None) != (acct["display_name"] or None):
+                self.db.execute("UPDATE accounts SET display_name=? WHERE id=?", (name or None, acct["id"]))
+                self._log(acct["id"], "display_name_set" if name else "display_name_cleared")
+                acct = self.db.one("SELECT * FROM accounts WHERE id=?", (acct["id"],))
         current = acct["partner_email"]
         now = self.clock.now()
         if new == current:
@@ -407,7 +474,7 @@ class Escrow:
             self._log(acct["id"], "partner_added", detail=new)
             # Adding accountability never waits on email.
             self._mail_partner(new, "partner_added", "You are now a Pax accountability partner",
-                               f"{acct['email']} has made you their Pax accountability partner. "
+                               f"{self.who(acct)} has made you their Pax accountability partner. "
                                "You will be told when they ask to remove their blocker. You "
                                "never need to approve anything; Pax is fully automatic.",
                                required=False)
@@ -418,7 +485,7 @@ class Escrow:
             self._notify(
                 acct, "partner_change_requested", "Partner change requested",
                 f"You asked to {what}. This takes effect in {fmt_duration(acct['wait_seconds'])}.",
-                f"{acct['email']} asked to "
+                f"{self.who(acct)} asked to "
                 + (f"replace you with {new}" if new else "remove you")
                 + f" as their Pax accountability partner. This takes effect in "
                   f"{fmt_duration(acct['wait_seconds'])}.",
@@ -595,7 +662,7 @@ class Escrow:
             self._notify(
                 acct, "support_release_on", f"Verified support release turned on for {d['name']}",
                 f"You turned on verified support release on {d['name']} (it's still your trial day).",
-                f"{acct['email']} turned on verified support release on {d['name']}: in a genuine "
+                f"{self.who(acct)} turned on verified support release on {d['name']}: in a genuine "
                 "emergency that Pax support has checked, a one-time code could remove Pax from that device "
                 "without the wait. You'd be emailed first.",
             )
@@ -607,7 +674,7 @@ class Escrow:
             acct, "support_release_on_requested", f"Verified support release requested for {d['name']}",
             f"You asked to allow verified support release on {d['name']}. It takes effect in "
             f"{fmt_duration(wait)}.",
-            f"{acct['email']} asked to allow verified support release on {d['name']}: in a genuine "
+            f"{self.who(acct)} asked to allow verified support release on {d['name']}: in a genuine "
             "emergency that Pax support has checked, a one-time code could remove Pax from that device "
             f"without the wait. You'd be emailed first. This takes effect in {fmt_duration(wait)}.",
         )
@@ -651,7 +718,7 @@ class Escrow:
                 self._mail_partner(
                     acct["partner_email"], "support_release_used",
                     f"[Pax partner] Verified support release used for {d['name']}",
-                    f"Pax support checked an emergency with {acct['email']} and issued a one-time code for "
+                    f"Pax support checked an emergency with {self.who(acct, mid=True)} and issued a one-time code for "
                     f"{d['name']}. It has just been used, so the password to remove Pax from {d['name']} is "
                     "being released now. You might want to check in with them.")
         except PartnerUnreachable:
@@ -929,6 +996,10 @@ class Escrow:
                 "usual), then delete your account.",
                 count=n, devices=blocked)
         log.info("account deleted (%d device(s))", gone["devices"])
+        if not email:
+            # v0.8.31: a private account has no address, so nothing is sent.
+            self.prune_deleted()
+            return gone
         sent = self._mail(email, "account_deleted", "Your Pax account has been deleted",
                           "Your Pax account has been deleted, as you asked. Your devices, blocked "
                           "sites, history and sign-ins have been removed from Pax's server, and the "
@@ -952,6 +1023,49 @@ class Escrow:
         cur = self.db.execute("DELETE FROM dns_changes WHERE at<? AND account_id NOT IN (SELECT id FROM accounts)",
                               (now - self.DELETED_TOMBSTONE_SECONDS,))
         return cur.rowcount or 0
+
+    # ------------------------------------------------ v0.8.31 replace escrow
+    def replace_escrow(self, acct, device_id: str, removal_password: str) -> dict:
+        """v0.8.31 PUT /v1/devices/{id}/escrow: replace the secret Pax holds for one of
+        the account's devices (the iPhone app adds the Screen Time passcode from Home
+        after one-tap set-up). Re-encrypted with aad=device_id like registration.
+        It never loosens anything: the secret is only ever revealed when a finished
+        wait (or emergency / support release) releases it. Refused (409) once the
+        device is released or retired, or while a removal request or emergency
+        release is open, so a request in flight always reveals the secret it was
+        made for. Logged as escrow_replaced (never the secret)."""
+        if len(removal_password or "") < 20 or len(removal_password) > 256:
+            raise EscrowError("removal password must be 20 to 256 characters")
+        refusal = None          # (log detail, Conflict) raised after the transaction, so the log stays
+        with self.db.transaction():
+            row = self.db.one("SELECT * FROM devices WHERE id=? AND account_id=?", (device_id, acct["id"]))
+            if not row:
+                raise NotFound("device not found")
+            if row["retired_at"] is not None:
+                refusal = ("retired", Conflict("this device was removed from your list", reason="retired"))
+            elif row["released_at"] is not None:
+                refusal = ("released", Conflict("this device's password has already been released",
+                                                reason="released"))
+            else:
+                rr = self._active_request(device_id)
+                if rr:
+                    why = "emergency_open" if rr["kind"] == "emergency" else "removal_request_open"
+                    refusal = (why, Conflict(
+                        "a turn-off request is open on this device; cancel it (or let it finish) first",
+                        reason=why, removal_request=self._request_view(rr)))
+            if refusal is None:
+                ct = self.box.encrypt(removal_password, aad=row["id"])
+                cur = self.db.execute("UPDATE devices SET password_ct=? WHERE id=? AND account_id=? "
+                                      "AND released_at IS NULL AND retired_at IS NULL",
+                                      (ct, row["id"], acct["id"]))
+                if cur.rowcount != 1:
+                    refusal = ("changed", Conflict("this device changed; try again", reason="changed"))
+                else:
+                    self._log(acct["id"], "escrow_replaced", row["id"])
+        if refusal is not None:
+            self._log(acct["id"], "escrow_replace_refused", device_id, refusal[0])
+            raise refusal[1]
+        return self.device_status(acct, device_id)
 
     # ---------------------------------------------------------------- removal
     def request_removal(self, acct, device_id: str) -> dict:
@@ -980,7 +1094,7 @@ class Escrow:
             acct, "removal_requested", f"Removal requested for {d['name']}",
             f"You asked to turn Pax off on {d['name']}. It can be turned off {when}. "
             "You can cancel any time during the wait.",
-            f"{acct['email']} asked to turn Pax off on {d['name']}. It can be turned off "
+            f"{self.who(acct)} asked to turn Pax off on {d['name']}. It can be turned off "
             f"{when}. You might want to check in with them.",
         )
         rid = _id()
@@ -1001,7 +1115,7 @@ class Escrow:
         self._log(acct["id"], "removal_cancelled", device_id)
         self._notify(acct, "removal_cancelled", f"Removal cancelled for {d['name']}",
                      f"You cancelled the removal request for {d['name']}. Well done.",
-                     f"{acct['email']} cancelled their request to remove Pax from {d['name']}.",
+                     f"{self.who(acct)} cancelled their request to remove Pax from {d['name']}.",
                      required=False)
         return self.device_status(acct, device_id)
 
@@ -1025,7 +1139,7 @@ class Escrow:
             # Partner first (fail closed): no email, no password.
             self._notify(acct, "password_revealed", f"Removal password released for {d['name']}",
                          f"The removal password for {d['name']} was revealed in the Pax app.",
-                         f"{acct['email']} has been given the password to remove Pax from "
+                         f"{self.who(acct)} has been given the password to remove Pax from "
                          f"{d['name']}.")
             self.db.execute(
                 "UPDATE removal_requests SET status='revealed', closed_at=? WHERE id=?",
@@ -1072,7 +1186,7 @@ class Escrow:
             self._mail_partner(
                 acct["partner_email"], "emergency_requested",
                 "[Pax partner] Emergency release requested",
-                f"{acct['email']} requested an emergency release of Pax on {d['name']}. It "
+                f"{self.who(acct)} requested an emergency release of Pax on {d['name']}. It "
                 f"unlocks in {fmt_duration(unlock_at - now)}. Please check in with them."
                 f"\n\n{crisis_text()}",
             )
