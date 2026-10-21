@@ -6,10 +6,9 @@
 #     number). This is the way while the workflow isn't on the default branch, because GitHub
 #     only offers "Run workflow" for workflows that exist on the default branch;
 #   - or "Run workflow" (workflow_dispatch) once it is on the default branch.
-# Signing is automatic with the App Store Connect API key in three repo secrets:
+# Signing is automatic with an App Store Connect API key. Its key ID and issuer ID are not
+# secret and are set below; only the private key is a repo secret:
 #   ASC_KEY_P8      the .p8 private key text
-#   ASC_KEY_ID      its key ID
-#   ASC_ISSUER_ID   the issuer ID
 # The key needs the Admin role (cloud-managed distribution certificate). The key file is
 # written to a temp folder for the run and deleted at the end, whatever happens.
 name: ios-upload
@@ -61,8 +60,8 @@ jobs:
       - name: Check the secrets are there
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: 8G4S3TUCV5
+          ASC_ISSUER_ID: a8055883-0c57-4d82-ae26-a8b35e6f087d
         run: |
           missing=""
           [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
@@ -81,7 +80,7 @@ jobs:
       - name: Write the API key (temp, deleted at the end)
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_ID: 8G4S3TUCV5
         run: |
           set +x
           umask 077
@@ -96,8 +95,8 @@ jobs:
 
       - name: Archive (Release, generic iOS device, automatic signing)
         env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: 8G4S3TUCV5
+          ASC_ISSUER_ID: a8055883-0c57-4d82-ae26-a8b35e6f087d
         run: |
           set -o pipefail
           xcodebuild -project Pax.xcodeproj -scheme Pax -configuration Release \
@@ -141,8 +140,8 @@ jobs:
 
       - name: Export (app-store-connect)
         env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: 8G4S3TUCV5
+          ASC_ISSUER_ID: a8055883-0c57-4d82-ae26-a8b35e6f087d
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -171,8 +170,8 @@ jobs:
       - name: Upload to App Store Connect
         if: github.event_name == 'push' || inputs.upload
         env:
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: 8G4S3TUCV5
+          ASC_ISSUER_ID: a8055883-0c57-4d82-ae26-a8b35e6f087d
         run: |
           set -o pipefail
           xcrun altool --validate-app -f "$EXPORT_DIR/Pax.ipa" -t ios \
