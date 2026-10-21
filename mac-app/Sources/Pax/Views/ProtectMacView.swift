@@ -86,7 +86,7 @@ struct ProtectMacView: View {
             Card {
                 Text("Before you start").font(Theme.body(15, weight: .medium)).foregroundStyle(Theme.primaryText)
                 CheckRow(isOn: $mac.agreed,
-                         text: "I'm 18 or over, this is my Mac, and I understand that turning Pax off takes "
+                         text: "I'm 18 or over, and this Mac is mine or my child's. I understand that turning Pax off takes "
                              + "my turn-off wait (\(waitText)).")
                 CheckRow(isOn: $mac.madeBackup, text: "I have a recent backup of this Mac (Time Machine or iCloud).")
                 NoteRow(icon: "key", text: "If FileVault is on, keep its recovery key somewhere outside this Mac, "

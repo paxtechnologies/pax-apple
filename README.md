@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.29
+# Pax Peace (Apple), v0.8.30
 
 **Less scrolling. More living.**
 
@@ -179,6 +179,19 @@ Device state (v0.8.26): `GET devices` / `GET devices/{id}` add `released` and, f
 `last_seen` (a UTC day) and `checking_in` (false after 48 hours or more with no Pax DNS traffic; null =
 unknown). `POST devices/{id}/retire` forgets a device on the owner's list, only once its password was
 released (409 otherwise, 404 for another account's device; logged; never turns anything off).
+Delete account (v0.8.30, App Store guideline 5.1.1(v)): `DELETE accounts/me` with the account's (or any
+signed-in) Bearer token. 204, no body: the account and every row on it (devices, turn-off requests, guard
+and sync sign-ins, blocked sites and their requests, DNS addresses, sign-in codes, history, usage rows) are
+deleted in one transaction, the token stops working at once, and the holder is emailed "Your Pax account
+has been deleted" (best-effort; a failed email never undoes it; the trusted person isn't emailed). Fail
+closed: 409 `devices_still_protected` (`count`, `devices: [{device_id, name, platform, reason, removal_request,
+checking_in}]`, `reason` one of `pax_on` | `turn_off_wait` | `emergency_release` | `pending_request`) while
+Pax still holds any device's key (including one that isn't checking in) or any removal request is open;
+deleting never skips the wait or the trusted person's email. 401 without a valid token; 429 after 10 refused
+tries in an hour. Kept by design: the hashed hardware code (`trial_hardware`, no second trial day) and used
+support codes (`support_nonces`, a code works once); `mail_log`/`signup_attempts` hashes go within two days.
+The DNS feed carries the account once with `"deleted": true` so both DNS servers drop it at their next
+poll; that `dns_changes` row (random ID, sequence number, time) is pruned after an hour.
 Blocklist (v0.3): `GET blocklist`, `POST blocklist {domain}` (instant), `POST blocklist/remove
 {domain}` (202, waits), `POST allowlist {domain}` (202, waits), `POST allowlist/remove {domain}`
 (instant), `POST blocklist/requests/{id}/cancel`, `GET dns` (your DoH URL; creates the token),

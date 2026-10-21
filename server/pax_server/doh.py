@@ -250,11 +250,18 @@ class Policies:
         return p
 
     def apply(self, feed: dict) -> None:
-        built = {a["account_id"]: (a, self._build(a)) for a in feed.get("accounts", [])
-                 if isinstance(a, dict) and a.get("account_id")}
+        entries = [a for a in feed.get("accounts", []) if isinstance(a, dict) and a.get("account_id")]
+        # v0.8.30: a deleted account comes once with "deleted": its addresses and entry go.
+        deleted = {a["account_id"] for a in entries if a.get("deleted") is True}
+        built = {a["account_id"]: (a, self._build(a)) for a in entries if a["account_id"] not in deleted}
         with self._lock:
             if feed.get("full"):
                 self._tokens, self._accounts, self._policies = {}, {}, {}
+            for aid in deleted:
+                for h in [h for h, (a, _r) in self._tokens.items() if a == aid]:
+                    del self._tokens[h]
+                self._accounts.pop(aid, None)
+                self._policies.pop(aid, None)
             for aid, (acct, pol) in built.items():
                 for h in [h for h, (a, _r) in self._tokens.items() if a == aid]:
                     del self._tokens[h]

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, EmailStr, Field
 
 from . import __version__
@@ -337,6 +337,10 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
                     except Exception:  # noqa: BLE001
                         log.exception("removal lapse sweep failed")
                     try:
+                        await asyncio.to_thread(escrow.prune_deleted)   # v0.8.30 (self-limited)
+                    except Exception:  # noqa: BLE001
+                        log.exception("deleted-account prune failed")
+                    try:
                         await asyncio.to_thread(stats.tick)     # v0.8.24 counts (self-limited)
                     except Exception:  # noqa: BLE001
                         log.exception("stats tick failed")
@@ -427,6 +431,18 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.get("/v1/accounts/me")
     def me(acct=Depends(current_account)):
         return escrow.account_status(acct)
+
+    @app.delete("/v1/accounts/me", status_code=204, response_class=Response)
+    def delete_account(acct=Depends(current_account)):
+        """v0.8.30 (App Store guideline 5.1.1(v)): delete the account and everything
+        on it, in one transaction. Fail closed: 409 devices_still_protected while Pax
+        still holds any device's key or a turn-off wait / emergency release / other
+        removal request is open; deleting never skips the wait or the trusted
+        person's email. 204 on success; the token stops working at once. The holder
+        gets a confirmation email (best-effort, never undoes it)."""
+        gone = escrow.delete_account(acct)
+        _mark(stats.forget, gone.get("subjects", ()), gone.get("dns_hashes", ()))
+        return Response(status_code=204)
 
     @app.put("/v1/accounts/me/wait")
     def set_wait(body: WaitIn, acct=Depends(current_account)):

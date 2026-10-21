@@ -161,6 +161,15 @@ class Stats:
                     db.execute(f"UPDATE stats_daily SET active=active+1, active_{platform}=active_{platform}+1 "
                                "WHERE day=?", (day,))
 
+    def forget(self, subjects=(), token_hashes=()) -> None:
+        """v0.8.30: a deleted account's in-memory "already marked today" entries."""
+        with self._lock:
+            for sub in subjects:
+                self._seen.pop(sub, None)
+            for h in token_hashes:
+                self._dns_day.pop(h, None)
+                self._dns_pending.discard(h)
+
     def mark_device(self, device_row, version: Optional[str] = None) -> None:
         if device_row is not None:
             self.mark(f"device:{device_row['id']}", platform_of(device_row["platform"]), version)

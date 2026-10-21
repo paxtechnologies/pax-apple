@@ -162,6 +162,9 @@ reads `GET https://api.paxpeace.com/v1/replica/dns/changes` with a shared key (i
 token hashes and effective lists, never a token, password or email. If the primary is down, the second
 server keeps answering with every user's last known list (also after a restart, from
 `/var/lib/pax/dns/replica-cache.json`); new edits wait until the primary is back.
+v0.8.30: a deleted account (`DELETE /v1/accounts/me`) comes once in the feed with `"deleted": true` and no
+tokens, so both servers drop its DNS addresses at their next 3-second poll (its address then gets the
+default filter, never an unfiltered answer), and it is gone from the on-disk copy.
 
 **Failover**: `dns.paxpeace.com` has two A records (one per server). iOS connects by name through Network
 framework, which resolves every address and races connection attempts, so an address that refuses or

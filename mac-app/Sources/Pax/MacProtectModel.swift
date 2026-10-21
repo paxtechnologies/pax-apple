@@ -22,7 +22,7 @@ final class MacProtectModel: ObservableObject {
     /// Mac path step: 0 choose what to block, 1 wait time, 2 lock it in.
     @Published var step = 0
     @Published var password = ""
-    /// One plain agreement: of age, my Mac, I understand the wait and the standard account.
+    /// One plain agreement: of age, my Mac or my child's, I understand the wait and the standard account.
     @Published var agreed = false
     @Published var savedRecoveryKey = false
     /// v0.8.10: "Also make these standard accounts" (on by default): Pax makes the

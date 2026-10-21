@@ -115,6 +115,13 @@ class Unauthorized(EscrowError):
     status, code = 401, "unauthorized"
 
 
+class DevicesStillProtected(Conflict):
+    """v0.8.30: DELETE /v1/accounts/me while Pax still holds a device's key, or a
+    turn-off wait / emergency release / other removal request is open (fail closed:
+    deleting an account never skips the wait or the trusted person's email)."""
+    status, code = 409, "devices_still_protected"
+
+
 class PartnerUnreachable(EscrowError):
     """v0.8.5: the partner alert an action needs couldn't be sent, so the action
     didn't start (fail closed). Support code PAX-ESCROW-010."""
@@ -815,6 +822,136 @@ class Escrow:
             pass
         self._log(acct["id"], "device_retired", device_id)
         return {"device_id": device_id, "retired": True, "retired_at": now}
+
+    # ------------------------------------------------ v0.8.30 delete account
+    DELETE_TRIES_PER_HOUR = 10
+    # A deleted account leaves one dns_changes row (its random ID, a sequence number
+    # and a time; nothing else) so the DNS servers drop it at their next 3-second
+    # poll instead of the next 10-minute full sync. Pruned after this long.
+    DELETED_TOMBSTONE_SECONDS = 3600
+    # Every table holding one account's rows, children first (no ON DELETE CASCADE,
+    # PRAGMA foreign_keys=ON). activity (stats.py) is keyed by subject.
+    _DELETE_SQL = (
+        ("guard_tokens", "DELETE FROM guard_tokens WHERE device_id IN (SELECT id FROM devices WHERE account_id=:a)"),
+        ("removal_requests", "DELETE FROM removal_requests WHERE device_id IN "
+                             "(SELECT id FROM devices WHERE account_id=:a)"),
+        ("activity", "DELETE FROM activity WHERE subject IN (SELECT 'device:' || id FROM devices WHERE account_id=:a) "
+                     "OR subject IN (SELECT 'link:' || id FROM sync_links WHERE account_id=:a) "
+                     "OR subject = 'dns-account:' || :a"),
+        ("devices", "DELETE FROM devices WHERE account_id=:a"),
+        ("blocklist_entries", "DELETE FROM blocklist_entries WHERE account_id=:a"),
+        ("blocklist_requests", "DELETE FROM blocklist_requests WHERE account_id=:a"),
+        ("dns_tokens", "DELETE FROM dns_tokens WHERE account_id=:a"),
+        ("dns_changes", "DELETE FROM dns_changes WHERE account_id=:a"),
+        ("sync_links", "DELETE FROM sync_links WHERE account_id=:a"),
+        ("account_tokens", "DELETE FROM account_tokens WHERE account_id=:a"),
+        ("signin_codes", "DELETE FROM signin_codes WHERE account_id=:a"),
+        ("events", "DELETE FROM events WHERE account_id=:a"),
+        ("accounts", "DELETE FROM accounts WHERE id=:a"),
+    )
+
+    def _still_protected(self, account_id: str) -> list[dict]:
+        """Devices that stop an account being deleted. The same rule as
+        work/v0830 delete_check.sql (released_at IS NULL: Pax still holds the key,
+        whether or not the phone is checking in), plus any open removal request
+        (a turn-off wait, an emergency release, a trial/grace/support request).
+        Released and retired devices are safe."""
+        out = []
+        for d in self.db.all("SELECT * FROM devices WHERE account_id=? ORDER BY installed_at", (account_id,)):
+            rr = self.db.one("SELECT kind FROM removal_requests WHERE device_id=? AND status='pending' "
+                             "ORDER BY created_at DESC LIMIT 1", (d["id"],))
+            if d["released_at"] is None:
+                reason = ("emergency_release" if rr and rr["kind"] == "emergency"
+                          else "turn_off_wait" if rr else "pax_on")
+            elif rr:
+                reason = "pending_request"          # shouldn't happen; fail closed anyway
+            else:
+                continue
+            item = {"device_id": d["id"], "name": d["name"], "platform": d["platform"],
+                    "reason": reason, "removal_request": rr["kind"] if rr else None,
+                    "checking_in": None}
+            if d["released_at"] is None:
+                item["checking_in"] = self._seen_view(d)["checking_in"]
+            out.append(item)
+        return out
+
+    def delete_account(self, acct) -> dict:
+        """v0.8.30 DELETE /v1/accounts/me. Refuses (409 devices_still_protected) while
+        any device is still protected; otherwise deletes every row of the account in
+        one transaction, then emails the holder a confirmation (best-effort: a failed
+        email never undoes it). The trusted person is not emailed. Returns what the
+        caller needs to forget in memory (stats subjects, DNS token hashes)."""
+        aid = acct["id"]
+        now = self.clock.now()
+        tries = self.db.one("SELECT COUNT(*) FROM events WHERE account_id=? AND kind='account_delete_refused' "
+                            "AND at>?", (aid, now - 3600))[0]
+        if tries >= self.DELETE_TRIES_PER_HOUR:
+            raise RateLimited("too many tries to delete this account in the last hour; try again later")
+        # Lapse requests whose window has passed first, so a stale "pending" row
+        # doesn't block a device that was really turned off long ago.
+        for rr in self.db.all("SELECT rr.*, d.installed_at AS device_installed_at FROM removal_requests rr "
+                              "JOIN devices d ON d.id=rr.device_id WHERE d.account_id=? AND rr.status='pending'",
+                              (aid,)):
+            if self._window_over(rr, rr["device_installed_at"], now):
+                self._lapse(rr, aid, now)
+        blocked: list[dict] = []
+        gone: dict = {}
+        with self.db.transaction():
+            row = self.db.one("SELECT * FROM accounts WHERE id=?", (aid,))
+            if row is None:
+                raise Unauthorized("invalid token")
+            blocked = self._still_protected(aid)
+            if not blocked:
+                email = row["email"]
+                gone = {
+                    "subjects": [f"device:{r[0]}" for r in self.db.all(
+                        "SELECT id FROM devices WHERE account_id=?", (aid,))]
+                    + [f"link:{r[0]}" for r in self.db.all("SELECT id FROM sync_links WHERE account_id=?", (aid,))]
+                    + [f"dns-account:{aid}"],
+                    "dns_hashes": [r[0] for r in self.db.all(
+                        "SELECT token_hash FROM dns_tokens WHERE account_id=?", (aid,))],
+                    "devices": self.db.one("SELECT COUNT(*) FROM devices WHERE account_id=?", (aid,))[0],
+                }
+                for table, sql in self._DELETE_SQL:
+                    try:
+                        self.db.execute(sql, {"a": aid})
+                    except sqlite3.OperationalError:
+                        if table != "activity":     # only stats.py's table can be absent
+                            raise
+                # Tombstone for the DNS feeds (see DELETED_TOMBSTONE_SECONDS).
+                self.db.execute("INSERT INTO dns_changes(account_id, at) VALUES (?,?)", (aid, now))
+        if blocked:
+            n = len(blocked)
+            self._log(aid, "account_delete_refused", detail=f"{n} device(s) still protected")
+            raise DevicesStillProtected(
+                f"Pax is still on {n} device{'s' if n != 1 else ''} on this account. Turn Pax off on "
+                "every device first (your turn-off wait and the email to your trusted person apply as "
+                "usual), then delete your account.",
+                count=n, devices=blocked)
+        log.info("account deleted (%d device(s))", gone["devices"])
+        sent = self._mail(email, "account_deleted", "Your Pax account has been deleted",
+                          "Your Pax account has been deleted, as you asked. Your devices, blocked "
+                          "sites, history and sign-ins have been removed from Pax's server, and the "
+                          "app's sign-in no longer works.\n\n"
+                          "If you didn't ask for this, or you'd like to use Pax again, you can set up "
+                          "a new account at any time. Reply to this email if you have any questions."
+                          "\n\nPax")
+        if not sent:
+            log.warning("email[account_deleted] confirmation not sent (the account is deleted)")
+        self.prune_deleted()
+        return gone
+
+    def prune_deleted(self, force: bool = False) -> int:
+        """Drop deleted accounts' DNS-feed tombstones once they're old (at most
+        every 10 minutes from the sweep; the scan is over dns_changes)."""
+        now = self.clock.now()
+        last = getattr(self, "_last_prune", None)
+        if not force and last is not None and now - last < 600:
+            return 0
+        self._last_prune = now
+        cur = self.db.execute("DELETE FROM dns_changes WHERE at<? AND account_id NOT IN (SELECT id FROM accounts)",
+                              (now - self.DELETED_TOMBSTONE_SECONDS,))
+        return cur.rowcount or 0
 
     # ---------------------------------------------------------------- removal
     def request_removal(self, acct, device_id: str) -> dict:

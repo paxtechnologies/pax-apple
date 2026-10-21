@@ -661,6 +661,12 @@ class Blocklist:
                 "SELECT DISTINCT account_id FROM dns_changes WHERE seq > ?", (since,))]
         accounts = []
         for aid in ids:
+            if self.db.one("SELECT 1 FROM accounts WHERE id=?", (aid,)) is None:
+                # v0.8.30: a deleted account (its dns_changes tombstone). No tokens, so
+                # any server drops its DNS addresses; "deleted" drops the entry too.
+                accounts.append({"account_id": aid, "deleted": True, "tokens": [], "block": [],
+                                 "allow": [], "categories": {}, "settings": {}})
+                continue
             tokens = self.db.all(VALID_TOKENS_SQL, {"acct": aid, "now": now})
             block, allow = self.effective(aid)
             accounts.append({

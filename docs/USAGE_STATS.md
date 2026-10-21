@@ -59,7 +59,8 @@ Pax DNS traffic), and null when Pax can't tell (the account's DNS address hasn't
 was kept, or the device is a Mac or already turned off). The Mac then says "Not checking in. It may
 have been reset or removed." Nothing new is stored for this, and nobody else (not the partner, not
 `/v1/stats`) sees it. Removing a turned-off device from the list (`POST /v1/devices/{id}/retire`)
-deletes its row.
+deletes its row. Deleting the account (`DELETE /v1/accounts/me`, v0.8.30) deletes every row of its
+devices, linked Macs and DNS address; the daily totals (numbers only) stay.
 
 ## Self-hosting
 

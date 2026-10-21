@@ -146,7 +146,7 @@ final class SetupModel: ObservableObject {
     @Published var config = SetupConfiguration()
     @Published var choices = BlockChoices()
 
-    /// One plain agreement instead of three checkboxes: of age, my device, I understand the wait.
+    /// One plain agreement instead of three checkboxes: of age, my device or my child's, I understand the wait.
     @Published var agreed = false
     // Ready checks
     @Published var confirmedBackup = false

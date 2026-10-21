@@ -472,7 +472,7 @@ private struct PhoneLockInStep: View {
                 }
                 Divider().overlay(Theme.border)
                 CheckRow(isOn: $model.agreed,
-                         text: "I'm 18 or over, this \(deviceWord) is mine, and I understand that turning Pax "
+                         text: "I'm 18 or over, and this \(deviceWord) is mine or my child's. I understand that turning Pax "
                              + "off takes my turn-off wait (\(TurnOffWait.duration(days: model.config.waitDays))).")
             }
             if let p = model.preflight, !p.blocking.isEmpty || !p.warnings.isEmpty {

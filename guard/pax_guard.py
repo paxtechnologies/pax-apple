@@ -83,7 +83,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.29"
+VERSION = "0.8.30"
 
 
 # v0.8.23: a short backup-filter episode (pax-guard restarting after an update starts on
