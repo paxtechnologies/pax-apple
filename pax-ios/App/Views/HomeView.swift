@@ -153,6 +153,7 @@ struct AccountView: View {
     @Environment(\.openURL) private var openURL
     @State private var confirmDelete = false
     @State private var result: String?
+    @State private var stillOn: [AccountDeletion.StillOn]?
 
     var body: some View {
         NavigationView {
@@ -185,6 +186,9 @@ struct AccountView: View {
                         case .emailRequest(let url):
                             result = PaxCopy.deleteRequested
                             openURL(url)
+                        case .stillProtected(let devices):
+                            result = nil
+                            stillOn = devices
                         case .failed: break
                         }
                     }
@@ -195,5 +199,47 @@ struct AccountView: View {
             }
         }
         .navigationViewStyle(.stack)
+        .sheet(isPresented: Binding(get: { stillOn != nil }, set: { if !$0 { stillOn = nil } })) {
+            StillProtectedView(devices: stillOn ?? []) { stillOn = nil }
+        }
+    }
+}
+
+/// The server refused to delete the account because Pax is still on one or more devices
+/// (409 devices_still_protected). Nothing was deleted; turn Pax off first, wait included.
+struct StillProtectedView: View {
+    let devices: [AccountDeletion.StillOn]
+    var onDone: () -> Void
+
+    var body: some View {
+        PaxPage {
+            SectionTitle(PaxCopy.deleteStillOnTitle)
+            BodyText(PaxCopy.deleteStillOnBody(count: max(devices.count, 1)))
+            if !devices.isEmpty {
+                PaxCard {
+                    ForEach(Array(devices.enumerated()), id: \.offset) { _, d in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Image(systemName: d.kind == "Mac" ? "laptopcomputer"
+                                  : d.kind == "iPad" ? "ipad" : "iphone")
+                                .foregroundStyle(Palette.accent)
+                                .frame(width: 22)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(d.name)
+                                    .font(PaxFont.body(17, weight: .medium, relativeTo: .body))
+                                    .foregroundStyle(Palette.ink)
+                                Text("\(d.kind) · \(PaxCopy.deleteStillOnReason(d.reason, checkingIn: d.checkingIn))")
+                                    .font(PaxFont.body(15, relativeTo: .footnote))
+                                    .foregroundStyle(Palette.body)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+            BodyText(PaxCopy.deleteStillOnHowTo)
+            BodyText(PaxCopy.deleteStillOnNothingChanged, small: true)
+            Button(PaxCopy.doneButton, action: onDone).buttonStyle(PaxPrimaryButton())
+        }
     }
 }

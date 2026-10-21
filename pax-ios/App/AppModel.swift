@@ -301,24 +301,38 @@ final class AppModel: ObservableObject {
 
     // MARK: account deletion
 
-    enum DeletionOutcome { case deleted, emailRequest(URL), failed }
+    enum DeletionOutcome: Equatable {
+        case deleted
+        case emailRequest(URL)
+        /// Pax is still on these devices: nothing was deleted. Turn Pax off first.
+        case stillProtected([AccountDeletion.StillOn])
+        case failed
+    }
 
     func deleteAccount() async -> DeletionOutcome {
         busy = true; defer { busy = false }
-        do {
-            switch try await api.deleteAccount() {
-            case .deleted:
-                api.signOutLocally()
-                policy.accountEmail = nil
-                policy.save()
-                return .deleted
-            case .notAvailable:
-                return .emailRequest(deletionMail())
-            }
-        } catch let e as PaxAPIError where e.status == 401 {
-            return .emailRequest(deletionMail())                      // signed out: ask by email
-        } catch {
-            message = error.localizedDescription
+        message = nil
+        let outcome: AccountDeletion.Outcome
+        do { outcome = try await api.deleteAccount() }
+        catch { message = error.localizedDescription; return .failed }
+        switch outcome {
+        case .deleted:
+            // Every token of the account is dead on the server: forget them here too.
+            api.signOutLocally()
+            policy.accountEmail = nil
+            policy.trustedEmail = nil
+            if !policy.isActive { policy.deviceID = nil }
+            policy.save()
+            return .deleted
+        case .notAvailable, .signedOut:
+            return .emailRequest(deletionMail())
+        case .stillProtected(_, _, let devices):
+            return .stillProtected(devices)
+        case .rateLimited:
+            message = PaxCopy.deleteRateLimited
+            return .failed
+        case .failed(let text):
+            message = text
             return .failed
         }
     }

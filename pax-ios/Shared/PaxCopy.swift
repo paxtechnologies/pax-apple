@@ -221,8 +221,8 @@ enum PaxCopy {
     static func deleteBody(isActive: Bool) -> String {
         var s = "This deletes your email, trusted person, devices and blocked sites from the Pax server."
         if isActive {
-            s += " Pax stays on this device after your account is deleted, and the Screen Time passcode Pax keeps "
-                + "can't be given back. If you want it back, turn Pax off first (it takes your turn-off wait)."
+            s += " Pax has to be off on every device on your account first. Turning Pax off takes your "
+                + "turn-off wait, and deleting your account never skips it."
         }
         return s
     }
@@ -234,6 +234,27 @@ enum PaxCopy {
         "Please delete my Pax account.\n\nAccount email: \(email)\nAccount reference: \(accountRef)\n\nSent from the Pax app on iPhone or iPad."
     }
     static let deleteMailSubject = "Delete my Pax account"
+    static let deleteRateLimited = "Too many tries. Please wait an hour, then try again."
+    static let deleteStillOnTitle = "Pax is still on"
+    static func deleteStillOnBody(count: Int) -> String {
+        count == 1 ? "Your account can't be deleted while Pax is still on one of its devices:"
+                   : "Your account can't be deleted while Pax is still on \(count) of its devices:"
+    }
+    static let deleteStillOnHowTo = "Turn Pax off on each one first, from Home › Turn off Pax. It takes your turn-off "
+        + "wait, and deleting your account never skips it. When Pax is off everywhere, come back here to delete "
+        + "your account."
+    static let deleteStillOnNothingChanged = "Nothing has been deleted."
+    static func deleteStillOnReason(_ reason: String, checkingIn: Bool?) -> String {
+        var s: String
+        switch reason {
+        case "turn_off_wait": s = "Turn-off wait in progress"
+        case "emergency_release": s = "Support turn-off in progress"
+        case "pending_request": s = "A turn-off request is still open"
+        default: s = "Pax is on"
+        }
+        if checkingIn == false { s += " · not seen online lately" }
+        return s
+    }
 
     /// Every visible string, for the copy tests.
     static func all(isPad: Bool) -> [String] {
@@ -259,7 +280,11 @@ enum PaxCopy {
             turnOffConfirmBody(trusted: true), turnOffStart, keepOn, turnOffWaiting("3 days"), turnOffReady,
             turnOffNow, turnOffUnknown, releasedTitle, releasedPasscode, releasedHowTo, releasedNoPasscode,
             accountTitle, privacy, support, deleteTitle, deleteBody(isActive: true), deleteBody(isActive: false),
-            deleteConfirm, deleteDone, deleteRequested, deleteMailSubject,
+            deleteConfirm, deleteDone, deleteRequested, deleteMailSubject, deleteRateLimited,
+            deleteStillOnTitle, deleteStillOnBody(count: 1), deleteStillOnBody(count: 2), deleteStillOnHowTo,
+            deleteStillOnNothingChanged, deleteStillOnReason("pax_on", checkingIn: false),
+            deleteStillOnReason("turn_off_wait", checkingIn: true), deleteStillOnReason("emergency_release", checkingIn: nil),
+            deleteStillOnReason("pending_request", checkingIn: nil),
         ]
         for a in [PaxAudience.me, .child] {
             out += [emailTitle(a), emailBody(a), trustedTitle(a), trustedBody(a)]

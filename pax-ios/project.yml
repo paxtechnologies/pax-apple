@@ -181,6 +181,7 @@ targets:
       - Shared/Watchers.swift
       - Shared/SetupRules.swift
       - Shared/PaxCopy.swift
+      - Shared/AccountDeletion.swift
       - Guide/Sources/Core
     settings:
       base:

@@ -92,11 +92,24 @@ jobs:
                   if sys.argv[1] in x['name']: print(x['udid']); sys.exit()
           " "$1"
           }
+          size() { stat -f%z "$1" 2>/dev/null || echo 0; }
+          # A frame caught before SwiftUI draws is only the launch colour: it compresses to
+          # ~90-120 KB, while real screens are 250 KB+. Retry those (up to 3 launches, longer
+          # waits each time) instead of keeping a blank image.
           shoot() {  # udid prefix name launch-args...
             local U=$1 P=$2 N=$3; shift 3
-            xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax "$@" || return 0
-            sleep 12
-            xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/$P-$N.png" || true
+            local F="$RUNNER_TEMP/shots/$P-$N.png" try look
+            for try in 1 2 3; do
+              xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax "$@" || { sleep 10; continue; }
+              for look in 1 2 3; do
+                sleep $((8 + try * 6))
+                xcrun simctl io "$U" screenshot "$F" || true
+                [ "$(size "$F")" -gt 200000 ] && return 0
+              done
+              echo "::warning::$P-$N looked blank ($(size "$F") bytes) after launch $try"
+              xcrun simctl spawn "$U" log show --last 2m --style compact --predicate 'process == "Pax"' 2>/dev/null | tail -15 || true
+            done
+            echo "::warning::$P-$N stayed blank; dropped"; rm -f "$F"
           }
           device() {  # udid prefix
             local U=$1 P=$2

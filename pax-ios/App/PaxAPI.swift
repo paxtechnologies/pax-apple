@@ -85,16 +85,13 @@ final class PaxAPI {
         let _: Empty = try await send("PUT", "/v1/accounts/me/partner", ["email": email])
     }
 
-    /// Account deletion. The server has no delete route yet; a 404/405 answer means
-    /// "not available", and the app falls back to an emailed request.
-    enum DeleteResult { case deleted, notAvailable }
-    func deleteAccount() async throws -> DeleteResult {
-        do {
-            let _: Empty = try await send("DELETE", "/v1/accounts/me", nil)
-            return .deleted
-        } catch let e as PaxAPIError where e.status == 404 || e.status == 405 {
-            return .notAvailable
-        }
+    /// Account deletion (server 0.8.30: 204 / 401 / 409 devices_still_protected / 429).
+    /// Servers without the route answer 404 or 405 (0.8.29), which means "not available":
+    /// the app falls back to an emailed request. See AccountDeletion.
+    func deleteAccount() async throws -> AccountDeletion.Outcome {
+        guard token != nil else { return .signedOut }
+        let (status, data) = try await sendRaw("DELETE", "/v1/accounts/me")
+        return AccountDeletion.outcome(status: status, body: data)
     }
 
     // MARK: device and turn-off
@@ -177,6 +174,22 @@ final class PaxAPI {
             throw PaxAPI.error(status: status, data: data)
         }
         return try JSONDecoder().decode(T.self, from: data.isEmpty ? Data("{}".utf8) : data)
+    }
+
+    /// The status and body as they came, for answers the caller reads itself.
+    private func sendRaw(_ method: String, _ path: String) async throws -> (Int, Data) {
+        var req = URLRequest(url: base.appendingPathComponent(path))
+        req.httpMethod = method
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
+        } catch {
+            throw PaxAPIError(status: 0, code: "offline",
+                              message: "Pax couldn't reach its server. Check your connection and try again.")
+        }
     }
 
     /// The server answers errors as {"error": code, "message": text, "pax_code": …}.
