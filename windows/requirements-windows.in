@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# What "Pax for iPhone set-up" on Windows bundles, installed with --no-deps (same idea as
+# device/requirements-bundle.in on the Mac): the import closure of device/pax_device.py,
+# traced for Windows. Differences from the Mac list:
+#   - no ioregistry (macOS only)
+#   - pywin32: pymobiledevice3.osu.win_util imports win32security on Windows; Pax also
+#     uses win32crypt (DPAPI) to keep the account token on this PC only
+#   - colorama: click and tqdm use it on Windows
+# Regenerate the hashes after changing a version:
+#   python windows/lock_windows.py          (writes windows/requirements-windows.txt)
+pymobiledevice3==11.32.0
+backports-zstd==1.8.0
+bpylist2==4.1.1
+certifi==2026.7.22
+cffi==2.1.1
+chardet==7.6.0
+charset-normalizer==3.5.2
+click==8.5.0
+colorama==0.4.6
+construct==2.10.70
+cryptography==48.0.1
+hyperframe==6.1.0
+idna==3.20
+ifaddr==0.2.0
+packaging==26.3
+prompt-toolkit==3.0.53
+psutil==7.2.2
+pycparser==3.11
+pygments==2.21.0
+pygnuutils==0.1.1
+pyiosbackup==0.2.4
+pywin32==311
+questionary==2.1.1
+requests==2.34.2
+tqdm==4.70.1
+typing-extensions==4.16.0
+urllib3==2.8.0
+wcwidth==0.9.2

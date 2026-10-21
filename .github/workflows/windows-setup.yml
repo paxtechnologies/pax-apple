@@ -1,0 +1,98 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# "Pax for iPhone set-up" for Windows (windows/, docs/WINDOWS_SETUP.md). Runs ONLY for the
+# windows-setup branch (and by hand): tests, the PyInstaller build, the self-tests of both
+# executables from the built folder, the Inno Setup installer, and an UNSIGNED artifact.
+# It never signs, tags, releases or pushes anything, and never touches the ci-logs* branches.
+name: windows-setup
+
+on:
+  push:
+    branches: [windows-setup]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-setup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests + PaxSetup.exe (unsigned)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install (hash-pinned runtime, then test and build tools)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --no-deps --require-hashes --only-binary=:all: -r windows/requirements-windows.txt
+          python -m pip install -r windows/requirements-dev.txt -r server/requirements-dev.txt
+          python -m pip install pyinstaller==6.22.3 pillow
+
+      - name: Tests (windows/, plus the shared seed tests on Windows)
+        run: |
+          python -m pytest -q windows/tests
+          python -m pytest -q device/tests/test_seed.py
+
+      - name: Lock file is current
+        run: python windows/lock_windows.py --check
+
+      - name: Shared helper self-test (pymobiledevice3 on Windows, from source)
+        run: |
+          $out = python windows/helper_main.py selftest --expect-pymobiledevice3 11.32.0 | Select-Object -Last 1
+          Write-Host $out
+          if (-not ($out | ConvertFrom-Json).ok) { throw "helper selftest failed" }
+
+      - name: Icon
+        run: python windows/make_icon.py
+
+      - name: PyInstaller (onedir)
+        run: pyinstaller --noconfirm --clean --distpath dist --workpath build/pyi windows/pax_setup.spec
+
+      - name: Self-test the built executables
+        run: |
+          $h = & dist/PaxSetup/pax-helper.exe selftest --expect-pymobiledevice3 11.32.0 | Select-Object -Last 1
+          Write-Host "pax-helper.exe: $h"
+          if (-not ($h | ConvertFrom-Json).ok) { throw "pax-helper.exe selftest failed" }
+          # With no iPhone, `list` must still answer in JSON (usbmux not reachable on the runner).
+          $l = & dist/PaxSetup/pax-helper.exe list | Select-Object -Last 1
+          Write-Host "pax-helper.exe list: $l"
+          $null = $l | ConvertFrom-Json
+          $global:LASTEXITCODE = 0   # no iPhone on the runner: `list` answers ok=false, which is expected
+          $p = Start-Process -FilePath dist/PaxSetup/PaxSetup.exe -ArgumentList "--selftest-out", "$env:RUNNER_TEMP\app-selftest.json" -Wait -PassThru
+          $a = Get-Content "$env:RUNNER_TEMP\app-selftest.json" -Raw
+          Write-Host "PaxSetup.exe: $a"
+          if ($p.ExitCode -ne 0 -or -not ($a | ConvertFrom-Json).ok) { throw "PaxSetup.exe selftest failed" }
+          "{0:N1} MB" -f ((Get-ChildItem dist/PaxSetup -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+
+      - name: Installer (Inno Setup 6)
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+          & $iscc /DAppVersion=0.1.0 "/DSourceDir=$PWD\dist\PaxSetup" "/DOutDir=$PWD\dist" windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Get-ChildItem dist\*.exe | ForEach-Object { "{0}  {1:N1} MB  sha256 {2}" -f $_.Name, ($_.Length / 1MB), (Get-FileHash $_ -Algorithm SHA256).Hash }
+
+      - name: Zip the folder build
+        run: Compress-Archive -Path dist/PaxSetup -DestinationPath dist/PaxSetup-0.1.0-windows-x64-folder.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PaxSetup-windows-unsigned
+          path: |
+            dist/PaxSetup-0.1.0-windows-x64.exe
+            dist/PaxSetup-0.1.0-windows-x64-folder.zip
+          if-no-files-found: error
+          retention-days: 30
