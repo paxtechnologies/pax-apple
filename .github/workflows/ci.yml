@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 name: ci
-on:
-  push:
-    # The windows-setup branch has its own workflow (windows-setup.yml) and must not
-    # publish to the ci-logs-* branches. Every other branch and every tag runs as before.
-    branches-ignore: [windows-setup]
-    tags: ["**"]
-  pull_request:
+on: [push, pull_request]
 permissions:
   contents: write   # the ci-logs-python / ci-logs-mac branches
 concurrency:

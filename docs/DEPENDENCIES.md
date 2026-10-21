@@ -90,24 +90,6 @@ Each wheel's licence file ships in its `.dist-info` folder; bpylist2's wheel has
 `licenses/helper-runtime/LICENSE.bpylist2.txt` carries its MIT text. Sources: the PyPI links above
 (each has the sdist), and the python-build-standalone release above.
 
-## Windows iPhone set-up (branch `windows-setup`, not released)
-
-"Pax for iPhone set-up" for Windows ([WINDOWS_SETUP.md](WINDOWS_SETUP.md)) ships the same helper
-code and the same packages as above (`windows/requirements-windows.txt`, hash-pinned for
-win_amd64 by `windows/lock_windows.py`), without ioregistry, plus:
-
-| Package / tool | Licence | Why it's there |
-|---|---|---|
-| [pywin32](https://pypi.org/project/pywin32/311/) 311 | PSF-2.0 | pymobiledevice3's Windows layer imports `win32security`; DPAPI keeps the account token on the PC |
-| [colorama](https://pypi.org/project/colorama/0.4.6/) 0.4.6 | BSD-3-Clause | click and tqdm use it on Windows |
-| CPython 3.12 (python.org Windows build, via actions/setup-python) with Tcl/Tk | PSF-2.0; Tcl/Tk: BSD-style | the runtime PyInstaller bundles; tkinter draws the window |
-| PyInstaller 6.22.3 (build only; its bootloader ships in the .exe files) | GPL-2.0-or-later with the bootloader exception | builds `PaxSetup.exe` and `pax-helper.exe` |
-| Inno Setup 6 (build only; its installer stub ships) | Inno Setup License (permissive) | the per-user installer |
-| Pillow (build only, not shipped) | MIT-CMU | makes `pax.ico` from the Mac app icon |
-
-Apple's Mobile Device Service (from Apple's "Apple Devices" app or iTunes) is required on the PC and
-is **not** shipped: people install it from Microsoft Store or Apple.
-
 ## pax-guard's runtime (v0.8.6)
 
 pax-guard is a root LaunchDaemon, so it must not run code from `/Applications/Pax.app`, which the

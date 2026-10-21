@@ -1,6 +1,0 @@
-# SPDX-License-Identifier: GPL-3.0-only
-# Tests for windows/ (any OS). The server tests in windows/tests also need
-# server/requirements-dev.txt; the helper self-test needs requirements-windows.txt.
-pytest>=8
-pyyaml>=6
-cryptography>=42
