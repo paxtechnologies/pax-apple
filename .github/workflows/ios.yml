@@ -103,7 +103,7 @@ jobs:
             [ -n "$U" ] || { echo "no simulator for $P"; return 0; }
             xcrun simctl boot "$U" || true
             # Cold boots on the Intel runner can take many minutes: wait up to 20.
-            if ! timeout 1200 xcrun simctl bootstatus "$U" -b; then
+            if ! perl -e 'alarm shift; exec @ARGV' 1200 xcrun simctl bootstatus "$U" -b; then   # macOS has no timeout(1)
               echo "::warning::$P simulator did not finish booting"; xcrun simctl shutdown "$U" || true; return 0
             fi
             sleep 20
