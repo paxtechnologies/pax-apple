@@ -50,6 +50,9 @@ struct OnboardingView: View {
             guard !started else { return }
             started = true
             step = SetupRules.resume(isActive: model.policy.isActive)
+            #if DEBUG
+            if let s = ScreenshotMode.step { step = s }      // App Store screenshots only
+            #endif
         }
     }
 

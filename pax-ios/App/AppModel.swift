@@ -22,6 +22,13 @@ final class AppModel: ObservableObject {
     @Published var revealedPasscode: String?
 
     let api = PaxAPI()
+
+    init() {
+        #if DEBUG
+        if ScreenshotMode.home { policy = ScreenshotMode.samplePolicy; dnsOn = true }
+        #endif
+    }
+
     var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     var authorized: Bool { AuthorizationCenter.shared.authorizationStatus == .approved }
 
@@ -30,6 +37,9 @@ final class AppModel: ObservableObject {
     private var checking = false
 
     func onActive() async {
+        #if DEBUG
+        if ScreenshotMode.home { return }                    // screenshots: no network, no settings
+        #endif
         guard policy.isActive, !checking else { return }
         checking = true; defer { checking = false }
         PaxRestrictions.apply(policy, selection: selection)      // self-heal

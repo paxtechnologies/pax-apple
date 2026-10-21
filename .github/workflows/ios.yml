@@ -42,38 +42,102 @@ jobs:
           echo "IPHONE_UDID=$UDID" >> "$GITHUB_ENV"
           xcodebuild -project Pax.xcodeproj -scheme Pax -destination "id=$UDID" \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/test.log"
-      - name: Screenshot of the welcome screen (simulator)
-        continue-on-error: true
-        timeout-minutes: 8
-        run: |
-          mkdir -p "$RUNNER_TEMP/shots"
-          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -path '*iphonesimulator*' -name 'Pax.app' | head -1)
-          U=$IPHONE_UDID
-          xcrun simctl boot "$U" || true
-          xcrun simctl bootstatus "$U" -b
-          xcrun simctl status_bar "$U" override --time 9:41 --batteryState charged --batteryLevel 100 || true
-          xcrun simctl install "$U" "$APP"
-          xcrun simctl ui "$U" appearance light
-          xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax
-          sleep 10
-          xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/full-welcome-light.png"
-          xcrun simctl ui "$U" appearance dark
-          xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax
-          sleep 10
-          xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/full-welcome-dark.png"
-      - name: Keep the screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-screenshots
-          path: ${{ runner.temp }}/shots/*.png
-          if-no-files-found: ignore
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ios-logs
           path: ${{ runner.temp }}/*.log
+
+  # App Store screenshots (Debug build, simulator): 6.9" iPhone (1320x2868) and 13" iPad
+  # (2064x2752). Non-blocking: a slow or hung simulator boot never turns the workflow red.
+  # Screens are opened with Debug-only launch arguments (pax-ios/App/ScreenshotMode.swift).
+  appstore-screenshots:
+    runs-on: macos-15-intel   # arm64 macOS runners were out of capacity on 2026-10-20
+    timeout-minutes: 75
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: pax-ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the newest Xcode on the runner
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$X/Contents/Developer"
+          xcodebuild -version
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build for the simulator (Debug, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project Pax.xcodeproj -scheme Pax -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/shots-build.log"
+      - name: List simulators
+        run: xcrun simctl list devices available
+      - name: Screenshots
+        timeout-minutes: 55
+        run: |
+          set -x
+          mkdir -p "$RUNNER_TEMP/shots"
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -path '*iphonesimulator*' -name 'Pax.app' | head -1)
+          pick() {  # newest iOS runtime, first device whose name contains $1
+            xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          for k,v in sorted(d.items(), reverse=True):
+              if 'iOS' not in k: continue
+              for x in v:
+                  if sys.argv[1] in x['name']: print(x['udid']); sys.exit()
+          " "$1"
+          }
+          shoot() {  # udid prefix name launch-args...
+            local U=$1 P=$2 N=$3; shift 3
+            xcrun simctl launch --terminate-running-process "$U" org.paxpeace.pax "$@" || return 0
+            sleep 12
+            xcrun simctl io "$U" screenshot "$RUNNER_TEMP/shots/$P-$N.png" || true
+          }
+          device() {  # udid prefix
+            local U=$1 P=$2
+            [ -n "$U" ] || { echo "no simulator for $P"; return 0; }
+            xcrun simctl boot "$U" || true
+            # Cold boots on the Intel runner can take many minutes: wait up to 20.
+            if ! timeout 1200 xcrun simctl bootstatus "$U" -b; then
+              echo "::warning::$P simulator did not finish booting"; xcrun simctl shutdown "$U" || true; return 0
+            fi
+            sleep 20
+            xcrun simctl status_bar "$U" override --time 9:41 --dataNetwork wifi --wifiBars 3 \
+              --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+            xcrun simctl install "$U" "$APP" || return 0
+            xcrun simctl ui "$U" appearance light
+            shoot "$U" "$P" 1-welcome
+            shoot "$U" "$P" 2-home -PaxShotHome YES
+            shoot "$U" "$P" 3-wait -PaxShotStep 5
+            shoot "$U" "$P" 4-who -PaxShotStep 1
+            shoot "$U" "$P" 5-passcode -PaxShotStep 8
+            shoot "$U" "$P" 6-trusted -PaxShotStep 4
+            xcrun simctl ui "$U" appearance dark
+            shoot "$U" "$P" 7-home-dark -PaxShotHome YES
+            xcrun simctl shutdown "$U" || true
+          }
+          device "$(pick 'Pro Max')" iphone69
+          IPAD=$(pick 'iPad Pro 13-inch'); [ -n "$IPAD" ] || IPAD=$(pick '13-inch')   # iPad Pro 13" = 2064x2752
+          device "$IPAD" ipad13
+          for f in "$RUNNER_TEMP"/shots/*.png; do sips -g pixelWidth -g pixelHeight "$f"; done
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appstore-screenshots
+          path: ${{ runner.temp }}/shots/*.png
+          if-no-files-found: ignore
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appstore-screenshots-logs
+          path: ${{ runner.temp }}/shots-*.log
 
   # The interim guide app (pax-ios/Guide): no entitlements, ships first under the same
   # bundle id. Build for the simulator, run its tests, and keep a few screenshots.

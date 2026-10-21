@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-<!-- Pax (App Store): no tracking. Collected for the account only: email address (and the
-     optional trusted person's email), the device name and your blocked sites. No browsing
-     history. UserDefaults is used only through the app's own App Group (1C8F.1). -->
+<!-- Pax (App Store): no tracking, no browsing history. Collected for the account only, linked to it,
+     for app functionality: email addresses (yours and the optional trusted person's), a device
+     identifier Pax makes at set-up (profile_identifier) with the device name, and the sites you
+     block. UserDefaults: the app's own App Group (1C8F.1) and the app's own defaults (CA92.1). -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -15,6 +16,18 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeDeviceID</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>
@@ -44,6 +57,7 @@
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
+				<string>CA92.1</string>
 				<string>1C8F.1</string>
 			</array>
 		</dict>

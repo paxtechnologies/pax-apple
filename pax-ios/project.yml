@@ -81,7 +81,10 @@ targets:
     type: app-extension
     platform: iOS
     sources:
-      - ShieldConfiguration
+      - path: ShieldConfiguration
+        excludes: [PrivacyInfo.xcprivacy]
+      - path: ShieldConfiguration/PrivacyInfo.xcprivacy
+        buildPhase: resources
       - Shared/PaxShared.swift
       - Shared/PaxColors.swift
     info:
@@ -109,7 +112,10 @@ targets:
     type: app-extension
     platform: iOS
     sources:
-      - ShieldAction
+      - path: ShieldAction
+        excludes: [PrivacyInfo.xcprivacy]
+      - path: ShieldAction/PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: ShieldAction/Info.plist
       properties:
@@ -134,7 +140,10 @@ targets:
     type: app-extension
     platform: iOS
     sources:
-      - DeviceActivityMonitor
+      - path: DeviceActivityMonitor
+        excludes: [PrivacyInfo.xcprivacy]
+      - path: DeviceActivityMonitor/PrivacyInfo.xcprivacy
+        buildPhase: resources
       - Shared/PaxShared.swift
       - Shared/PaxPolicy.swift
       - Shared/PaxRestrictions.swift

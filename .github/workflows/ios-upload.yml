@@ -1,0 +1,188 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Pax for iPhone and iPad: archive the App Store build and upload it to App Store Connect
+# (TestFlight first; nothing here submits for App Review). Run by hand only, from branch
+# ios/full-v1. Signing is automatic with the App Store Connect API key in three repo secrets:
+#   ASC_KEY_P8      the .p8 private key text
+#   ASC_KEY_ID      its key ID
+#   ASC_ISSUER_ID   the issuer ID
+# The key needs the Admin role (cloud-managed distribution certificate). The key file is
+# written to a temp folder for the run and deleted at the end, whatever happens.
+name: ios-upload
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: 'CFBundleVersion (leave empty to use this workflow''s run number)'
+        required: false
+        default: ''
+      upload:
+        description: 'Upload to App Store Connect (untick to archive and export only)'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: ios-upload
+  cancel-in-progress: false
+jobs:
+  upload:
+    if: github.ref == 'refs/heads/ios/full-v1'
+    runs-on: macos-15-intel   # arm64 macOS runners were out of capacity on 2026-10-20
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: pax-ios
+    env:
+      BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+      TEAM_ID: Z94GSK7JA8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Paths
+        run: |
+          echo "ARCHIVE=$RUNNER_TEMP/Pax.xcarchive" >> "$GITHUB_ENV"
+          echo "EXPORT_DIR=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
+          echo "KEY_DIR=$RUNNER_TEMP/asc" >> "$GITHUB_ENV"
+
+      - name: Check the secrets are there
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          missing=""
+          [ -n "$ASC_KEY_P8" ] || missing="$missing ASC_KEY_P8"
+          [ -n "$ASC_KEY_ID" ] || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
+          case "$BUILD_NUMBER" in ''|*[!0-9.]*) echo "::error::build_number must be digits (got '$BUILD_NUMBER')"; exit 1;; esac
+          echo "Build number: $BUILD_NUMBER"
+
+      - name: Use the newest Xcode on the runner
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$X/Contents/Developer"
+          xcodebuild -version
+
+      - name: Write the API key (temp, deleted at the end)
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set +x
+          umask 077
+          mkdir -p "$KEY_DIR" "$HOME/.appstoreconnect/private_keys"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          # altool looks for the key here by its ID.
+          cp "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" "$HOME/.appstoreconnect/private_keys/"
+          grep -q 'BEGIN PRIVATE KEY' "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" || { echo "::error::ASC_KEY_P8 doesn't look like a .p8 key"; exit 1; }
+
+      - run: brew install xcodegen
+      - run: xcodegen generate
+
+      - name: Archive (Release, generic iOS device, automatic signing)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -project Pax.xcodeproj -scheme Pax -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            archive 2>&1 | tee "$RUNNER_TEMP/archive.log"
+
+      - name: Check the archive (app + 3 extensions, versions, entitlements, privacy, encryption)
+        run: |
+          set -e
+          APP="$ARCHIVE/Products/Applications/Pax.app"
+          PB=/usr/libexec/PlistBuddy
+          test -d "$APP"
+          ls "$APP/PlugIns"
+          n=$(ls -d "$APP"/PlugIns/*.appex | wc -l | tr -d ' ')
+          [ "$n" = 3 ] || { echo "::error::expected 3 extensions, found $n"; exit 1; }
+          if ls "$APP/PlugIns" | grep -qi -e url -e filter; then echo "::error::URL filter target must not ship"; exit 1; fi
+          V=$($PB -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")
+          [ "$($PB -c 'Print :ITSAppUsesNonExemptEncryption' "$APP/Info.plist")" = false ]
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          for b in "$APP" "$APP"/PlugIns/*.appex; do
+            id=$($PB -c 'Print :CFBundleIdentifier' "$b/Info.plist")
+            sv=$($PB -c 'Print :CFBundleShortVersionString' "$b/Info.plist")
+            bv=$($PB -c 'Print :CFBundleVersion' "$b/Info.plist")
+            echo "$id $sv ($bv)"
+            [ "$sv" = "$V" ] && [ "$bv" = "$BUILD_NUMBER" ] || { echo "::error::$id version mismatch"; exit 1; }
+            test -f "$b/PrivacyInfo.xcprivacy" || { echo "::error::$id has no PrivacyInfo.xcprivacy"; exit 1; }
+            ent=$(codesign -d --entitlements :- "$b" 2>/dev/null)
+            echo "$ent" | grep -q 'com.apple.developer.family-controls' || { echo "::error::$id lacks Family Controls"; exit 1; }
+            echo "$ent" | grep -q 'group.org.paxpeace.pax' || { echo "::error::$id lacks the App Group"; exit 1; }
+          done
+          for id in org.paxpeace.pax.shield-configuration org.paxpeace.pax.shield-action org.paxpeace.pax.monitor; do
+            grep -rqs "$id" "$APP"/PlugIns/*/Info.plist || { echo "::error::missing $id"; exit 1; }
+          done
+          codesign -dv "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier' || true
+
+      - name: Export (app-store-connect)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/export.log"
+          ls -la "$EXPORT_DIR"
+          test -f "$EXPORT_DIR/Pax.ipa"
+
+      - name: Upload to App Store Connect
+        if: inputs.upload
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcrun altool --validate-app -f "$EXPORT_DIR/Pax.ipa" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/validate.log"
+          xcrun altool --upload-app -f "$EXPORT_DIR/Pax.ipa" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/upload.log"
+          echo "Uploaded Pax $BUILD_NUMBER. It shows in App Store Connect › TestFlight after Apple's processing." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete the API key
+        if: always()
+        run: |
+          rm -rf "$KEY_DIR" "$HOME/.appstoreconnect/private_keys"
+          echo "key files removed"
+
+      - name: Keep the IPA, dSYMs and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pax-ios-${{ env.BUILD_NUMBER }}
+          retention-days: 14
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/export/*.ipa
+            ${{ runner.temp }}/export/*.plist
+            ${{ runner.temp }}/export/*.log
+            ${{ runner.temp }}/Pax.xcarchive/dSYMs
+            ${{ runner.temp }}/*.log
