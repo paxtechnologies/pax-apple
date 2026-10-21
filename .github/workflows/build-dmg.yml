@@ -30,6 +30,10 @@ name: Build DMG
 
 on:
   push:
+    # Not on the windows-setup branch (windows-setup.yml builds that); every other branch
+    # and every tag (releases) runs as before.
+    branches-ignore: [windows-setup]
+    tags: ["**"]
   workflow_dispatch:
 
 permissions:
