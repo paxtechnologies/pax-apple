@@ -1,7 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Pax for iPhone and iPad: archive the App Store build and upload it to App Store Connect
-# (TestFlight first; nothing here submits for App Review). Run by hand only, from branch
-# ios/full-v1. Signing is automatic with the App Store Connect API key in three repo secrets:
+# (TestFlight first; nothing here submits for App Review). Runs only on branch ios/full-v1,
+# started by hand in one of two ways:
+#   - push a commit to ios/full-v1 that changes pax-ios/appstore-upload.txt (one line: the build
+#     number). This is the way while the workflow isn't on the default branch, because GitHub
+#     only offers "Run workflow" for workflows that exist on the default branch;
+#   - or "Run workflow" (workflow_dispatch) once it is on the default branch.
+# Signing is automatic with the App Store Connect API key in three repo secrets:
 #   ASC_KEY_P8      the .p8 private key text
 #   ASC_KEY_ID      its key ID
 #   ASC_ISSUER_ID   the issuer ID
@@ -9,6 +14,9 @@
 # written to a temp folder for the run and deleted at the end, whatever happens.
 name: ios-upload
 on:
+  push:
+    branches: [ios/full-v1]
+    paths: ['pax-ios/appstore-upload.txt']
   workflow_dispatch:
     inputs:
       build_number:
@@ -33,13 +41,19 @@ jobs:
       run:
         working-directory: pax-ios
     env:
-      BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
       TEAM_ID: Z94GSK7JA8
     steps:
       - uses: actions/checkout@v4
 
-      - name: Paths
+      - name: Paths and build number
         run: |
+          if [ "${{ github.event_name }}" = push ]; then
+            B=$(tr -d ' \r\n' < appstore-upload.txt)
+          else
+            B="${{ inputs.build_number }}"
+          fi
+          [ -n "$B" ] || B="${{ github.run_number }}"
+          echo "BUILD_NUMBER=$B" >> "$GITHUB_ENV"
           echo "ARCHIVE=$RUNNER_TEMP/Pax.xcarchive" >> "$GITHUB_ENV"
           echo "EXPORT_DIR=$RUNNER_TEMP/export" >> "$GITHUB_ENV"
           echo "KEY_DIR=$RUNNER_TEMP/asc" >> "$GITHUB_ENV"
@@ -155,7 +169,7 @@ jobs:
           test -f "$EXPORT_DIR/Pax.ipa"
 
       - name: Upload to App Store Connect
-        if: inputs.upload
+        if: github.event_name == 'push' || inputs.upload
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
