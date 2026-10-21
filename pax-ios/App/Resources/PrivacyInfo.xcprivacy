@@ -2,8 +2,8 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <!-- Pax (App Store): no tracking, no browsing history. Collected for the account only, linked to it,
      for app functionality: email addresses (yours and the optional trusted person's), a device
-     identifier Pax makes at set-up (profile_identifier) with the device name, and the sites you
-     block. UserDefaults: the app's own App Group (1C8F.1) and the app's own defaults (CA92.1). -->
+     identifier Pax makes at set-up (profile_identifier) with the device name, the sites you
+     block, and the server's last-active day for each device (Product Interaction: a date only). UserDefaults: the app's own App Group (1C8F.1) and the app's own defaults (CA92.1). -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -47,6 +47,19 @@
 			<key>NSPrivacyCollectedDataTypePurposes</key>
 			<array>
 				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+				<string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
 			</array>
 		</dict>
 	</array>
