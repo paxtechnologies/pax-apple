@@ -2,35 +2,35 @@
  "bench": {
   "proxy_fresh": {
    "pool": 662,
-   "resolving": 581,
-   "working_proxies": 64
+   "resolving": 582,
+   "working_proxies": 68
   },
   "queries": {
    "neutral": 800,
-   "reference": 783
+   "reference": 787
   },
   "scores": {
    "adult": {
-    "gains": 0,
-    "last": 327,
-    "last_fp": 73,
+    "gains": 1,
+    "last": 342,
+    "last_fp": 72,
     "losses": 0,
-    "n": 399,
-    "new": 327,
+    "n": 400,
+    "new": 343,
     "new_fp": 73,
-    "new_open_ref_blocks": 30,
-    "ref": 284
+    "new_open_ref_blocks": 31,
+    "ref": 301
    },
    "benign": {
     "gains": 0,
     "last": 12,
-    "last_fp": 4,
+    "last_fp": 2,
     "losses": 0,
     "n": 249,
     "new": 12,
-    "new_fp": 4,
-    "new_open_ref_blocks": 1,
-    "ref": 9
+    "new_fp": 2,
+    "new_open_ref_blocks": 3,
+    "ref": 13
    },
    "proxy": {
     "gains": 0,
@@ -45,87 +45,87 @@
    },
    "proxy_fresh": {
     "gains": 0,
-    "last": 49,
+    "last": 53,
     "last_fp": 4,
     "losses": 0,
-    "n": 64,
-    "new": 49,
+    "n": 68,
+    "new": 53,
     "new_fp": 4,
     "new_open_ref_blocks": 10,
-    "ref": 55
+    "ref": 59
    }
   }
  },
  "build": {
-  "bypass": 18131,
-  "final": 1348272,
-  "hagezi_doh_vpn": 16140,
+  "bypass": 18321,
+  "final": 1349609,
+  "hagezi_doh_vpn": 16290,
   "hand_list": 28,
-  "list_a": 92076,
-  "list_b": 474375,
+  "list_a": 92139,
+  "list_b": 475705,
   "list_c": {
    "raw": 4591366,
    "without_blogspot": 965948
   },
-  "loop_block_extra": 2335,
-  "loop_bypass_extra": 1909,
+  "loop_block_extra": 2441,
+  "loop_bypass_extra": 1950,
   "nrd": {
    "days_found": 14,
    "days_requested": 14,
-   "entries": 1246
+   "entries": 1255
   },
   "pax_zones": 3,
   "single_label": 4,
-  "union": 1355647,
+  "union": 1356998,
   "verified_block_extra": 8690,
   "verified_bypass_extra": 313
  },
  "code": "29950cdac49ba8ea1535ded8b396f05d0d4dc77e",
  "discovery": {
   "certificates": 0,
-  "chrome_ranked": 5054,
-  "curated": 2570,
-  "links": 2031,
+  "chrome_ranked": 4747,
+  "curated": 2571,
+  "links": 2572,
   "lookalikes": 3000,
-  "majestic": 808,
-  "new_registrations": 1466,
-  "project_sites": 956,
-  "ranked": 2042,
+  "majestic": 831,
+  "new_registrations": 1455,
+  "project_sites": 1022,
+  "ranked": 2039,
   "vpn_category": 6026
  },
  "entries": {
-  "pax-block": 1348272,
-  "pax-bypass": 18131,
-  "pax-nrd": 1246
+  "pax-block": 1349609,
+  "pax-bypass": 18321,
+  "pax-nrd": 1255
  },
  "failures": [],
- "finished_at": "2026.1020.0342",
+ "finished_at": "2026.1021.0343",
  "known_good": {
   "encoded": null,
   "known_good_blocked": 0,
   "uk57_blocked": 0
  },
- "last_version": "2026.1019.0322",
+ "last_version": "2026.1020.0322",
  "ok": true,
- "started_at": "2026.1020.0322",
+ "started_at": "2026.1021.0322",
  "top10k": {
-  "confirmed": 0,
+  "confirmed": 2,
   "encoded_held": null,
   "held_back": 0,
-  "new_blocks": 0,
+  "new_blocks": 2,
   "unconfirmed": 0
  },
  "verification": {
-  "added_proxy": 104,
-  "added_restricted": 87,
+  "added_proxy": 47,
+  "added_restricted": 106,
   "checked": 1500,
-  "proxy_checked": 503,
-  "proxy_gone": 445,
-  "rechecked_dropped": 2,
+  "proxy_checked": 291,
+  "proxy_gone": 398,
+  "rechecked_dropped": 6,
   "waiting": {
-   "proxy": 445,
-   "restricted": 22093
+   "proxy": 398,
+   "restricted": 20913
   }
  },
- "version": "2026.1020.0322"
+ "version": "2026.1021.0322"
 }
