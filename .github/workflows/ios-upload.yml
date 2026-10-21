@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Pax for iPhone and iPad: archive the App Store build and upload it to App Store Connect
-# (TestFlight first; nothing here submits for App Review). Runs only on branch ios/full-v1,
-# started by hand in one of two ways:
+# (TestFlight first; nothing here submits for App Review). Runs only on branches ios/full-v1
+# (1.1.x) and ios/onetap-v1.2 (1.2 one-tap set-up), started by hand in one of two ways:
 #   - push a commit to ios/full-v1 that changes pax-ios/appstore-upload.txt (one line: the build
 #     number). This is the way while the workflow isn't on the default branch, because GitHub
 #     only offers "Run workflow" for workflows that exist on the default branch;
@@ -16,7 +16,7 @@
 name: ios-upload
 on:
   push:
-    branches: [ios/full-v1]
+    branches: [ios/full-v1, ios/onetap-v1.2]
     paths: ['pax-ios/appstore-upload.txt', 'pax-ios/appstore-dryrun.txt']
   workflow_dispatch:
     inputs:
@@ -35,7 +35,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   upload:
-    if: github.ref == 'refs/heads/ios/full-v1'
+    if: github.ref == 'refs/heads/ios/full-v1' || github.ref == 'refs/heads/ios/onetap-v1.2'
     runs-on: macos-15-intel   # arm64 macOS runners were out of capacity on 2026-10-20
     timeout-minutes: 60
     defaults:

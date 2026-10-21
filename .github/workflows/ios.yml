@@ -126,12 +126,10 @@ jobs:
             xcrun simctl ui "$U" appearance light
             shoot "$U" "$P" 1-welcome
             shoot "$U" "$P" 2-home -PaxShotHome YES
-            shoot "$U" "$P" 3-wait -PaxShotStep 5
-            shoot "$U" "$P" 4-who -PaxShotStep 1
-            shoot "$U" "$P" 5-passcode -PaxShotStep 8
-            shoot "$U" "$P" 6-trusted -PaxShotStep 4
+            shoot "$U" "$P" 3-done -PaxShotStep 7
+            shoot "$U" "$P" 4-child -PaxShotStep 1
             xcrun simctl ui "$U" appearance dark
-            shoot "$U" "$P" 7-home-dark -PaxShotHome YES
+            shoot "$U" "$P" 5-home-dark -PaxShotHome YES
             xcrun simctl shutdown "$U" || true
           }
           device "$(pick 'Pro Max')" iphone69

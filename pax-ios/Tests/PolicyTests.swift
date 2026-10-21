@@ -118,17 +118,22 @@ final class PolicyTests: XCTestCase {
 
     // MARK: set-up
 
-    func testSetupOrder() {
-        var s = SetupStep.welcome
-        var seen: [SetupStep] = [s]
-        while s != .done { s = SetupRules.next(after: s, passcode: true); seen.append(s) }
-        XCTAssertEqual(seen, SetupStep.allCases)
-        XCTAssertEqual(SetupRules.next(after: .lockIn, passcode: false), .dns)
+    func testOneTapPaths() {
+        XCTAssertEqual(SetupRules.path(child: false, privateAccounts: true), [.welcome, .turningOn, .done])
+        XCTAssertEqual(SetupRules.path(child: false, privateAccounts: false), [.welcome, .turningOn, .email, .code, .done])
+        XCTAssertEqual(SetupRules.path(child: true, privateAccounts: true), [.welcome, .childEmail, .childCode, .turningOn, .done])
+        XCTAssertEqual(SetupRules.after(.on), .done)
+        XCTAssertEqual(SetupRules.after(.denied), .welcome)
+        XCTAssertEqual(SetupRules.after(.needsEmail), .email)
+        XCTAssertEqual(SetupRules.after(.failed), .retry)
     }
 
-    func testNoWayBackOnceSwitchedOn() {
-        for s in [SetupStep.lockIn, .passcodeType, .dns, .done] { XCTAssertNil(SetupRules.back(from: s)) }
-        XCTAssertEqual(SetupRules.resume(isActive: true), .dns)
+    func testNoWayBackOnceScreenTimeWasAsked() {
+        for s in [SetupStep.welcome, .turningOn, .email, .retry, .done] { XCTAssertNil(SetupRules.back(from: s)) }
+        XCTAssertEqual(SetupRules.back(from: .childEmail), .welcome)
+        XCTAssertEqual(SetupRules.back(from: .childCode), .childEmail)
+        XCTAssertEqual(SetupRules.back(from: .code), .email)
+        XCTAssertEqual(SetupRules.resume(isActive: true), .done)
         XCTAssertEqual(SetupRules.resume(isActive: false), .welcome)
     }
 
@@ -143,19 +148,24 @@ final class PolicyTests: XCTestCase {
         XCTAssertFalse(SetupRules.isCode("١٢٣٤٥٦"))   // non-ASCII digits
     }
 
-    func testTrustedPersonIsOptionalAndNotYou() {
-        XCTAssertNil(SetupRules.trustedProblem("", account: "me@example.com"))
+    func testTrustedPersonNeedsAnEmailThatIsNotYours() {
+        XCTAssertNotNil(SetupRules.trustedProblem("", account: "me@example.com"))
         XCTAssertNil(SetupRules.trustedProblem("friend@example.com", account: "me@example.com"))
+        XCTAssertNil(SetupRules.trustedProblem("friend@example.com", account: nil))      // private account
         XCTAssertNotNil(SetupRules.trustedProblem("ME@example.com", account: "me@example.com"))
-        XCTAssertNotNil(SetupRules.trustedProblem("friend", account: "me@example.com"))
+        XCTAssertNotNil(SetupRules.trustedProblem("friend", account: nil))
+        XCTAssertEqual(SetupRules.cleanName("  Sam \n"), "Sam")
+        XCTAssertNil(SetupRules.cleanName("   "))
+        XCTAssertEqual(SetupRules.cleanName(String(repeating: "a", count: 99))?.count, 40)
     }
 
     func testSetUpOnlyLengthensTheWait() {
         XCTAssertEqual(SetupRules.waitToSend(chosenDays: 7, currentSeconds: nil), 7)
-        XCTAssertEqual(SetupRules.waitToSend(chosenDays: 7, currentSeconds: 72 * 3600), 7)
+        XCTAssertEqual(SetupRules.waitToSend(chosenDays: 7, currentSeconds: 72 * 3600), 7)   // server default 3 days
         XCTAssertNil(SetupRules.waitToSend(chosenDays: 7, currentSeconds: 30 * 86_400))
         XCTAssertEqual(SetupRules.waitToSend(chosenDays: 1, currentSeconds: nil), 3)      // clamped
-        XCTAssertEqual(SetupRules.defaultWait(for: .child), Pax.childDefaultWaitDays)
+        XCTAssertEqual(SetupRules.defaultWait(child: false), 7)
+        XCTAssertEqual(SetupRules.defaultWait(child: true), Pax.childDefaultWaitDays)
     }
 
     // MARK: DNS and Screen Time watch

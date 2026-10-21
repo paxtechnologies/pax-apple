@@ -22,10 +22,14 @@ final class PaxAPI {
     struct Account: Decodable { let account_id: String; let token: String }
     struct AccountStatus: Decodable {
         let account_id: String
-        let email: String
+        /// nil for a private device account (1.2 server change).
+        let email: String?
         let wait_seconds: Int
         let partner_email: String?
         let pending_partner_email: String?
+        let pending_wait_seconds: Int?
+        let pending_wait_effective_at: Double?
+        let pending_partner_effective_at: Double?
     }
     /// The server's device status (escrow.device_status).
     struct DeviceStatus: Decodable {
@@ -48,6 +52,27 @@ final class PaxAPI {
     struct Empty: Decodable { init(from decoder: Decoder) throws {} }
 
     enum CreateResult { case created, exists }
+    /// Whether the server can do something newer than this app's oldest supported server.
+    enum Capability { case done, notAvailable }
+
+    /// A route this server doesn't have: FastAPI answers 404/405 with {"detail": …} and no
+    /// Pax error code (Pax's own 404s carry {"error": "not_found"}).
+    static func isMissingRoute(_ e: PaxAPIError) -> Bool { (e.status == 404 || e.status == 405) && e.code == nil }
+
+    // MARK: private device account (1.2; needs the server change, see pax-ios/SERVER_CHANGE.md)
+
+    /// One-tap set-up: an account bound to this device, with no email and no code. The token
+    /// is kept in this device's Keychain only. Servers without the route: `.notAvailable`,
+    /// and set-up asks for an email and a code instead.
+    func createDeviceAccount(label: String) async throws -> Capability {
+        do {
+            let a: Account = try await send("POST", "/v1/accounts/device", ["label": label], auth: false)
+            Keychain.set(a.token, for: "account-token")
+            return .done
+        } catch let e as PaxAPIError where PaxAPI.isMissingRoute(e) {
+            return .notAvailable
+        }
+    }
 
     // MARK: account and sign-in (email code)
 
@@ -77,12 +102,20 @@ final class PaxAPI {
 
     func me() async throws -> AccountStatus { try await send("GET", "/v1/accounts/me", nil) }
 
-    func setWait(days: Int) async throws {
-        let _: Empty = try await send("PUT", "/v1/accounts/me/wait", ["wait_days": TurnOffRules.clampWait(days: days)])
+    /// Longer: instant. Shorter: the server makes it pending for the current wait and tells the
+    /// trusted person first (503 if it can't, and nothing changes).
+    @discardableResult
+    func setWait(days: Int) async throws -> AccountStatus {
+        try await send("PUT", "/v1/accounts/me/wait", ["wait_days": TurnOffRules.clampWait(days: days)])
     }
 
-    func setTrustedPerson(email: String) async throws {
-        let _: Empty = try await send("PUT", "/v1/accounts/me/partner", ["email": email])
+    /// `fromName` (1.2 server change) is the first name the trusted person sees; servers
+    /// without it ignore the field.
+    @discardableResult
+    func setTrustedPerson(email: String, fromName: String?) async throws -> AccountStatus {
+        var body: [String: Any] = ["email": email]
+        if let n = fromName, !n.isEmpty { body["from_name"] = n }
+        return try await send("PUT", "/v1/accounts/me/partner", body)
     }
 
     /// Account deletion (server 0.8.30: 204 / 401 / 409 devices_still_protected / 429).
@@ -96,13 +129,27 @@ final class PaxAPI {
 
     // MARK: device and turn-off
 
-    func registerDevice(name: String, platform: String, installID: String, secret: EscrowSecret) async throws -> DeviceStatus {
+    func registerDevice(name: String, platform: String, installID: String, secret: EscrowSecret,
+                        kind: String = "appstore") async throws -> DeviceStatus {
         try await send("POST", "/v1/devices", [
             "name": name, "platform": platform,
-            "profile_identifier": "org.paxpeace.pax.appstore.\(installID)",
+            "profile_identifier": "org.paxpeace.pax.\(kind).\(installID)",
             "removal_password": secret.sealed,
             "support_release": true,
         ])
+    }
+
+    /// 1.2 server change: replace this device's escrowed secret (adding the Screen Time
+    /// passcode later). Never loosens anything: the server refuses while a turn-off is open
+    /// or after a release. Servers without the route: `.notAvailable` (the app then keeps the
+    /// passcode in a second device record).
+    func replaceEscrow(device: String, secret: EscrowSecret) async throws -> Capability {
+        do {
+            let _: Empty = try await send("PUT", "/v1/devices/\(device)/escrow", ["removal_password": secret.sealed])
+            return .done
+        } catch let e as PaxAPIError where PaxAPI.isMissingRoute(e) {
+            return .notAvailable
+        }
     }
 
     func status(device: String) async throws -> DeviceStatus {

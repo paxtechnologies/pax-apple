@@ -59,6 +59,12 @@ enum AccessWatch {
 /// The emails Pax sends through the server's notify relay (POST /v1/notify). The server
 /// sends the trusted person's copy first.
 struct PaxAlertEmail: Equatable {
+    /// " (sam@example.com)" or " (Sam)", or nothing for a private account with no name.
+    static func tag(_ who: String) -> String {
+        let w = who.trimmingCharacters(in: .whitespacesAndNewlines)
+        return w.isEmpty ? "" : " (\(w))"
+    }
+
     let kind: String
     let subject: String
     let body: String
@@ -70,7 +76,7 @@ struct PaxAlertEmail: Equatable {
                       body: "Pax noticed that its encrypted DNS was switched off in Settings on \(device). "
                           + "The adult-site filter and the delete block are still on. To switch the DNS back on: "
                           + "Settings › General › VPN & Device Management › DNS › Pax.",
-                      trustedBody: "Pax noticed that its encrypted DNS was switched off on \(device) (\(email)). "
+                      trustedBody: "Pax noticed that its encrypted DNS was switched off on \(device)\(tag(email)). "
                           + "The adult-site filter and the delete block are still on. You might want to check in.")
     }
 
@@ -79,7 +85,7 @@ struct PaxAlertEmail: Equatable {
                       subject: "Encrypted DNS isn't on yet on \(device)",
                       body: "Pax's encrypted DNS hasn't been switched on on \(device) since set-up. "
                           + "To switch it on: Settings › General › VPN & Device Management › DNS › Pax.",
-                      trustedBody: "Pax's encrypted DNS hasn't been switched on on \(device) (\(email)) since set-up. "
+                      trustedBody: "Pax's encrypted DNS hasn't been switched on on \(device)\(tag(email)) since set-up. "
                           + "The adult-site filter and the delete block are on.")
     }
 
@@ -87,7 +93,7 @@ struct PaxAlertEmail: Equatable {
         PaxAlertEmail(kind: "ios_screen_time_off",
                       subject: "Pax's Screen Time access is off on \(device)",
                       body: "Pax's Screen Time access was switched off on \(device), so its protection there has stopped.",
-                      trustedBody: "Pax's Screen Time access was switched off on \(device) (\(email)), so Pax's "
+                      trustedBody: "Pax's Screen Time access was switched off on \(device)\(tag(email)), so Pax's "
                           + "protection on that device has stopped. You might want to check in.")
     }
 }

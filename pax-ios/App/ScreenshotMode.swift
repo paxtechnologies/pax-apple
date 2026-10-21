@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // App Store screenshots only. Debug builds on the simulator read two launch arguments:
-//   -PaxShotStep <n>   open set-up at that step (SetupStep raw value)
+//   -PaxShotStep <n>   open set-up at that step (SetupStep raw value: 1 child, 7 done)
 //   -PaxShotHome YES   show Home with sample settings, in memory only (nothing saved,
 //                      no network, no Screen Time or DNS calls)
 // None of this is compiled into Release, so the App Store build has no hidden mode.

@@ -86,13 +86,20 @@ extension EscrowSecret {
     /// Fail closed: anything other than a sealed secret whose release key matches the hash
     /// this device kept at set-up leaves Pax on.
     static func decide(sealed: String?, expectedHash: String?) -> ReleaseDecision {
-        guard let expected = expectedHash, !expected.isEmpty else {
+        decide(sealed: sealed, acceptedHashes: [expectedHash].compactMap { $0 })
+    }
+
+    /// The same, accepting any of a few hashes this device wrote down (the current one and one
+    /// saved just before the server's copy was replaced). Empty strings never match.
+    static func decide(sealed: String?, acceptedHashes: [String]) -> ReleaseDecision {
+        let accepted = Set(acceptedHashes.filter { !$0.isEmpty })
+        guard !accepted.isEmpty else {
             return .stayOn(reason: "This device has no release record, so Pax stays on.")
         }
         guard let sealed, let secret = open(sealed) else {
             return .stayOn(reason: "Pax couldn't read what the server sent, so Pax stays on.")
         }
-        guard secret.releaseKeyHash == expected else {
+        guard accepted.contains(secret.releaseKeyHash) else {
             return .stayOn(reason: "The release didn't match this device, so Pax stays on.")
         }
         return .release(passcode: secret.screenTimePasscode)

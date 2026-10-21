@@ -124,6 +124,20 @@ struct PaxPrimaryButton: ButtonStyle {
     }
 }
 
+/// The one big button on Welcome ("Turn Pax on").
+struct PaxBigButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(PaxFont.body(20, weight: .semibold, relativeTo: .title3))
+            .padding(.vertical, 22).padding(.horizontal, 24)
+            .frame(maxWidth: .infinity, minHeight: 68)
+            .foregroundStyle(Palette.buttonText)
+            .background(Capsule().fill(Palette.buttonFill))
+            .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
 struct PaxSecondaryButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Pax for iPhone and iPad (App Store build): on-phone set-up with Screen Time
+# Pax for iPhone and iPad (App Store build), 1.2 one-tap set-up: on-phone set-up with Screen Time
 # (FamilyControls .individual), encrypted DNS and the Pax server's turn-off wait. Generate the Xcode project with
 #   brew install xcodegen && xcodegen generate
 # (the .xcodeproj is not committed). CI: .github/workflows/ios.yml
@@ -13,8 +13,8 @@ settings:
   base:
     DEVELOPMENT_TEAM: Z94GSK7JA8
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.2.0"
+    CURRENT_PROJECT_VERSION: "5"
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Automatic
 targets:
@@ -180,6 +180,7 @@ targets:
       - Shared/EscrowSecret.swift
       - Shared/Watchers.swift
       - Shared/SetupRules.swift
+      - Shared/Stronger.swift
       - Shared/PaxCopy.swift
       - Shared/AccountDeletion.swift
       - Guide/Sources/Core

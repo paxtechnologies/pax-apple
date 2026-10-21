@@ -6,17 +6,18 @@ import XCTest
 final class CopyTests: XCTestCase {
     private var every: [String] { PaxCopy.all(isPad: false) + PaxCopy.all(isPad: true) }
 
-    func testSetUpFromAMacNote() {
-        for pad in [false, true] {
-            let d = pad ? "iPad" : "iPhone"
-            XCTAssertEqual(PaxCopy.macNote(isPad: pad),
-                           "For the strongest protection, set Pax up from a Mac. It locks this \(d) more firmly "
-                           + "and can't be switched off in Settings.")
-            XCTAssertTrue(PaxCopy.limits(isPad: pad, passcode: true).contains(PaxCopy.macSummaryLine(isPad: pad)))
-            XCTAssertTrue(PaxCopy.limits(isPad: pad, passcode: false).contains(PaxCopy.macSummaryLine(isPad: pad)))
-        }
-        XCTAssertEqual(PaxCopy.macLink, "How to set up from a Mac")
-        XCTAssertTrue(PaxCopy.macSummaryLine(isPad: false).contains("set Pax up from a Mac"))
+    func testOneTapWelcome() {
+        XCTAssertEqual(PaxCopy.turnOn, "Turn Pax on")
+        XCTAssertEqual(PaxCopy.childLink, "Setting up for a child?")
+        XCTAssertTrue(PaxCopy.childBody(isPad: false).contains("not your child's"))
+        XCTAssertTrue(PaxCopy.retryBody.contains("nothing has been switched on"))
+    }
+
+    func testMakePaxUnremovableCard() {
+        XCTAssertEqual(PaxCopy.computerTitle, "Make Pax unremovable")
+        XCTAssertEqual(PaxCopy.computerSubtitle, "Set up from a Mac or Windows PC")
+        XCTAssertEqual(Pax.computerSetupURL.absoluteString, "https://paxpeace.com/setup")
+        XCTAssertTrue(PaxCopy.lockBody.contains("Face ID alone can switch Pax off"))
     }
 
     func testMacStepsComeFromTheGuide() {
@@ -39,10 +40,9 @@ final class CopyTests: XCTestCase {
     func testFamilyAndTrustedPersonWording() {
         XCTAssertTrue(PaxCopy.welcomeBody(isPad: false).contains("adult and explicit content"))
         XCTAssertTrue(PaxCopy.welcomeBody(isPad: false).contains("your family"))
-        XCTAssertEqual(PaxCopy.trustedTitle(.me), "Someone you trust")
+        XCTAssertEqual(PaxCopy.trustedTitle, "Add someone you trust")
         XCTAssertTrue(PaxCopy.trustedWitness.contains("never approve"))
         XCTAssertTrue(PaxCopy.waitTitle.contains("turn-off wait"))
-        XCTAssertTrue(PaxCopy.emailBody(.child).contains("not your child's"))
     }
 
     func testHonestLimits() {

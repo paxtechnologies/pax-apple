@@ -11,8 +11,11 @@ enum Pax {
     static let privacyURL = URL(string: "https://paxpeace.com/privacy")!
     static let siteURL = URL(string: "https://paxpeace.com")!
     static let supportEmail = "hello@paxpeace.com"
+    /// "Make Pax unremovable": setting Pax up from a computer (paxpeace.com).
+    static let computerSetupURL = URL(string: "https://paxpeace.com/setup")!
 
-    /// The turn-off wait the person picks at set-up (days): 3 days to 1 year.
+    /// The turn-off wait (days): 3 days to 1 year. One-tap set-up uses the default (7 days);
+    /// it can be changed later on Home (longer is instant, shorter goes through the wait).
     static let minWaitDays = 3
     static let maxWaitDays = 365
     static let defaultWaitDays = 7

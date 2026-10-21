@@ -1,33 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// "For the strongest protection, set Pax up from a Mac." The note (Welcome, Home, the
-// set-up summary) and the sheet with the same steps as the guide app
-// (Guide/Sources/Core/GuideCopy.swift).
+// "Make Pax unremovable": the Mac steps sheet opened from Home's last "Make Pax stronger"
+// card, with the same steps as the guide app (Guide/Sources/Core/GuideCopy.swift).
 import SwiftUI
 import UIKit
-
-struct MacNoteCard: View {
-    let isPad: Bool
-    @State private var shown = false
-
-    var body: some View {
-        PaxCard {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Image(systemName: "laptopcomputer")
-                    .foregroundStyle(Palette.accent)
-                    .accessibilityHidden(true)
-                Text(PaxCopy.macNoteTitle)
-                    .font(PaxFont.body(15, weight: .semibold, relativeTo: .subheadline))
-                    .foregroundStyle(Palette.accent)
-                    .textCase(.uppercase)
-                    .tracking(1.2)
-            }
-            BodyText(PaxCopy.macNote(isPad: isPad))
-            Button(PaxCopy.macLink) { shown = true }
-                .buttonStyle(PaxSecondaryButton())
-        }
-        .sheet(isPresented: $shown) { MacSetupView(isPad: isPad) }
-    }
-}
 
 struct MacSetupView: View {
     let isPad: Bool
