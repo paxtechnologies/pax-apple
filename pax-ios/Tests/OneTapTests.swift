@@ -57,7 +57,7 @@ final class OneTapTests: XCTestCase {
         XCTAssertEqual(TurnOffRules.combine(a, .ready), a)
         XCTAssertEqual(TurnOffRules.combine(.ready, .ready), .ready)
         XCTAssertEqual(TurnOffRules.combine(.ready, .unknown), .unknown)
-        XCTAssertEqual(TurnOffRules.combine(.unknown, .none), .unknown)
+        XCTAssertEqual(TurnOffRules.combine(.unknown, nil), .unknown)
         // One asked for and one not: never "ready"; asking again covers the missing one.
         XCTAssertEqual(TurnOffRules.combine(.ready, TurnOffPhase.none), TurnOffPhase.none)
         XCTAssertEqual(TurnOffRules.combine(TurnOffPhase.none, a), TurnOffPhase.none)
