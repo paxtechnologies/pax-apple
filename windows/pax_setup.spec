@@ -8,7 +8,10 @@
 # Both share one _internal folder. Build from the repo root:
 #   pyinstaller --noconfirm --distpath dist --workpath build windows/pax_setup.spec
 import os
+import re
 from pathlib import Path
+
+from PyInstaller.utils.hooks import copy_metadata
 
 REPO = Path(SPECPATH).resolve().parent
 WIN = REPO / "windows"
@@ -40,13 +43,24 @@ helper_hidden = [
     "pymobiledevice3.osu.os_utils", "pymobiledevice3.osu.win_util",
     "win32security", "win32api", "winreg", "app_blocks", "seed",
 ]
+# Each bundled package's .dist-info (its version for `pax-helper.exe selftest`, and its licence
+# files, as on the Mac where every wheel's licence ships in its .dist-info folder).
+metadata = []
+for line in (WIN / "requirements-windows.in").read_text().splitlines():
+    m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==", line.strip())
+    if m:
+        try:
+            metadata += copy_metadata(m.group(1))
+        except Exception:  # noqa: BLE001  (a package without metadata: reported by the selftest)
+            pass
+
 excludes = ["IPython", "fastapi", "uvicorn", "PIL", "av", "matplotlib", "numpy", "pytest"]
 
 a_app = Analysis([str(WIN / "app_main.py")], pathex=PATHEX, datas=brand,
                  hiddenimports=["make_profile", "pax_restricted", "pax_errors", "win32crypt",
                                 "pax_windows.gui", "pax_windows.selftest"],
                  excludes=excludes, noarchive=False)
-a_helper = Analysis([str(WIN / "helper_main.py")], pathex=PATHEX, datas=[],
+a_helper = Analysis([str(WIN / "helper_main.py")], pathex=PATHEX, datas=metadata,
                     hiddenimports=helper_hidden, excludes=excludes + ["tkinter"], noarchive=False)
 
 pyz_app = PYZ(a_app.pure)
