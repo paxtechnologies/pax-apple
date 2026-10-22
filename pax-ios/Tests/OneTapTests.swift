@@ -81,7 +81,8 @@ final class OneTapTests: XCTestCase {
         XCTAssertNil(LockRefusal.of(status: 503, reason: nil))
         for r in [LockRefusal.turnOffOpen, .supportTurnOffOpen, .released, .removed, .changed, .notOnAccount] {
             XCTAssertFalse(r.message(isPad: false).contains("409"))
-            XCTAssertTrue(r.message(isPad: true).contains("iPad"))
+            XCTAssertFalse(r.message(isPad: true).contains("iPhone"))
+            if r != .changed { XCTAssertTrue(r.message(isPad: true).contains("this iPad")) }
         }
     }
 
