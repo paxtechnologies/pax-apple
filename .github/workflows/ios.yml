@@ -128,6 +128,7 @@ jobs:
             shoot "$U" "$P" 2-home -PaxShotHome YES
             shoot "$U" "$P" 3-done -PaxShotStep 7
             shoot "$U" "$P" 4-child -PaxShotStep 1
+            shoot "$U" "$P" 6-email -PaxShotStep 3
             xcrun simctl ui "$U" appearance dark
             shoot "$U" "$P" 5-home-dark -PaxShotHome YES
             xcrun simctl shutdown "$U" || true

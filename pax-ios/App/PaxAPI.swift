@@ -9,6 +9,8 @@ struct PaxAPIError: Error, LocalizedError {
     let status: Int
     let code: String?
     let message: String
+    /// 409 answers carry a `reason` (PUT /v1/devices/{id}/escrow).
+    var reason: String? = nil
     var errorDescription: String? { message }
 }
 
@@ -19,11 +21,15 @@ final class PaxAPI {
 
     init(base: URL = Pax.apiBase) { self.base = base }
 
-    struct Account: Decodable { let account_id: String; let token: String }
+    /// POST /v1/accounts/email/verify: 201 created:true (a new account, its email verified) or
+    /// 200 created:false (signed in to the account this email already has).
+    struct Verified: Decodable { let account_id: String; let token: String; let created: Bool? }
     struct AccountStatus: Decodable {
         let account_id: String
-        /// nil for a private device account (1.2 server change).
         let email: String?
+        let email_verified: Bool?
+        /// The holder's first name in their trusted person's emails (`from_name`).
+        let display_name: String?
         let wait_seconds: Int
         let partner_email: String?
         let pending_partner_email: String?
@@ -34,12 +40,15 @@ final class PaxAPI {
     /// The server's device status (escrow.device_status).
     struct DeviceStatus: Decodable {
         let device_id: String
+        let name: String?
+        let platform: String?
         let in_grace_period: Bool?
         let grace_until: Double?
         let released: Bool?
         let wait_seconds: Int?
         let removal_request: RemovalRequest?
     }
+    struct DeviceList: Decodable { let devices: [DeviceStatus] }
     struct RemovalRequest: Decodable {
         let status: String
         let kind: String?
@@ -51,52 +60,24 @@ final class PaxAPI {
     struct DNSInfo: Decodable { let doh_url: String }
     struct Empty: Decodable { init(from decoder: Decoder) throws {} }
 
-    enum CreateResult { case created, exists }
-    /// Whether the server can do something newer than this app's oldest supported server.
-    enum Capability { case done, notAvailable }
+    // MARK: account: every account has a verified email (server 0.8.31, docs/ONETAP_ACCOUNTS.md)
 
-    /// A route this server doesn't have: FastAPI answers 404/405 with {"detail": …} and no
-    /// Pax error code (Pax's own 404s carry {"error": "not_found"}).
-    static func isMissingRoute(_ e: PaxAPIError) -> Bool { (e.status == 404 || e.status == 405) && e.code == nil }
-
-    // MARK: private device account (1.2; needs the server change, see pax-ios/SERVER_CHANGE.md)
-
-    /// One-tap set-up: an account bound to this device, with no email and no code. The token
-    /// is kept in this device's Keychain only. Servers without the route: `.notAvailable`,
-    /// and set-up asks for an email and a code instead.
-    func createDeviceAccount(label: String) async throws -> Capability {
-        do {
-            let a: Account = try await send("POST", "/v1/accounts/device", ["label": label], auth: false)
-            Keychain.set(a.token, for: "account-token")
-            return .done
-        } catch let e as PaxAPIError where PaxAPI.isMissingRoute(e) {
-            return .notAvailable
-        }
+    /// Emails a 6-digit code (a new address gets a sign-up code, a known one a sign-in code;
+    /// the answer is always the same 202). Codes last 15 minutes, only the newest works.
+    func startEmail(email: String) async throws {
+        let _: Empty = try await send("POST", "/v1/accounts/email/start", ["email": email], auth: false)
     }
 
-    // MARK: account and sign-in (email code)
-
-    /// Creates the account if the email is new. An existing email answers 409 (sign_in).
-    /// The token from a new account is not kept: every device signs in with an emailed
-    /// code, so the address is always checked.
-    func createAccount(email: String) async throws -> CreateResult {
-        do {
-            let _: Account = try await send("POST", "/v1/accounts", ["email": email], auth: false)
-            return .created
-        } catch let e as PaxAPIError where e.status == 409 {
-            return .exists
-        }
+    /// Checks the code. Nothing is kept here: the caller decides whether to keep the token
+    /// (see `keep(token:)`), so a sign-in to the wrong account never replaces anything.
+    func verifyEmail(email: String, code: String, label: String) async throws -> Verified {
+        try await send("POST", "/v1/accounts/email/verify",
+                       ["email": email, "code": code, "label": String(label.prefix(100))], auth: false)
     }
 
-    func startSignIn(email: String) async throws {
-        let _: Empty = try await send("POST", "/v1/accounts/signin/start", ["email": email], auth: false)
-    }
-
-    func finishSignIn(email: String, code: String, label: String) async throws {
-        let a: Account = try await send("POST", "/v1/accounts/signin",
-                                        ["email": email, "code": code, "label": label], auth: false)
-        Keychain.set(a.token, for: "account-token")
-    }
+    /// The token lives in this device's Keychain only (AfterFirstUnlockThisDeviceOnly). If it's
+    /// ever lost, the same email and code sign in again.
+    func keep(token: String) { Keychain.set(token, for: "account-token") }
 
     func signOutLocally() { Keychain.delete("account-token") }
 
@@ -109,12 +90,12 @@ final class PaxAPI {
         try await send("PUT", "/v1/accounts/me/wait", ["wait_days": TurnOffRules.clampWait(days: days)])
     }
 
-    /// `fromName` (1.2 server change) is the first name the trusted person sees; servers
-    /// without it ignore the field.
+    /// `fromName` is the holder's first name in the trusted person's emails (one line, at most
+    /// 40 characters). nil leaves it as it is; "" clears it.
     @discardableResult
     func setTrustedPerson(email: String, fromName: String?) async throws -> AccountStatus {
         var body: [String: Any] = ["email": email]
-        if let n = fromName, !n.isEmpty { body["from_name"] = n }
+        if let n = fromName { body["from_name"] = n }
         return try await send("PUT", "/v1/accounts/me/partner", body)
     }
 
@@ -129,27 +110,26 @@ final class PaxAPI {
 
     // MARK: device and turn-off
 
-    func registerDevice(name: String, platform: String, installID: String, secret: EscrowSecret,
-                        kind: String = "appstore") async throws -> DeviceStatus {
+    /// Escrow first: the release key is saved here before anything is switched on.
+    func registerDevice(name: String, platform: String, installID: String, secret: EscrowSecret) async throws -> DeviceStatus {
         try await send("POST", "/v1/devices", [
             "name": name, "platform": platform,
-            "profile_identifier": "org.paxpeace.pax.\(kind).\(installID)",
+            "profile_identifier": "org.paxpeace.pax.appstore.\(installID)",
             "removal_password": secret.sealed,
             "support_release": true,
         ])
     }
 
-    /// 1.2 server change: replace this device's escrowed secret (adding the Screen Time
-    /// passcode later). Never loosens anything: the server refuses while a turn-off is open
-    /// or after a release. Servers without the route: `.notAvailable` (the app then keeps the
-    /// passcode in a second device record).
-    func replaceEscrow(device: String, secret: EscrowSecret) async throws -> Capability {
-        do {
-            let _: Empty = try await send("PUT", "/v1/devices/\(device)/escrow", ["removal_password": secret.sealed])
-            return .done
-        } catch let e as PaxAPIError where PaxAPI.isMissingRoute(e) {
-            return .notAvailable
-        }
+    /// Replaces this device's escrowed secret (Home › Lock Screen Time adds the Screen Time
+    /// passcode). Never loosens anything. The server refuses with 409 and a `reason` (released,
+    /// retired, removal_request_open, emergency_open, changed) or 404; see `LockRefusal`.
+    func replaceEscrow(device: String, secret: EscrowSecret) async throws {
+        let _: Empty = try await send("PUT", "/v1/devices/\(device)/escrow", ["removal_password": secret.sealed])
+    }
+
+    func devices() async throws -> [DeviceStatus] {
+        let l: DeviceList = try await send("GET", "/v1/devices", nil)
+        return l.devices
     }
 
     func status(device: String) async throws -> DeviceStatus {
@@ -255,6 +235,7 @@ final class PaxAPI {
             message = tidy
         }
         return PaxAPIError(status: status, code: code,
-                           message: message ?? "Pax's server couldn't do that (\(status)). Pax stays as it is.")
+                           message: message ?? "Pax's server couldn't do that (\(status)). Pax stays as it is.",
+                           reason: obj?["reason"] as? String)
     }
 }

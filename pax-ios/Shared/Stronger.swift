@@ -38,18 +38,27 @@ enum StrongerList {
     }
 }
 
-extension TurnOffRules {
-    /// With a second escrow record (the passcode one), turning off is only as far along as the
-    /// slower of the two. Anything unreadable reads as unknown (Pax stays on).
-    static func combine(_ a: TurnOffPhase, _ b: TurnOffPhase?) -> TurnOffPhase {
-        guard let b else { return a }
-        switch (a, b) {
-        case (.unknown, _), (_, .unknown): return .unknown
-        case (.none, .none): return .none
-        case (.ready, .ready): return .ready
-        case (.waiting(let x), .waiting(let y)): return .waiting(until: max(x, y))
-        case (.waiting(let x), .ready), (.ready, .waiting(let x)): return .waiting(until: x)
-        default: return .none   // one asked for and one not: "Ask to turn off" asks again for the missing one
+/// Why the server refused to add the Screen Time passcode (PUT /v1/devices/{id}/escrow), in
+/// calm words. Nothing on the device or the server changed in any of these.
+enum LockRefusal: Equatable {
+    case turnOffOpen        // 409 removal_request_open
+    case supportTurnOffOpen // 409 emergency_open
+    case released           // 409 released
+    case removed            // 409 retired
+    case changed            // 409 changed: try again
+    case notOnAccount       // 404
+
+    static func of(status: Int, reason: String?) -> LockRefusal? {
+        switch (status, reason) {
+        case (409, "removal_request_open"): return .turnOffOpen
+        case (409, "emergency_open"): return .supportTurnOffOpen
+        case (409, "released"): return .released
+        case (409, "retired"): return .removed
+        case (409, _): return .changed
+        case (404, _): return .notOnAccount
+        default: return nil         // not a refusal (offline, 5xx…): the general message
         }
     }
+
+    func message(isPad: Bool) -> String { PaxCopy.lockRefused(self, isPad: isPad) }
 }

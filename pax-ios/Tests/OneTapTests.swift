@@ -1,14 +1,101 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// 1.2 one-tap set-up: the "Make Pax stronger" list, changing the wait, releasing with a
-// replaced escrow or a second (passcode) record. Fail closed throughout.
+// 1.2 one-tap set-up: email and code first (every account has a verified email), the waits,
+// "Welcome back" for an existing account, the "Make Pax stronger" list, Lock Screen Time's
+// refusals, releasing with a replaced escrow. Fail closed throughout.
 import XCTest
 
 final class OneTapTests: XCTestCase {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func testOneTapIsThreeScreens() {
-        // Welcome, Apple's Screen Time sheet (while "Turning Pax on" shows), Done.
-        XCTAssertEqual(SetupRules.path(child: false, privateAccounts: true).count, 3)
+    func testSetUpIsFiveScreens() {
+        // Welcome, email, code, Apple's Screen Time sheet (while "Turning Pax on" shows), Done.
+        XCTAssertEqual(SetupRules.path(child: false, existing: false).count, 5)
+        XCTAssertEqual(SetupRules.path(child: true, existing: false).count, 5)
+        // An email that already has an account adds "Welcome back" (what's already set).
+        XCTAssertEqual(SetupRules.path(child: false, existing: true).count, 6)
+        XCTAssertFalse(SetupRules.path(child: false, existing: false).contains(.welcomeBack))
+    }
+
+    func testScreenshotStepNumbersStayPut() {
+        // ios.yml opens these with -PaxShotStep.
+        XCTAssertEqual(SetupStep(rawValue: 1), .childEmail)
+        XCTAssertEqual(SetupStep(rawValue: 3), .email)
+        XCTAssertEqual(SetupStep(rawValue: 7), .done)
+    }
+
+    func testDefaultWaits() {
+        XCTAssertEqual(SetupRules.defaultWait(child: false), 7)
+        XCTAssertEqual(SetupRules.defaultWait(child: true), 30)
+        // A new account (the server's 72 hours) is raised to 7 days; a child's to 30.
+        XCTAssertEqual(SetupRules.waitToSend(chosenDays: 7, currentSeconds: 72 * 3600), 7)
+        XCTAssertEqual(SetupRules.waitToSend(chosenDays: 30, currentSeconds: 72 * 3600), 30)
+    }
+
+    func testAnExistingWaitIsNeverShortened() {
+        XCTAssertNil(SetupRules.waitToSend(chosenDays: 7, currentSeconds: 30 * 86_400))
+        XCTAssertNil(SetupRules.waitToSend(chosenDays: 7, currentSeconds: 7 * 86_400))       // same: nothing sent
+        XCTAssertEqual(SetupRules.waitToSend(chosenDays: 30, currentSeconds: 14 * 86_400), 30)
+    }
+
+    func testWelcomeBackShowsWhatIsAlreadySet() {
+        let a = ExistingAccount(waitSeconds: 14 * 86_400, pendingWaitSeconds: 3 * 86_400,
+                                trustedEmail: "friend@example.com",
+                                devices: [(name: "Sam's MacBook", platform: "mac", released: false),
+                                          (name: "Old iPad", platform: "ipados", released: true),
+                                          (name: nil, platform: "ios", released: nil)],
+                                child: false)
+        XCTAssertEqual(a.waitDays, 14)
+        XCTAssertEqual(a.pendingWaitDays, 3)
+        XCTAssertNil(a.lengthenTo)                           // 14 days already: left as it is
+        XCTAssertEqual(a.devices, [.init(name: "Sam's MacBook", kind: "Mac"), .init(name: "A device", kind: "iPhone")])
+        let lines = PaxCopy.welcomeBackLines(a).joined(separator: " ")
+        XCTAssertTrue(lines.contains("Turn-off wait: 2 weeks"))
+        XCTAssertTrue(lines.contains("friend@example.com"))
+        XCTAssertTrue(lines.contains("Sam's MacBook (Mac)"))
+        XCTAssertFalse(lines.contains("Old iPad"))
+        XCTAssertFalse(lines.contains("lengthens"))
+
+        let short = ExistingAccount(waitSeconds: 3 * 86_400, pendingWaitSeconds: nil, trustedEmail: "",
+                                    devices: [], child: true)
+        XCTAssertEqual(short.lengthenTo, 30)
+        XCTAssertNil(short.trustedEmail)
+        XCTAssertTrue(PaxCopy.welcomeBackLines(short).joined().contains("lengthens it to 30 days"))
+    }
+
+    func testSigningInAgainOnlyToTheSameAccount() {
+        XCTAssertTrue(SetupRules.sameAccount(setUpID: "a1", setUpEmail: "sam@example.com", signedInID: "a1", signedInEmail: "x@example.com"))
+        XCTAssertFalse(SetupRules.sameAccount(setUpID: "a1", setUpEmail: "sam@example.com", signedInID: "b2", signedInEmail: "sam@example.com"))
+        XCTAssertTrue(SetupRules.sameAccount(setUpID: nil, setUpEmail: "Sam@Example.com", signedInID: "b2", signedInEmail: " sam@example.com"))
+        XCTAssertFalse(SetupRules.sameAccount(setUpID: nil, setUpEmail: "sam@example.com", signedInID: "b2", signedInEmail: "kim@example.com"))
+    }
+
+    func testLockScreenTimeRefusalsAreCalm() {
+        XCTAssertEqual(LockRefusal.of(status: 409, reason: "removal_request_open"), .turnOffOpen)
+        XCTAssertEqual(LockRefusal.of(status: 409, reason: "emergency_open"), .supportTurnOffOpen)
+        XCTAssertEqual(LockRefusal.of(status: 409, reason: "released"), .released)
+        XCTAssertEqual(LockRefusal.of(status: 409, reason: "retired"), .removed)
+        XCTAssertEqual(LockRefusal.of(status: 409, reason: "changed"), .changed)
+        XCTAssertEqual(LockRefusal.of(status: 409, reason: nil), .changed)
+        XCTAssertEqual(LockRefusal.of(status: 404, reason: nil), .notOnAccount)
+        XCTAssertNil(LockRefusal.of(status: 0, reason: nil))         // offline: the general message
+        XCTAssertNil(LockRefusal.of(status: 503, reason: nil))
+        for r in [LockRefusal.turnOffOpen, .supportTurnOffOpen, .released, .removed, .changed, .notOnAccount] {
+            XCTAssertFalse(r.message(isPad: false).contains("409"))
+            XCTAssertTrue(r.message(isPad: true).contains("iPad"))
+        }
+    }
+
+    func testFirstNameForTheTrustedPerson() {
+        XCTAssertEqual(SetupRules.cleanName("  Sam \n"), "Sam")
+        XCTAssertEqual(SetupRules.cleanName("Sam\tLee"), "Sam Lee")
+        XCTAssertEqual(SetupRules.cleanName("Sa\u{202E}m"), "Sam")              // bidi override removed
+        XCTAssertNil(SetupRules.cleanName(" \n "))
+        XCTAssertEqual(SetupRules.cleanName(String(repeating: "a", count: 99))?.count, 40)
+        XCTAssertNotNil(SetupRules.nameProblem("https://example.com"))
+        XCTAssertNotNil(SetupRules.nameProblem("www.example.com"))
+        XCTAssertNotNil(SetupRules.nameProblem(String(repeating: "a", count: 41)))
+        XCTAssertNil(SetupRules.nameProblem("Sam"))
+        XCTAssertNil(SetupRules.nameProblem(""))
     }
 
     func testStrongerOrderIsFixed() {
@@ -47,22 +134,6 @@ final class OneTapTests: XCTestCase {
         XCTAssertEqual(WaitChange.of(currentDays: 365, newDays: 1000), .same)    // clamped to 365
     }
 
-    func testCombinedPhaseIsTheSlowerOne() {
-        let a = TurnOffPhase.waiting(until: t0.addingTimeInterval(100))
-        let b = TurnOffPhase.waiting(until: t0.addingTimeInterval(200))
-        XCTAssertEqual(TurnOffRules.combine(.none, nil), .none)
-        XCTAssertEqual(TurnOffRules.combine(.ready, nil), .ready)
-        XCTAssertEqual(TurnOffRules.combine(a, b), b)
-        XCTAssertEqual(TurnOffRules.combine(.ready, a), a)
-        XCTAssertEqual(TurnOffRules.combine(a, .ready), a)
-        XCTAssertEqual(TurnOffRules.combine(.ready, .ready), .ready)
-        XCTAssertEqual(TurnOffRules.combine(.ready, .unknown), .unknown)
-        XCTAssertEqual(TurnOffRules.combine(.unknown, nil), .unknown)
-        // One asked for and one not: never "ready"; asking again covers the missing one.
-        XCTAssertEqual(TurnOffRules.combine(.ready, TurnOffPhase.none), TurnOffPhase.none)
-        XCTAssertEqual(TurnOffRules.combine(TurnOffPhase.none, a), TurnOffPhase.none)
-    }
-
     func testReleaseAcceptsTheHashWrittenBeforeAReplace() {
         let old = EscrowSecret.make(passcode: nil)
         let new = EscrowSecret.make(passcode: "4831")
@@ -89,17 +160,14 @@ final class OneTapTests: XCTestCase {
     func testNewPolicyFieldsRoundTripAndOldPoliciesStayOn() throws {
         var p = PaxPolicy()
         p.isActive = true
-        p.privateAccount = true
+        p.accountID = "a1"
         p.pendingReleaseKeyHash = "pending"
-        p.passcodeDeviceID = "dev2"
-        p.passcodeKeyHash = "hash2"
         p.displayName = "Sam"
         XCTAssertEqual(PaxPolicy.decode(try JSONEncoder().encode(p)), p)
         // A 1.1 policy has none of these keys: still on, nothing invented.
         let old = PaxPolicy.decode(Data(#"{"isActive":true,"setUpFinished":true,"deviceID":"d","releaseKeyHash":"h"}"#.utf8))
         XCTAssertTrue(old.isActive)
-        XCTAssertFalse(old.privateAccount)
-        XCTAssertNil(old.passcodeDeviceID)
+        XCTAssertNil(old.accountID)
         XCTAssertEqual(old.acceptedReleaseHashes, ["h"])
     }
 

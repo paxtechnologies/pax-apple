@@ -17,7 +17,7 @@ enum PaxCopy {
     static let welcomeFree = "Free and open source. Pax never keeps your browsing history."
     static let turnOn = "Turn Pax on"
     static func turnOnNote(isPad: Bool) -> String {
-        "\(device(isPad: isPad)) asks once for Screen Time access, with Face ID or your passcode."
+        "You'll confirm your email with a code, then \(device(isPad: isPad)) asks once for Screen Time access."
     }
     static let childLink = "Setting up for a child?"
 
@@ -34,16 +34,53 @@ enum PaxCopy {
     static let codeTitle = "Check your email"
     static func codeBody(email: String) -> String { "Enter the 6-digit code Pax sent to \(email). It works for 15 minutes." }
     static let codeContinue = "Continue"
-    static let codeResend = "Send a new code"
+    static let codeResend = "Send again"
+    static let codeResendNote = "Didn't get it? Check your spam folder, or send it again. Only the newest code works."
+    static let codeSent = "A new code is on its way."
+    static let codeWrong = "That code isn't right, or it has expired. Check the newest email from Pax, or send it again."
+    static let emailInvalid = "That doesn't look like an email address."
+    static let tooManyCodes = "Too many codes for now. Please wait a little, then try again."
 
-    // MARK: turning on (quiet work after the Screen Time sheet)
+    // MARK: your email (every Pax account has one, checked with a code)
+
+    static let emailTitle = "Your email"
+    static func emailBody(isPad: Bool) -> String {
+        "Pax sends you a code to check it's yours. Your email keeps your account safe if this "
+            + "\(device(isPad: isPad)) is ever lost or replaced, and Pax emails you a copy of your own requests. Nothing else."
+    }
+
+    // MARK: welcome back (the email already has a Pax account)
+
+    static let welcomeBackTitle = "Welcome back"
+    static func welcomeBackBody(isPad: Bool) -> String {
+        "This email already has a Pax account. What's set there applies to this \(device(isPad: isPad)) too."
+    }
+    static func welcomeBackLines(_ a: ExistingAccount) -> [String] {
+        var l: [String] = []
+        var wait = "Turn-off wait: \(TurnOffRules.waitLabel(days: a.waitDays))"
+        if let p = a.pendingWaitDays, p != a.waitDays { wait += " (changing to \(TurnOffRules.waitLabel(days: p)) later)" }
+        l.append(wait + ".")
+        if let longer = a.lengthenTo {
+            l.append("Setting up here lengthens it to \(TurnOffRules.waitLabel(days: longer)), for every device on this account.")
+        }
+        l.append(a.trustedEmail.map { "Someone you trust: \($0)." } ?? "No one you trust added yet.")
+        if a.devices.isEmpty {
+            l.append("Pax isn't on any other device on this account right now.")
+        } else {
+            for d in a.devices { l.append("Pax is on \(d.name) (\(d.kind)).") }
+        }
+        return l
+    }
+    static let welcomeBackNote = "Setting up here never shortens your wait or removes anything."
+    static let welcomeBackContinue = "Continue"
+    static let welcomeBackLoadFailed = "Pax couldn't read your account just now. Check your connection, then try again."
+
+    // MARK: turning on (Apple's Screen Time sheet, then the quiet work)
 
     static let turningOnTitle = "Turning Pax on"
-    static let turningOnBody = "This only takes a moment."
-
-    /// Only on servers that can't make a private account yet.
-    static let emailTitle = "Your email"
-    static let emailBody = "Pax sends a code to keep your account safe, and copies of your own requests. Nothing else."
+    static func turningOnBody(isPad: Bool) -> String {
+        "\(device(isPad: isPad)) asks once for Screen Time access, with Face ID or your passcode. Then it only takes a moment."
+    }
 
     static let retryTitle = "Pax isn't on yet"
     static let retryBody = "Pax couldn't reach its server, so nothing has been switched on. "
@@ -51,6 +88,22 @@ enum PaxCopy {
     static let retryButton = "Try again"
     static let accessDenied = "Screen Time access wasn't given, so Pax can't protect this device yet. "
         + "You can try again whenever you're ready."
+
+    // MARK: signing in again (the sign-in on this device was lost)
+
+    static let signInAgainTitle = "Sign in to Pax again"
+    static func signInAgainBody(isPad: Bool) -> String {
+        "Pax is still on, but this \(device(isPad: isPad)) isn't signed in to your Pax account any more. "
+            + "Sign in with your email and a code to change settings or turn Pax off."
+    }
+    static let signInButton = "Sign in"
+    static let signedIn = "You're signed in again."
+    static func wrongAccount(setUpWith email: String?, isPad: Bool) -> String {
+        if let e = email, !e.isEmpty {
+            return "That's a different Pax account. This \(device(isPad: isPad)) was set up with \(e), so please use that email."
+        }
+        return "That's a different Pax account from the one this \(device(isPad: isPad)) was set up with. Nothing has changed."
+    }
 
     // MARK: done
 
@@ -113,6 +166,24 @@ enum PaxCopy {
     static let passcodeDone = "I've set it"
     static let passcodeAfter = "Pax has already saved this passcode. It's shown again only when your turn-off wait ends."
     static let passcodeLater = "Not now"
+    static func lockRefused(_ r: LockRefusal, isPad: Bool) -> String {
+        let d = device(isPad: isPad)
+        switch r {
+        case .turnOffOpen:
+            return "A turn-off is in progress on this \(d), so Pax can't add a passcode right now. "
+                + "If you'd like to keep Pax on, tap Keep Pax on, then try again."
+        case .supportTurnOffOpen:
+            return "A turn-off through Pax support is in progress on this \(d), so Pax can't add a passcode right now."
+        case .released:
+            return "Pax has already been turned off on this \(d), so there's nothing to lock."
+        case .removed:
+            return "This \(d) was removed from your Pax account, so there's nothing to lock."
+        case .changed:
+            return "Something changed on Pax's server while saving your passcode. Nothing was lost. Please try again."
+        case .notOnAccount:
+            return "Pax couldn't find this \(d) on the account you're signed in to. Nothing has changed."
+        }
+    }
 
     // (b) Someone you trust
     static let trustedTitle = "Add someone you trust"
@@ -229,14 +300,11 @@ enum PaxCopy {
     // MARK: account
 
     static let accountTitle = "Account"
-    static func accountPrivate(isPad: Bool) -> String {
-        "A private account for this \(device(isPad: isPad)). No email needed."
-    }
     static let privacy = "Privacy policy"
     static let support = "Email Pax support"
     static let deleteTitle = "Delete my account"
     static func deleteBody(isActive: Bool) -> String {
-        var s = "This deletes your account from the Pax server: your email if you gave one, the person you trust, "
+        var s = "This deletes your account from the Pax server: your email, the person you trust, "
             + "your devices and your blocked sites."
         if isActive {
             s += " Pax has to be off on every device on your account first. Turning Pax off takes your "
@@ -249,7 +317,7 @@ enum PaxCopy {
     static let deleteRequested = "Your request is ready to send in your email app. Pax support deletes the account "
         + "and replies to confirm."
     static func deleteMailBody(email: String, accountRef: String) -> String {
-        "Please delete my Pax account.\n\nAccount email: \(email.isEmpty ? "none (private account)" : email)\n"
+        "Please delete my Pax account.\n\nAccount email: \(email.isEmpty ? "(not shown on this device)" : email)\n"
             + "Account reference: \(accountRef)\n\nSent from the Pax app on iPhone or iPad."
     }
     static let deleteMailSubject = "Delete my Pax account"
@@ -280,8 +348,12 @@ enum PaxCopy {
         var out: [String] = [
             welcomeTitle, welcomeBody(isPad: isPad), welcomeFree, turnOn, turnOnNote(isPad: isPad), childLink,
             childTitle, childBody(isPad: isPad), childWaitNote, emailPlaceholder, sendCode, codeTitle,
-            codeBody(email: "you@example.com"), codeContinue, codeResend,
-            turningOnTitle, turningOnBody, emailTitle, emailBody, retryTitle, retryBody, retryButton, accessDenied,
+            codeBody(email: "you@example.com"), codeContinue, codeResend, codeResendNote, codeSent, codeWrong,
+            emailInvalid, tooManyCodes, emailTitle, emailBody(isPad: isPad),
+            welcomeBackTitle, welcomeBackBody(isPad: isPad), welcomeBackNote, welcomeBackContinue, welcomeBackLoadFailed,
+            turningOnTitle, turningOnBody(isPad: isPad), retryTitle, retryBody, retryButton, accessDenied,
+            signInAgainTitle, signInAgainBody(isPad: isPad), signInButton, signedIn,
+            wrongAccount(setUpWith: "you@example.com", isPad: isPad), wrongAccount(setUpWith: nil, isPad: isPad),
             doneTitle, doneNext, doneButton,
             homeOn, homeAccessLost, homeAccessLostBody(isPad: isPad, trusted: true), homeFilter, homeDelete,
             homePasscodeKept, homeNoPasscode, homeDNSOn, homeDNSOff, homeDNSNotAdded, homeTrusted(nil),
@@ -302,7 +374,7 @@ enum PaxCopy {
             turnOffTitle, turnOffIdle(trusted: true), turnOffIdle(trusted: false), turnOffAsk, turnOffConfirmTitle,
             turnOffConfirmBody(trusted: true), turnOffStart, keepOn, turnOffWaiting("3 days"), turnOffReady,
             turnOffNow, turnOffUnknown, releasedTitle, releasedPasscode, releasedHowTo, releasedNoPasscode,
-            accountTitle, accountPrivate(isPad: isPad), privacy, support, deleteTitle, deleteBody(isActive: true),
+            accountTitle, privacy, support, deleteTitle, deleteBody(isActive: true),
             deleteBody(isActive: false), deleteConfirm, deleteDone, deleteRequested, deleteMailSubject,
             deleteRateLimited, deleteStillOnTitle, deleteStillOnBody(count: 1), deleteStillOnBody(count: 2),
             deleteStillOnHowTo, deleteStillOnNothingChanged, deleteStillOnReason("pax_on", checkingIn: false),
@@ -310,6 +382,14 @@ enum PaxCopy {
             deleteStillOnReason("pending_request", checkingIn: nil),
         ]
         out += passcodeSteps(isPad: isPad)
+        out += [LockRefusal.turnOffOpen, .supportTurnOffOpen, .released, .removed, .changed, .notOnAccount]
+            .map { lockRefused($0, isPad: isPad) }
+        out += welcomeBackLines(ExistingAccount(waitSeconds: 3 * 86_400, pendingWaitSeconds: nil,
+                                                trustedEmail: "friend@example.com",
+                                                devices: [(name: "Sam's MacBook", platform: "mac", released: false)],
+                                                child: false))
+        out += welcomeBackLines(ExistingAccount(waitSeconds: 30 * 86_400, pendingWaitSeconds: 7 * 86_400,
+                                                trustedEmail: nil, devices: [], child: false))
         out += doneLines(isPad: isPad, waitDays: 7)
         out += limits(isPad: isPad, passcode: false)
         return out

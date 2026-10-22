@@ -15,16 +15,19 @@ It uses Apple's Screen Time APIs with individual authorization:
 - optional encrypted DNS through Pax's own filter (`dns.paxpeace.com`),
 - an optional Screen Time passcode that Pax keeps until your turn-off wait ends.
 
-**1.2 one-tap set-up** (branch `ios/onetap-v1.2`): Welcome ("Turn Pax on") → Apple's Screen Time
-sheet (once) → Done. Quietly, in this order: a private device account with no email, the turn-off
-wait (7 days; 30 on a child's device), the release key escrowed on the Pax server, and only then
-the settings (fail closed: if the server can't be reached nothing is switched on and the app offers
-"Try again"). "Setting up for a child?" asks for the parent's email and a code first. Home then
-offers "Make Pax stronger", all optional, in this order: Lock Screen Time (the passcode escrow,
-recommended), someone you trust, encrypted DNS, apps to keep closed, the turn-off wait (longer is
-instant, shorter waits), and setting Pax up from a computer. The private account needs a server
-change ([SERVER_CHANGE.md](SERVER_CHANGE.md)); until it ships the app asks for an email and a code
-after the Screen Time sheet.
+**1.2 one-tap set-up** (branch `ios/onetap-v1.2`): Welcome ("Turn Pax on") → your email → the
+6-digit code → Apple's Screen Time sheet (once) → Done. Every Pax account has a verified email
+(server 0.8.31, [docs/ONETAP_ACCOUNTS.md](../docs/ONETAP_ACCOUNTS.md)), so a lost or replaced phone
+never means a lost account: the same email and code sign in again. An email that already has an
+account shows "Welcome back" (its wait, trusted person and devices) before the Screen Time sheet.
+Quietly, in this order: the turn-off wait (only ever lengthened: 7 days, 30 on a child's device),
+the release key escrowed on the Pax server, and only then the settings (fail closed: if the server
+can't be reached nothing is switched on and the app offers "Try again"). "Setting up for a child?"
+uses the same email and code, with the parent's email. Home then offers "Make Pax stronger", all
+optional, in this order: Lock Screen Time (the passcode, added to this device's escrow with
+`PUT /v1/devices/{id}/escrow`, recommended), someone you trust (with your first name for their
+emails), encrypted DNS, apps to keep closed, the turn-off wait (longer is instant, shorter waits),
+and setting Pax up from a Mac or Windows PC (paxpeace.com/setup).
 
 Turning it off works like on a Mac: you ask, your trusted person (if you have one) is emailed
 first, the wait you chose runs on the Pax server, then everything is removed and the Screen Time

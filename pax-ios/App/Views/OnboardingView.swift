@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// One-tap set-up (1.2): Welcome ("Turn Pax on") → Apple's Screen Time sheet → Done.
-// "Setting up for a child?" keeps the parent's email and code. Everything else happens quietly
-// in AppModel.turnOn, escrow first: if the server can't be reached nothing is switched on and
-// a calm "Try again" is shown. Servers that can't make a private account yet ask for an email
-// and a code after the Screen Time sheet, then carry on.
+// One-tap set-up (1.2): Welcome ("Turn Pax on") → your email → the 6-digit code → Apple's Screen
+// Time sheet → Done. Every Pax account has a verified email, so a lost or replaced phone never
+// means a lost account. "Setting up for a child?" uses the same email and code, with the parent's
+// email. An email that already has an account shows "Welcome back" (what's already set) first.
+// After the code everything happens quietly in AppModel.turnOn, escrow first: if the server can't
+// be reached nothing is switched on and a calm "Try again" is shown.
 import SwiftUI
 import UIKit
 
@@ -13,6 +14,7 @@ struct OnboardingView: View {
     @State private var child = false
     @State private var email = ""
     @State private var code = ""
+    @State private var resent = false
     @State private var started = false
 
     private var isPad: Bool { model.isPad }
@@ -32,7 +34,7 @@ struct OnboardingView: View {
             .frame(minHeight: 24)
             PaxLogo(height: 54)
             content
-            if step != .retry { MessageText(text: model.message) }
+            if step != .retry && step != .denied { MessageText(text: model.message) }
         }
         .disabled(model.busy)
         .overlay { if model.busy && step != .turningOn { ProgressView().controlSize(.large) } }
@@ -41,12 +43,12 @@ struct OnboardingView: View {
             started = true
             step = SetupRules.resume(isActive: model.policy.isActive)
             #if DEBUG
-            if let s = ScreenshotMode.step { step = s }      // App Store screenshots only
+            if let s = ScreenshotMode.step { step = s; if s == .childEmail { child = true } }   // App Store screenshots only
             #endif
         }
     }
 
-    private func go(_ s: SetupStep) { model.message = nil; step = s }
+    private func go(_ s: SetupStep) { model.message = nil; resent = false; step = s }
 
     /// Screen Time sheet (once), then the quiet work.
     private func turnOn() {
@@ -54,8 +56,8 @@ struct OnboardingView: View {
         step = .turningOn
         Task {
             let outcome = await model.turnOn(child: child)
-            step = SetupRules.after(outcome)
-            if outcome == .needsEmail { code = "" }
+            step = SetupRules.after(outcome, child: child)
+            if outcome == .signedOut { code = "" }
         }
     }
 
@@ -63,12 +65,13 @@ struct OnboardingView: View {
         switch step {
         case .welcome: welcome
         case .childEmail: emailStep(title: PaxCopy.childTitle, body: PaxCopy.childBody(isPad: isPad),
-                                    note: PaxCopy.childWaitNote, next: .childCode)
-        case .childCode: codeStep
+                                    note: PaxCopy.childWaitNote)
+        case .email: emailStep(title: PaxCopy.emailTitle, body: PaxCopy.emailBody(isPad: isPad), note: nil)
+        case .childCode, .code: codeStep
+        case .welcomeBack: welcomeBack
         case .turningOn: turningOn
-        case .email: emailStep(title: PaxCopy.emailTitle, body: PaxCopy.emailBody, note: nil, next: .code)
-        case .code: codeStep
-        case .retry: retry
+        case .retry: retry(body: PaxCopy.retryBody)
+        case .denied: retry(body: PaxCopy.accessDenied)
         case .done: done
         }
     }
@@ -84,7 +87,7 @@ struct OnboardingView: View {
             BodyText(PaxCopy.welcomeBody(isPad: isPad))
             BodyText(PaxCopy.welcomeFree, small: true)
             Spacer(minLength: 8)
-            Button(PaxCopy.turnOn) { child = false; turnOn() }
+            Button(PaxCopy.turnOn) { child = false; go(.email) }
                 .buttonStyle(PaxBigButton())
                 .accessibilityHint(PaxCopy.turnOnNote(isPad: isPad))
             BodyText(PaxCopy.turnOnNote(isPad: isPad), small: true)
@@ -97,14 +100,14 @@ struct OnboardingView: View {
         }
     }
 
-    private func emailStep(title: String, body: String, note: String?, next: SetupStep) -> some View {
+    private func emailStep(title: String, body: String, note: String?) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionTitle(title)
             BodyText(body)
             if let note { BodyText(note, small: true) }
             PaxTextField(placeholder: PaxCopy.emailPlaceholder, text: $email, email: true)
             Button(PaxCopy.sendCode) {
-                Task { if await model.sendCode(email: email) { code = ""; go(next) } }
+                Task { if await model.sendCode(email: email) { code = ""; go(SetupRules.codeStep(child: child)) } }
             }
             .buttonStyle(PaxPrimaryButton())
             .disabled(!SetupRules.isEmail(email))
@@ -122,27 +125,55 @@ struct OnboardingView: View {
                 .padding(14)
                 .background(RoundedRectangle(cornerRadius: 14).fill(Palette.card))
             Button(PaxCopy.codeContinue) {
-                Task { if await model.verifyCode(email: email, code: code) { turnOn() } }
+                Task {
+                    let v = await model.verifyCode(email: email, code: code)
+                    guard let next = SetupRules.after(v, child: child) else { return }
+                    if next == .welcomeBack {
+                        go(.welcomeBack)
+                        _ = await model.loadExisting(child: child)
+                    } else {
+                        turnOn()
+                    }
+                }
             }
             .buttonStyle(PaxPrimaryButton())
             .disabled(!SetupRules.isCode(code))
-            Button(PaxCopy.codeResend) { Task { _ = await model.sendCode(email: email) } }
-                .buttonStyle(PaxSecondaryButton())
+            BodyText(resent ? PaxCopy.codeSent : PaxCopy.codeResendNote, small: true)
+            Button(PaxCopy.codeResend) {
+                Task { if await model.sendCode(email: email) { code = ""; resent = true } }
+            }
+            .buttonStyle(PaxSecondaryButton())
+        }
+    }
+
+    /// The email already had an account: show what's set there (never treated as fresh).
+    private var welcomeBack: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            SectionTitle(PaxCopy.welcomeBackTitle)
+            BodyText(PaxCopy.welcomeBackBody(isPad: isPad))
+            if let a = model.existing {
+                PaxCard { BulletList(lines: PaxCopy.welcomeBackLines(a)) }
+                BodyText(PaxCopy.welcomeBackNote, small: true)
+                Button(PaxCopy.welcomeBackContinue) { turnOn() }.buttonStyle(PaxPrimaryButton())
+            } else if !model.busy {
+                Button(PaxCopy.retryButton) { Task { _ = await model.loadExisting(child: child) } }
+                    .buttonStyle(PaxPrimaryButton())
+            }
         }
     }
 
     private var turningOn: some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionTitle(PaxCopy.turningOnTitle)
-            BodyText(PaxCopy.turningOnBody)
+            BodyText(PaxCopy.turningOnBody(isPad: isPad))
             ProgressView().controlSize(.large).frame(maxWidth: .infinity).padding(.top, 12)
         }
     }
 
-    private var retry: some View {
+    private func retry(body: String) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionTitle(PaxCopy.retryTitle)
-            BodyText(PaxCopy.retryBody)
+            BodyText(body)
             Button(PaxCopy.retryButton) { turnOn() }.buttonStyle(PaxPrimaryButton())
         }
     }
@@ -162,6 +193,68 @@ struct OnboardingView: View {
             BodyText(PaxCopy.doneNext)
             Button(PaxCopy.doneButton) { model.finishSetUp() }.buttonStyle(PaxPrimaryButton())
         }
+    }
+}
+
+/// Signing in again on a device Pax is already on (the Keychain sign-in was lost): the same
+/// email and code. Only the account this device was set up with is accepted.
+struct SignInAgainView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var code = ""
+    @State private var sent = false
+    @State private var resent = false
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.signInAgainTitle)
+                BodyText(PaxCopy.signInAgainBody(isPad: model.isPad))
+                PaxTextField(placeholder: PaxCopy.emailPlaceholder, text: $email, email: true)
+                    .disabled(sent)
+                if !sent {
+                    Button(PaxCopy.sendCode) {
+                        Task { if await model.sendCode(email: email) { code = ""; sent = true } }
+                    }
+                    .buttonStyle(PaxPrimaryButton())
+                    .disabled(!SetupRules.isEmail(email))
+                } else {
+                    BodyText(PaxCopy.codeBody(email: SetupRules.normaliseEmail(email)))
+                    TextField("123456", text: $code)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Palette.card))
+                    Button(PaxCopy.signInButton) {
+                        Task {
+                            let v = await model.verifyCode(email: email, code: code, again: true)
+                            if v != .failed {
+                                await model.onActive()
+                                model.message = PaxCopy.signedIn
+                                dismiss()
+                            }
+                        }
+                    }
+                    .buttonStyle(PaxPrimaryButton())
+                    .disabled(!SetupRules.isCode(code))
+                    BodyText(resent ? PaxCopy.codeSent : PaxCopy.codeResendNote, small: true)
+                    Button(PaxCopy.codeResend) {
+                        Task { if await model.sendCode(email: email) { code = ""; resent = true } }
+                    }
+                    .buttonStyle(PaxSecondaryButton())
+                }
+                MessageText(text: model.message)
+            }
+            .disabled(model.busy)
+            .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+            }
+            .onAppear { email = model.policy.accountEmail ?? ""; model.message = nil }
+        }
+        .navigationViewStyle(.stack)
     }
 }
 

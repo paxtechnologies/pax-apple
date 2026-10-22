@@ -3,10 +3,10 @@
 // Pax server. Fail closed throughout: settings are only ever added, except in
 // `confirmTurnOff`, after the server released the secret and its hash matched.
 //
-// 1.2 one-tap set-up: `turnOn` asks Screen Time once, then quietly makes a private device
-// account (no email; servers without that route ask for an email and code instead), sets the
-// turn-off wait, escrows the release key on the server and only then switches the settings
-// on. Everything else is optional, on Home ("Make Pax stronger").
+// 1.2 one-tap set-up: every Pax account has a verified email (server 0.8.31). The email and a
+// 6-digit code come first (`sendCode`, `verifyCode`); then `turnOn` asks Screen Time once, only
+// ever lengthens the turn-off wait, escrows the release key on the server and only then switches
+// the settings on. Everything else is optional, on Home ("Make Pax stronger").
 import Foundation
 import SwiftUI
 import FamilyControls
@@ -27,16 +27,20 @@ final class AppModel: ObservableObject {
     @Published var account: PaxAPI.AccountStatus?
     /// Shown once, after a turn-off: the Screen Time passcode (or "" if none was kept).
     @Published var revealedPasscode: String?
+    /// After a code that signed in to an account this email already had: what's already set.
+    @Published var existing: ExistingAccount?
+    /// Whether this device has a working sign-in (the token is in the Keychain).
+    @Published var signedIn = false
 
     let api = PaxAPI()
 
     private static let pendingPasscodeKey = "pending-screen-time-passcode"
-    private static let releasedPasscodeKey = "released-screen-time-passcode"
     private static let pendingEscrowKey = "pending-escrow-secret"
 
     init() {
+        signedIn = api.signedIn
         #if DEBUG
-        if ScreenshotMode.home { policy = ScreenshotMode.samplePolicy; dnsOn = true }
+        if ScreenshotMode.home { policy = ScreenshotMode.samplePolicy; dnsOn = true; signedIn = true }
         #endif
     }
 
@@ -45,8 +49,11 @@ final class AppModel: ObservableObject {
     var hasApps: Bool {
         !(selection.applicationTokens.isEmpty && selection.webDomainTokens.isEmpty && selection.categoryTokens.isEmpty)
     }
-    /// The name or email the trusted person's emails use for this account.
-    private var who: String { policy.accountEmail ?? policy.displayName ?? "" }
+    /// The name or email the trusted person's emails use for this account (as the server's who()).
+    private var who: String {
+        if let n = policy.displayName, !n.isEmpty { return n }
+        return policy.accountEmail ?? ""
+    }
 
     // MARK: launch / foreground
 
@@ -56,6 +63,7 @@ final class AppModel: ObservableObject {
         #if DEBUG
         if ScreenshotMode.home { return }                    // screenshots: no network, no settings
         #endif
+        signedIn = api.signedIn
         guard policy.isActive, !checking else { return }
         checking = true; defer { checking = false }
         PaxRestrictions.apply(policy, selection: selection)      // self-heal
@@ -66,13 +74,18 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAccount() async {
-        guard api.signedIn else { return }
-        if let a = try? await api.me() { applyAccount(a) }
+        guard api.signedIn else { signedIn = false; return }
+        do { applyAccount(try await api.me()) }
+        catch let e as PaxAPIError where e.status == 401 {
+            signedOutHere()         // sign in again with the email and a code
+        } catch {}
     }
 
     private func applyAccount(_ a: PaxAPI.AccountStatus) {
         account = a
         if let e = a.email, !e.isEmpty { policy.accountEmail = e }
+        policy.accountID = a.account_id
+        policy.displayName = (a.display_name ?? "").isEmpty ? nil : a.display_name
         policy.trustedEmail = a.partner_email
         policy.waitDays = TurnOffRules.days(fromSeconds: a.wait_seconds)
         policy.save()
@@ -81,15 +94,10 @@ final class AppModel: ObservableObject {
     func refreshStatus() async {
         guard let id = policy.deviceID, api.signedIn else { return }
         do {
-            let main = try await api.status(device: id)
-            inGrace = main.in_grace_period ?? false
-            if let w = main.wait_seconds { policy.waitDays = TurnOffRules.days(fromSeconds: w); policy.save() }
-            var second: TurnOffPhase?
-            if let pid = policy.passcodeDeviceID {
-                let other = try await api.status(device: pid)
-                second = Self.phase(of: other)
-            }
-            phase = TurnOffRules.combine(Self.phase(of: main), second)
+            let d = try await api.status(device: id)
+            inGrace = d.in_grace_period ?? false
+            if let w = d.wait_seconds { policy.waitDays = TurnOffRules.days(fromSeconds: w); policy.save() }
+            phase = Self.phase(of: d)
         } catch {
             switch phase {
             case .waiting, .ready: phase = .unknown
@@ -144,34 +152,79 @@ final class AppModel: ObservableObject {
         } catch {}                                          // tried again next launch
     }
 
-    // MARK: set-up: email and code (child path, and servers without private accounts)
+    // MARK: set-up: email and code (every account has a verified email)
 
-    /// Sends the sign-in code (creating the account first if the email is new).
+    private var label: String { isPad ? "iPad app" : "iPhone app" }
+
+    /// Emails a 6-digit code (POST /v1/accounts/email/start; always the same answer).
     func sendCode(email raw: String) async -> Bool {
         let email = SetupRules.normaliseEmail(raw)
-        return await run {
-            _ = try await self.api.createAccount(email: email)
-            try await self.api.startSignIn(email: email)
-        }
+        busy = true; defer { busy = false }
+        message = nil
+        do { try await api.startEmail(email: email); return true }
+        catch let e as PaxAPIError {
+            switch e.status {
+            case 422: message = PaxCopy.emailInvalid
+            case 429: message = PaxCopy.tooManyCodes
+            default: message = e.message
+            }
+            return false
+        } catch { message = PaxCopy.retryBody; return false }
     }
 
-    /// Signs in with the code, then reads the account (its wait and trusted person are kept).
-    func verifyCode(email raw: String, code: String) async -> Bool {
+    /// Checks the code (POST /v1/accounts/email/verify) and keeps the token in the Keychain.
+    /// `again`: signing in again on a device Pax is already on, so it can only be the account it
+    /// was set up with; another account's token is never kept.
+    func verifyCode(email raw: String, code raw2: String, again: Bool = false) async -> VerifyOutcome {
         let email = SetupRules.normaliseEmail(raw)
-        var status: PaxAPI.AccountStatus?
-        let ok = await run {
-            try await self.api.finishSignIn(email: email,
-                                            code: code.trimmingCharacters(in: .whitespacesAndNewlines),
-                                            label: self.isPad ? "iPad app" : "iPhone app")
-            status = try await self.api.me()
+        let code = raw2.trimmingCharacters(in: .whitespacesAndNewlines)
+        busy = true; defer { busy = false }
+        message = nil
+        let v: PaxAPI.Verified
+        do { v = try await api.verifyEmail(email: email, code: code, label: label) }
+        catch let e as PaxAPIError {
+            switch e.status {
+            case 401, 422: message = PaxCopy.codeWrong
+            case 429: message = PaxCopy.tooManyCodes
+            default: message = e.message
+            }
+            return .failed
+        } catch { message = PaxCopy.retryBody; return .failed }
+        if again, !SetupRules.sameAccount(setUpID: policy.accountID, setUpEmail: policy.accountEmail,
+                                          signedInID: v.account_id, signedInEmail: email) {
+            message = PaxCopy.wrongAccount(setUpWith: policy.accountEmail, isPad: isPad)
+            return .failed
         }
-        guard ok, let s = status else { return false }
-        policy.privateAccount = false
-        applyAccount(s)
-        return true
+        api.keep(token: v.token)
+        signedIn = true
+        policy.accountEmail = email
+        policy.accountID = v.account_id
+        policy.save()
+        existing = nil
+        return v.created == true ? .newAccount : .existingAccount
     }
 
-    // MARK: set-up: one tap
+    /// "Welcome back": reads what the existing account already has (its wait, trusted person
+    /// and devices). Nothing is changed here.
+    func loadExisting(child: Bool) async -> Bool {
+        busy = true; defer { busy = false }
+        message = nil
+        do {
+            let a = try await api.me()
+            applyAccount(a)
+            let list = (try? await api.devices()) ?? []
+            existing = ExistingAccount(waitSeconds: a.wait_seconds, pendingWaitSeconds: a.pending_wait_seconds,
+                                       trustedEmail: a.partner_email,
+                                       devices: list.map { (name: $0.name, platform: $0.platform, released: $0.released) },
+                                       child: child)
+            return true
+        } catch {
+            message = PaxCopy.welcomeBackLoadFailed
+            return false
+        }
+    }
+
+    // MARK: set-up: Screen Time, wait, escrow, settings
 
     /// Face ID once. Never called once Pax is on, or once access was given: a second call
     /// after approval lifts the delete block.
@@ -181,28 +234,18 @@ final class AppModel: ObservableObject {
         catch { message = PaxCopy.accessDenied }
     }
 
-    /// The whole one-tap set-up. Order matters and is fail closed:
-    /// Screen Time (once) → account → wait → escrow on the server → only then the settings.
+    /// After the code. Order matters and is fail closed:
+    /// account (already signed in) → Screen Time (once) → wait (only longer) → escrow on the
+    /// server → only then the settings.
     func turnOn(child: Bool) async -> TurnOnOutcome {
         if policy.isActive { return .on }
         message = nil
+        guard api.signedIn else { signedIn = false; return .signedOut }
         await authorize()
         guard authorized else { message = PaxCopy.accessDenied; return .denied }
         busy = true; defer { busy = false }
         do {
-            // 1. Account: a private device account, unless already signed in (child path,
-            //    the email fallback, or a retry after a server hiccup).
-            if !api.signedIn {
-                switch try await api.createDeviceAccount(label: isPad ? "iPad app" : "iPhone app") {
-                case .done:
-                    policy.privateAccount = true
-                    policy.accountEmail = nil
-                    policy.save()
-                case .notAvailable:
-                    return .needsEmail
-                }
-            }
-            // 2. Turn-off wait: 7 days (30 for a child). Only ever lengthens an existing account's.
+            // Turn-off wait: 7 days (30 for a child). Only ever lengthens an existing account's.
             let current = try await api.me()
             applyAccount(current)
             if let send = SetupRules.waitToSend(chosenDays: SetupRules.defaultWait(child: child),
@@ -210,8 +253,11 @@ final class AppModel: ObservableObject {
                 let longer = try await api.setWait(days: send)
                 applyAccount(longer)
             }
-            // 3. Escrow first, then lock.
+            // Escrow first, then lock.
             try await lockIn(child: child)
+        } catch let e as PaxAPIError where e.status == 401 {
+            signedOutHere()
+            return .signedOut
         } catch {
             message = (error as? PaxAPIError)?.message ?? PaxCopy.retryBody
             return .failed
@@ -273,26 +319,24 @@ final class AppModel: ObservableObject {
             Keychain.set(secret.sealed, for: Self.pendingEscrowKey)
         }
         guard let code = secret.screenTimePasscode else { return nil }
-        let ok = await run {
-            guard self.policy.passcodeDeviceID == nil else { return }   // an older server's second record holds it
-            // Written down before the server's copy changes (see PaxPolicy.pendingReleaseKeyHash).
-            self.policy.pendingReleaseKeyHash = secret.releaseKeyHash
-            self.policy.save()
-            switch try await self.api.replaceEscrow(device: id, secret: secret) {
-            case .done:
-                self.policy.releaseKeyHash = secret.releaseKeyHash
-                self.policy.pendingReleaseKeyHash = nil
-            case .notAvailable:
-                // Older server: a second record on the account holds the passcode.
-                self.policy.pendingReleaseKeyHash = nil
-                let d = try await self.api.registerDevice(
-                    name: "\(UIDevice.current.name) · Screen Time passcode",
-                    platform: self.isPad ? "ipados" : "ios",
-                    installID: UUID().uuidString.lowercased(), secret: secret, kind: "appstore.passcode")
-                self.policy.passcodeDeviceID = d.device_id
-                self.policy.passcodeKeyHash = secret.releaseKeyHash
-            }
-            self.policy.save()
+        busy = true; defer { busy = false }
+        message = nil
+        // Written down before the server's copy changes (see PaxPolicy.pendingReleaseKeyHash), and
+        // kept on any failure: an earlier try whose answer never came back may have saved it.
+        policy.pendingReleaseKeyHash = secret.releaseKeyHash
+        policy.save()
+        var ok = false
+        do {
+            try await api.replaceEscrow(device: id, secret: secret)
+            policy.releaseKeyHash = secret.releaseKeyHash
+            policy.pendingReleaseKeyHash = nil
+            policy.save()
+            ok = true
+        } catch let e as PaxAPIError {
+            if e.status == 401 { signedOutHere() }
+            message = LockRefusal.of(status: e.status, reason: e.reason)?.message(isPad: isPad) ?? e.message
+        } catch {
+            message = PaxCopy.retryBody
         }
         guard ok else { return nil }        // nothing to type; the same secret is tried next time
         Keychain.delete(Self.pendingEscrowKey)
@@ -309,13 +353,15 @@ final class AppModel: ObservableObject {
 
     // MARK: (b) someone you trust
 
+    /// `from_name`: the first name typed here; an emptied field clears a name given before, and
+    /// an untouched empty one sends nothing.
     func addTrusted(email raw: String, name: String?) async -> Bool {
         let t = SetupRules.normaliseEmail(raw)
         let n = SetupRules.cleanName(name ?? "")
+        let fromName: String? = n ?? (policy.displayName == nil ? nil : "")
         var status: PaxAPI.AccountStatus?
-        let ok = await run { status = try await self.api.setTrustedPerson(email: t, fromName: n) }
+        let ok = await run { status = try await self.api.setTrustedPerson(email: t, fromName: fromName) }
         guard ok, let s = status else { return false }
-        if let n { policy.displayName = n }
         applyAccount(s)
         return true
     }
@@ -379,68 +425,48 @@ final class AppModel: ObservableObject {
 
     // MARK: turning off (server decides; fail closed)
 
-    /// Every escrow record this device has: the main one, and the passcode one on older servers.
-    private var records: [String] { [policy.deviceID, policy.passcodeDeviceID].compactMap { $0 } }
-
     func requestTurnOff() async {
-        guard !records.isEmpty else { return }
+        guard let id = policy.deviceID else { return }
         _ = await run {
-            for id in self.records {
-                do { _ = try await self.api.requestTurnOff(device: id) }
-                catch let e as PaxAPIError where e.status == 409 {}     // already asked for: fine
-            }
+            do { _ = try await self.api.requestTurnOff(device: id) }
+            catch let e as PaxAPIError where e.status == 409 {}         // already asked for: fine
         }
         await refreshStatus()
     }
 
     func cancelTurnOff() async {
-        guard !records.isEmpty else { return }
-        _ = await run {
-            for id in self.records { _ = try await self.api.cancelTurnOff(device: id) }
-        }
+        guard let id = policy.deviceID else { return }
+        _ = await run { _ = try await self.api.cancelTurnOff(device: id) }
         await refreshStatus()
     }
 
-    /// The only path that removes anything. With a passcode record, it is released first and
-    /// its passcode kept on this device until the main record is released too.
+    /// The only path that removes anything: after the server released the secret and its hash
+    /// matched one this device wrote down.
     func confirmTurnOff() async {
         guard let id = policy.deviceID else { return }
         busy = true; defer { busy = false }
-        var passcode: String? = Keychain.get(Self.releasedPasscodeKey)
-        if let pid = policy.passcodeDeviceID, passcode == nil {
-            let sealed: String
-            do { sealed = try await api.confirmTurnOff(device: pid) }
-            catch { message = error.localizedDescription; return }      // nothing cleared
-            switch EscrowSecret.decide(sealed: sealed, expectedHash: policy.passcodeKeyHash) {
-            case .stayOn(let reason): message = reason; return
-            case .release(let p):
-                passcode = p
-                if let p { Keychain.set(p, for: Self.releasedPasscodeKey) }
-            }
-        }
         let sealed: String
         do { sealed = try await api.confirmTurnOff(device: id) }
         catch { message = error.localizedDescription; return }       // nothing cleared
         switch EscrowSecret.decide(sealed: sealed, acceptedHashes: policy.acceptedReleaseHashes) {
         case .stayOn(let reason):
             message = reason
-        case .release(let mainPasscode):
+        case .release(let passcode):
             PaxRestrictions.clearAll()
             DeviceActivityCenter().stopMonitoring()
             await PaxDNS.remove()
             AuthorizationCenter.shared.revokeAuthorization { _ in }
             PaxSelection.clear()
-            Keychain.delete(Self.releasedPasscodeKey)
             Keychain.delete(Self.pendingPasscodeKey)
             Keychain.delete(Self.pendingEscrowKey)
             let email = policy.accountEmail
-            let priv = policy.privateAccount
+            let account = policy.accountID
             policy = PaxPolicy()
             policy.accountEmail = email
-            policy.privateAccount = priv
+            policy.accountID = account
             policy.save()
             phase = .none
-            revealedPasscode = mainPasscode ?? passcode ?? ""
+            revealedPasscode = passcode ?? ""
         }
     }
 
@@ -464,11 +490,12 @@ final class AppModel: ObservableObject {
         case .deleted:
             // Every token of the account is dead on the server: forget them here too.
             api.signOutLocally()
+            signedIn = false
             policy.accountEmail = nil
+            policy.accountID = nil
             policy.trustedEmail = nil
             policy.displayName = nil
-            policy.privateAccount = false
-            if !policy.isActive { policy.deviceID = nil; policy.passcodeDeviceID = nil }
+            if !policy.isActive { policy.deviceID = nil }
             policy.save()
             account = nil
             return .deleted
@@ -503,6 +530,17 @@ final class AppModel: ObservableObject {
         busy = true; defer { busy = false }
         message = nil
         do { try await work(); return true }
-        catch { message = error.localizedDescription; return false }
+        catch {
+            if let e = error as? PaxAPIError, e.status == 401 { signedOutHere() }
+            message = error.localizedDescription
+            return false
+        }
+    }
+
+    /// The server no longer takes this device's sign-in (or there is none): Home offers
+    /// "Sign in to Pax again" with the same email and code. Nothing on the device changes.
+    private func signedOutHere() {
+        api.signOutLocally()
+        signedIn = false
     }
 }

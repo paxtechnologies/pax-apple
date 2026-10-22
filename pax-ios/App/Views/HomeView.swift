@@ -17,6 +17,7 @@ struct HomeView: View {
     @State private var trustedShown = false
     @State private var waitShown = false
     @State private var macShown = false
+    @State private var signInShown = false
     @State private var moreApps = FamilyActivitySelection()
     @State private var now = Date()
     private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
@@ -35,6 +36,7 @@ struct HomeView: View {
                 .foregroundStyle(Palette.accent)
                 .accessibilityLabel(PaxCopy.accountTitle)
             }
+            if !model.signedIn { signInAgain }
             status
             stronger
             sites
@@ -59,6 +61,17 @@ struct HomeView: View {
         .sheet(isPresented: $trustedShown) { TrustedPersonView().environmentObject(model) }
         .sheet(isPresented: $waitShown) { WaitChangeView().environmentObject(model) }
         .sheet(isPresented: $macShown) { MacSetupView(isPad: isPad) }
+        .sheet(isPresented: $signInShown) { SignInAgainView().environmentObject(model) }
+    }
+
+    /// The sign-in on this device was lost: Pax stays on; the same email and code sign in again.
+    private var signInAgain: some View {
+        PaxCard {
+            Text(PaxCopy.signInAgainTitle)
+                .font(PaxFont.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+            BodyText(PaxCopy.signInAgainBody(isPad: isPad))
+            Button(PaxCopy.signInButton) { signInShown = true }.buttonStyle(PaxPrimaryButton())
+        }
     }
 
     private var status: some View {
@@ -341,7 +354,7 @@ struct LockScreenTimeView: View {
     }
 }
 
-/// (b) Someone you trust: the only place one-tap Pax asks for an email.
+/// (b) Someone you trust: their email, and your first name for their emails (`from_name`).
 struct TrustedPersonView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -359,14 +372,13 @@ struct TrustedPersonView: View {
                     BodyText(PaxCopy.trustedChangeNote, small: true)
                 }
                 PaxTextField(placeholder: PaxCopy.trustedEmailPlaceholder, text: $email, email: true)
-                if (model.policy.accountEmail ?? "").isEmpty {
-                    PaxTextField(placeholder: PaxCopy.trustedNamePlaceholder, text: $name)
-                    BodyText(PaxCopy.trustedNameHint, small: true)
-                }
+                PaxTextField(placeholder: PaxCopy.trustedNamePlaceholder, text: $name)
+                BodyText(PaxCopy.trustedNameHint, small: true)
                 BodyText(PaxCopy.trustedWitness, small: true)
                 MessageText(text: problem ?? model.message)
                 Button(PaxCopy.trustedSave) {
                     problem = SetupRules.trustedProblem(email, account: model.policy.accountEmail)
+                        ?? SetupRules.nameProblem(name)
                     guard problem == nil else { return }
                     Task { if await model.addTrusted(email: email, name: name) { dismiss() } }
                 }
@@ -457,8 +469,6 @@ struct AccountView: View {
                 SectionTitle(PaxCopy.accountTitle)
                 if let e = model.policy.accountEmail, !e.isEmpty {
                     BodyText(e)
-                } else if model.policy.privateAccount {
-                    BodyText(PaxCopy.accountPrivate(isPad: model.isPad))
                 }
                 PaxCard {
                     Link(PaxCopy.privacy, destination: Pax.privacyURL)

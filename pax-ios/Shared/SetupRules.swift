@@ -1,61 +1,88 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The on-phone set-up (1.2 "one-tap"), with the checks each step needs. Kept free of UI and
-// Apple frameworks so it can be tested.
+// Apple frameworks so it can be tested. Every Pax account has a verified email (server 0.8.31,
+// docs/ONETAP_ACCOUNTS.md), so the account comes first:
 //
-//   For me:      Welcome ("Turn Pax on") → Apple's Screen Time sheet → Done.
-//   For a child: Welcome → "Setting up for a child?" → parent's email → code → Screen Time → Done.
+//   For me:      Welcome ("Turn Pax on") → email → 6-digit code → Apple's Screen Time sheet → Done.
+//   For a child: Welcome → "Setting up for a child?" (the parent's email) → code → Screen Time → Done.
+//   An email that already has an account adds one screen after the code ("Welcome back"): what
+//   is already set (the turn-off wait, someone you trust, its devices) applies here too.
 //
-// Everything else happens quietly after the Screen Time sheet: a private device account (no
-// email), the 7-day turn-off wait, the release key escrowed on the server, and only then the
-// adult-content filter and the delete block. If the server can't be reached nothing is
-// switched on and a calm "Try again" is shown. Servers that can't make a private account yet
-// ask for an email and a code instead (`email`, `code`), then carry on.
+// After the code, quietly and in this order: Screen Time access (asked once, never again), the
+// turn-off wait (only ever lengthened: 7 days, 30 on a child's device), the release key escrowed
+// on the server, and only then the adult-content filter and the delete block. If the server can't
+// be reached nothing is switched on and a calm "Try again" is shown.
 import Foundation
 
 enum SetupStep: Int, CaseIterable, Equatable {
-    case welcome        // one big button: Turn Pax on
-    case childEmail     // child path: the parent's email
-    case childCode      // child path: the code the Pax server emailed
-    case turningOn      // Screen Time sheet, then the quiet work (account, escrow, settings)
-    case email          // only when the server can't make a private account yet
-    case code
-    case retry          // the server couldn't be reached: nothing is on yet, try again
-    case done           // Pax is on
+    case welcome = 0    // one big button: Turn Pax on
+    case childEmail = 1 // child path: the parent's email
+    case childCode = 2  // child path: the code the Pax server emailed
+    case email = 3      // your email
+    case code = 4       // the 6-digit code
+    case welcomeBack = 5 // the email already had an account: what's already set
+    case turningOn = 6  // Screen Time sheet (once), then the quiet work (wait, escrow, settings)
+    case done = 7       // Pax is on
+    case retry = 8      // the server couldn't be reached: nothing is on yet, try again
+    case denied = 9     // Screen Time access wasn't given: nothing is on yet
 }
 
-/// What the quiet work after the Screen Time sheet came to.
+/// What checking the emailed code came to.
+enum VerifyOutcome: Equatable {
+    /// A new account (its email now verified).
+    case newAccount
+    /// Signed in to the account this email already had: its wait, trusted person and devices apply.
+    case existingAccount
+    /// Wrong or expired code, or the server couldn't be reached. Nothing changed.
+    case failed
+}
+
+/// What the quiet work after the code came to.
 enum TurnOnOutcome: Equatable {
     /// Escrow saved, settings on.
     case on
     /// Screen Time access wasn't given. Nothing changed.
     case denied
-    /// This server can't make a private account: ask for an email and a code, then carry on.
-    case needsEmail
+    /// No working sign-in on this device (lost, or no longer valid): email and code again.
+    case signedOut
     /// The server couldn't be reached or refused. Nothing switched on (fail closed).
     case failed
 }
 
 enum SetupRules {
     /// The screens someone sees, in order, for each path.
-    static func path(child: Bool, privateAccounts: Bool) -> [SetupStep] {
-        if child { return [.welcome, .childEmail, .childCode, .turningOn, .done] }
-        return privateAccounts ? [.welcome, .turningOn, .done] : [.welcome, .turningOn, .email, .code, .done]
+    static func path(child: Bool, existing: Bool) -> [SetupStep] {
+        let start: [SetupStep] = child ? [.welcome, .childEmail, .childCode] : [.welcome, .email, .code]
+        return start + (existing ? [.welcomeBack] : []) + [.turningOn, .done]
+    }
+
+    /// The first screen after Welcome.
+    static func emailStep(child: Bool) -> SetupStep { child ? .childEmail : .email }
+    static func codeStep(child: Bool) -> SetupStep { child ? .childCode : .code }
+
+    /// Where the set-up goes after the code.
+    static func after(_ v: VerifyOutcome, child: Bool) -> SetupStep? {
+        switch v {
+        case .newAccount: return .turningOn
+        case .existingAccount: return .welcomeBack
+        case .failed: return nil            // stay on the code screen
+        }
     }
 
     /// Where the set-up goes after the quiet work.
-    static func after(_ outcome: TurnOnOutcome) -> SetupStep {
+    static func after(_ outcome: TurnOnOutcome, child: Bool) -> SetupStep {
         switch outcome {
         case .on: return .done
-        case .denied: return .welcome
-        case .needsEmail: return .email
+        case .denied: return .denied
+        case .signedOut: return emailStep(child: child)
         case .failed: return .retry
         }
     }
 
-    /// Going back is allowed only before anything is asked of Screen Time.
+    /// Going back is allowed only before the account is signed in.
     static func back(from s: SetupStep) -> SetupStep? {
         switch s {
-        case .childEmail: return .welcome
+        case .childEmail, .email: return .welcome
         case .childCode: return .childEmail
         case .code: return .email
         default: return nil
@@ -100,19 +127,48 @@ enum SetupRules {
         return nil
     }
 
-    /// A first name for the trusted person's emails: optional, short, one line.
-    static func cleanName(_ raw: String) -> String? {
-        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .newlines).joined(separator: " ")
-        guard !s.isEmpty else { return nil }
-        return String(s.prefix(40))
+    /// Signing in again on a device Pax is on: only the account it was set up with. Known by its
+    /// id, or (a device set up before ids were kept) by its email. Nothing known (an unreadable
+    /// policy): accepted, since no other account can release this device's escrow anyway.
+    static func sameAccount(setUpID: String?, setUpEmail: String?, signedInID: String, signedInEmail: String) -> Bool {
+        if let id = setUpID, !id.isEmpty { return id == signedInID }
+        if let e = setUpEmail, !e.isEmpty { return normaliseEmail(e) == normaliseEmail(signedInEmail) }
+        return true
     }
 
-    /// The account's wait is shared by all its devices. Set-up only ever lengthens it.
+    /// The longest first name the server takes (`from_name`).
+    static let maxNameLength = 40
+
+    /// A first name for the trusted person's emails: optional, one line, at most 40 characters.
+    /// Line breaks, tabs and other control or format characters become spaces or go.
+    static func cleanName(_ raw: String) -> String? {
+        var out = ""
+        for u in raw.unicodeScalars {
+            if u == " " || u.properties.isWhitespace { out.append(" ") }
+            else if u.properties.generalCategory == .control || u.properties.generalCategory == .format { continue }
+            else { out.unicodeScalars.append(u) }
+        }
+        let s = out.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        guard !s.isEmpty else { return nil }
+        return String(s.prefix(maxNameLength)).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The server refuses names with links; say so before asking it.
+    static func nameProblem(_ raw: String) -> String? {
+        let s = raw.lowercased()
+        if s.contains("://") || s.contains("www.") { return "Just a first name, please, with no links." }
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).count > maxNameLength {
+            return "Please keep your first name to \(maxNameLength) characters or fewer."
+        }
+        return nil
+    }
+
+    /// The account's wait is shared by all its devices. Set-up only ever lengthens it: nil when
+    /// the account's wait is already as long or longer (nothing is sent).
     static func waitToSend(chosenDays: Int, currentSeconds: Int?) -> Int? {
         let chosen = TurnOffRules.clampWait(days: chosenDays)
         guard let cur = currentSeconds else { return chosen }
-        return chosen * 86_400 >= cur ? chosen : nil
+        return chosen * 86_400 > cur ? chosen : nil
     }
 }
 
@@ -126,5 +182,41 @@ enum WaitChange: Equatable {
         let n = TurnOffRules.clampWait(days: newDays)
         if n == currentDays { return .same }
         return n > currentDays ? .longerNow : .shorterAfterWait
+    }
+}
+
+/// "Welcome back": what an existing account already has, read from GET /v1/accounts/me and
+/// GET /v1/devices after the code. Shown as it is; set-up never shortens anything.
+struct ExistingAccount: Equatable {
+    struct Device: Equatable {
+        let name: String
+        let kind: String        // iPhone, iPad, Mac or Device
+    }
+    var waitDays: Int
+    /// A shorter wait the account already asked for, coming in later.
+    var pendingWaitDays: Int?
+    var trustedEmail: String?
+    /// Devices Pax is on for this account (released ones aren't listed).
+    var devices: [Device]
+    /// The wait set-up will lengthen the account's to (nil: it stays as it is).
+    var lengthenTo: Int?
+
+    init(waitSeconds: Int, pendingWaitSeconds: Int?, trustedEmail: String?,
+         devices: [(name: String?, platform: String?, released: Bool?)], child: Bool) {
+        waitDays = TurnOffRules.days(fromSeconds: waitSeconds)
+        pendingWaitDays = pendingWaitSeconds.map(TurnOffRules.days(fromSeconds:))
+        self.trustedEmail = (trustedEmail ?? "").isEmpty ? nil : trustedEmail
+        self.devices = devices.filter { $0.released != true }.map {
+            Device(name: ($0.name ?? "").isEmpty ? "A device" : $0.name!, kind: ExistingAccount.kind($0.platform ?? ""))
+        }
+        lengthenTo = SetupRules.waitToSend(chosenDays: SetupRules.defaultWait(child: child), currentSeconds: waitSeconds)
+    }
+
+    static func kind(_ platform: String) -> String {
+        let p = platform.lowercased()
+        if p.contains("ipad") { return "iPad" }
+        if p.contains("iphone") || p == "ios" { return "iPhone" }
+        if p.contains("mac") { return "Mac" }
+        return "Device"
     }
 }

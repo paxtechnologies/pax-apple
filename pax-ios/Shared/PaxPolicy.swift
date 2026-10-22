@@ -37,16 +37,13 @@ struct PaxPolicy: Codable, Equatable {
     var dnsAlertSent: String?
     /// The trusted person was told Pax's Screen Time access was switched off.
     var accessAlertSent = false
-    /// 1.2: the account is a private device account (no email). See PaxAPI.createDeviceAccount.
-    var privateAccount = false
+    /// The Pax account this device was set up with, so signing in again (a lost token) can't
+    /// silently move it to another account.
+    var accountID: String?
     /// 1.2: a release key hash written down BEFORE the escrow on the server is replaced, so a
     /// crash between the server call and the save can never leave this device unable to match.
     var pendingReleaseKeyHash: String?
-    /// 1.2, servers without escrow replacement: the Screen Time passcode is escrowed in a second
-    /// device record on the account. Turning off releases both (the passcode record first).
-    var passcodeDeviceID: String?
-    var passcodeKeyHash: String?
-    /// The first name the trusted person sees in Pax's emails (private accounts have no email).
+    /// The first name the trusted person sees in Pax's emails (`from_name`), if one was given.
     var displayName: String?
 
     /// Every release key hash this device accepts for its main record.
@@ -59,8 +56,7 @@ struct PaxPolicy: Codable, Equatable {
     private enum K: String, CodingKey {
         case isActive, setUpFinished, audience, accountEmail, setUpAt, waitDays, blockedDomains,
              trustedEmail, passcodeEscrowed, deviceID, releaseKeyHash, dnsInstalled, dnsSeenOn,
-             dnsOffSince, dnsAlertSent, accessAlertSent, privateAccount, pendingReleaseKeyHash,
-             passcodeDeviceID, passcodeKeyHash, displayName
+             dnsOffSince, dnsAlertSent, accessAlertSent, accountID, pendingReleaseKeyHash, displayName
     }
 
     init(from decoder: Decoder) throws {
@@ -89,10 +85,8 @@ struct PaxPolicy: Codable, Equatable {
         dnsOffSince = o(.dnsOffSince)
         dnsAlertSent = o(.dnsAlertSent)
         accessAlertSent = v(.accessAlertSent, false)
-        privateAccount = v(.privateAccount, false)
+        accountID = o(.accountID)
         pendingReleaseKeyHash = o(.pendingReleaseKeyHash)
-        passcodeDeviceID = o(.passcodeDeviceID)
-        passcodeKeyHash = o(.passcodeKeyHash)
         displayName = o(.displayName)
     }
 
@@ -114,10 +108,8 @@ struct PaxPolicy: Codable, Equatable {
         try c.encodeIfPresent(dnsOffSince, forKey: .dnsOffSince)
         try c.encodeIfPresent(dnsAlertSent, forKey: .dnsAlertSent)
         try c.encode(accessAlertSent, forKey: .accessAlertSent)
-        try c.encode(privateAccount, forKey: .privateAccount)
+        try c.encodeIfPresent(accountID, forKey: .accountID)
         try c.encodeIfPresent(pendingReleaseKeyHash, forKey: .pendingReleaseKeyHash)
-        try c.encodeIfPresent(passcodeDeviceID, forKey: .passcodeDeviceID)
-        try c.encodeIfPresent(passcodeKeyHash, forKey: .passcodeKeyHash)
         try c.encodeIfPresent(displayName, forKey: .displayName)
     }
 

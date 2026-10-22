@@ -119,17 +119,23 @@ final class PolicyTests: XCTestCase {
     // MARK: set-up
 
     func testOneTapPaths() {
-        XCTAssertEqual(SetupRules.path(child: false, privateAccounts: true), [.welcome, .turningOn, .done])
-        XCTAssertEqual(SetupRules.path(child: false, privateAccounts: false), [.welcome, .turningOn, .email, .code, .done])
-        XCTAssertEqual(SetupRules.path(child: true, privateAccounts: true), [.welcome, .childEmail, .childCode, .turningOn, .done])
-        XCTAssertEqual(SetupRules.after(.on), .done)
-        XCTAssertEqual(SetupRules.after(.denied), .welcome)
-        XCTAssertEqual(SetupRules.after(.needsEmail), .email)
-        XCTAssertEqual(SetupRules.after(.failed), .retry)
+        XCTAssertEqual(SetupRules.path(child: false, existing: false), [.welcome, .email, .code, .turningOn, .done])
+        XCTAssertEqual(SetupRules.path(child: false, existing: true),
+                       [.welcome, .email, .code, .welcomeBack, .turningOn, .done])
+        XCTAssertEqual(SetupRules.path(child: true, existing: false), [.welcome, .childEmail, .childCode, .turningOn, .done])
+        XCTAssertEqual(SetupRules.after(.newAccount, child: false), .turningOn)
+        XCTAssertEqual(SetupRules.after(.existingAccount, child: true), .welcomeBack)
+        XCTAssertNil(SetupRules.after(VerifyOutcome.failed, child: false))      // stays on the code screen
+        XCTAssertEqual(SetupRules.after(.on, child: false), .done)
+        XCTAssertEqual(SetupRules.after(.denied, child: false), .denied)
+        XCTAssertEqual(SetupRules.after(.signedOut, child: false), .email)
+        XCTAssertEqual(SetupRules.after(.signedOut, child: true), .childEmail)
+        XCTAssertEqual(SetupRules.after(TurnOnOutcome.failed, child: false), .retry)
     }
 
-    func testNoWayBackOnceScreenTimeWasAsked() {
-        for s in [SetupStep.welcome, .turningOn, .email, .retry, .done] { XCTAssertNil(SetupRules.back(from: s)) }
+    func testNoWayBackOnceSignedIn() {
+        for s in [SetupStep.welcome, .welcomeBack, .turningOn, .retry, .denied, .done] { XCTAssertNil(SetupRules.back(from: s)) }
+        XCTAssertEqual(SetupRules.back(from: .email), .welcome)
         XCTAssertEqual(SetupRules.back(from: .childEmail), .welcome)
         XCTAssertEqual(SetupRules.back(from: .childCode), .childEmail)
         XCTAssertEqual(SetupRules.back(from: .code), .email)
@@ -151,7 +157,7 @@ final class PolicyTests: XCTestCase {
     func testTrustedPersonNeedsAnEmailThatIsNotYours() {
         XCTAssertNotNil(SetupRules.trustedProblem("", account: "me@example.com"))
         XCTAssertNil(SetupRules.trustedProblem("friend@example.com", account: "me@example.com"))
-        XCTAssertNil(SetupRules.trustedProblem("friend@example.com", account: nil))      // private account
+        XCTAssertNil(SetupRules.trustedProblem("friend@example.com", account: nil))      // email not known here
         XCTAssertNotNil(SetupRules.trustedProblem("ME@example.com", account: "me@example.com"))
         XCTAssertNotNil(SetupRules.trustedProblem("friend", account: nil))
         XCTAssertEqual(SetupRules.cleanName("  Sam \n"), "Sam")
