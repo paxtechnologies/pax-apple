@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import sqlite3
 import uuid
 from typing import Optional
 
@@ -51,6 +52,11 @@ def _id() -> str:
 
 def _code_hash(account_id: str, code: str) -> str:
     return hashlib.sha256(f"{account_id}:{code}".encode()).hexdigest()
+
+
+def _signup_email_hash(email: str) -> str:
+    """v0.8.31: how signup_codes knows an address without storing it."""
+    return hashlib.sha256(f"pax-signup:{email.strip().lower()}".encode()).hexdigest()
 
 
 class ListSync:
@@ -221,18 +227,111 @@ class ListSync:
         if not hmac.compare_digest(row["code_hash"], _code_hash(acct["id"], code)):
             self.db.execute("UPDATE signin_codes SET attempts=attempts+1 WHERE id=?", (row["id"],))
             raise Unauthorized("that code isn't right or has expired")
+        return self._issue_signin(acct, email, label, "signin_codes", row["id"])
+
+    def _issue_signin(self, acct, email: str, label: str, code_table: str, code_id: str) -> dict:
+        """A new sign-in token for an existing account whose email a one-time code
+        has just proved: the code is used up in the same transaction (a second use
+        finds it gone: 401), and the email counts as verified (v0.8.31)."""
+        assert code_table in ("signin_codes", "signup_codes")
         from .crypto import new_token
         token = new_token()
+        now = self.now()
         with self.db.transaction():
-            self.db.execute("UPDATE signin_codes SET used_at=? WHERE id=?", (now, row["id"]))
+            cur = self.db.execute(f"UPDATE {code_table} SET used_at=? WHERE id=? AND used_at IS NULL", (now, code_id))
+            if cur.rowcount != 1:
+                raise Unauthorized("that code isn't right or has expired")
             self.db.execute("INSERT INTO account_tokens(token_hash, account_id, created_at, label) VALUES (?,?,?,?)",
                             (hash_token(token), acct["id"], now, label[:100] or None))
+            self.db.execute("UPDATE accounts SET email_verified_at=? WHERE id=?", (now, acct["id"]))
         self.escrow._log(acct["id"], "signed_in", detail=label[:100] or None)
         self.escrow._mail(email, "signed_in", "Pax: a new device signed in",
                           "A device just signed in to your Pax account with a code sent to this address. "
                           "Signing in only lets it share your blocked sites; unblocking still waits and your "
                           "partner is told.")
         return {"account_id": acct["id"], "token": token}
+
+    # ------------------------------- v0.8.31: one email-code flow, new or existing
+    def email_start(self, email: str) -> None:
+        """POST /v1/accounts/email/start: a 6-digit code to `email`, whether or not it
+        has an account yet, so the caller learns nothing about which. An address with
+        an account gets today's sign-in code (signin_codes); a new address gets a code
+        in signup_codes (hashes only) and no account is made until it comes back.
+        Same rules for both: 15 minutes, 5 tries a code, 5 codes an hour an address."""
+        email = (email or "").strip().lower()
+        if self.db.one("SELECT 1 FROM accounts WHERE email=?", (email,)):
+            self.signin_start(email)
+            return
+        now = self.now()
+        eh = _signup_email_hash(email)
+        with self.db.transaction():
+            self.db.execute("DELETE FROM signup_codes WHERE expires_at<?", (now - 86400,))
+            recent = self.db.one("SELECT COUNT(*) FROM signup_codes WHERE email_hash=? AND created_at>?",
+                                 (eh, now - 3600))[0]
+            if recent >= CODES_PER_HOUR:
+                raise RateLimited("too many codes; try again in an hour")
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            self.db.execute("INSERT INTO signup_codes(id, email_hash, code_hash, created_at, expires_at) "
+                            "VALUES (?,?,?,?,?)", (_id(), eh, _code_hash("signup:" + eh, code), now, now + CODE_TTL))
+        self.escrow._mail(email, "signup_code", "Your Pax code",
+                          f"Your Pax code is {code}. It works for 15 minutes. If you didn't ask for it, "
+                          "you can ignore this email: no account is made without the code.")
+
+    def _signup_code(self, email: str, code: str):
+        """The open signup code for `email` when `code` matches it, else None (a
+        wrong guess uses up one of its 5 tries)."""
+        eh = _signup_email_hash(email)
+        row = self.db.one("SELECT * FROM signup_codes WHERE email_hash=? AND used_at IS NULL AND expires_at>? "
+                          "ORDER BY created_at DESC LIMIT 1", (eh, self.now()))
+        if not row or row["attempts"] >= CODE_MAX_ATTEMPTS:
+            return None
+        if not hmac.compare_digest(row["code_hash"], _code_hash("signup:" + eh, code)):
+            self.db.execute("UPDATE signup_codes SET attempts=attempts+1 WHERE id=?", (row["id"],))
+            return None
+        return row
+
+    def email_verify(self, email: str, code: str, label: str = "") -> tuple[dict, bool]:
+        """POST /v1/accounts/email/verify: ({account_id, token, created}, created).
+        Existing account: a new sign-in (exactly as POST /v1/accounts/signin).
+        New address: the account is made now, with its email already verified.
+        A wrong, used or expired code is 401 and nothing is made (fail closed)."""
+        email = (email or "").strip().lower()
+        code = (code or "").strip()
+        acct = self.db.one("SELECT * FROM accounts WHERE email=?", (email,))
+        if acct:
+            try:
+                return {**self.signin_finish(email, code, label), "created": False}, False
+            except Unauthorized:
+                # A code sent while the address had no account yet (someone made it
+                # in between) still proves the address: sign in with it.
+                row = self._signup_code(email, code)
+                if not row:
+                    raise
+                return {**self._issue_signin(acct, email, label, "signup_codes", row["id"]), "created": False}, False
+        row = self._signup_code(email, code)
+        if not row:
+            raise Unauthorized("that code isn't right or has expired")
+        from .crypto import new_token
+        account_id, token = _id(), new_token()
+        now = self.now()
+        try:
+            with self.db.transaction():
+                cur = self.db.execute("UPDATE signup_codes SET used_at=? WHERE id=? AND used_at IS NULL",
+                                      (now, row["id"]))
+                if cur.rowcount != 1:
+                    raise Unauthorized("that code isn't right or has expired")
+                self.db.execute(
+                    "INSERT INTO accounts(id, email, token_hash, created_at, wait_seconds, email_verified_at) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (account_id, email, hash_token(token), now, self.escrow.settings.default_wait_seconds, now))
+        except sqlite3.IntegrityError:
+            # The address got an account a moment ago (UNIQUE email): sign in to it.
+            acct = self.db.one("SELECT * FROM accounts WHERE email=?", (email,))
+            if not acct:
+                raise
+            return {**self._issue_signin(acct, email, label, "signup_codes", row["id"]), "created": False}, False
+        self.escrow._log(account_id, "account_registered", detail="email verified")
+        return {"account_id": account_id, "token": token, "created": True}, True
 
 
 def view_domain(d: str) -> str:

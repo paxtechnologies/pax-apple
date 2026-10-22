@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.30
+# Pax Peace (Apple), v0.8.31
 
 **Less scrolling. More living.**
 
@@ -192,6 +192,20 @@ tries in an hour. Kept by design: the hashed hardware code (`trial_hardware`, no
 support codes (`support_nonces`, a code works once); `mail_log`/`signup_attempts` hashes go within two days.
 The DNS feed carries the account once with `"deleted": true` so both DNS servers drop it at their next
 poll; that `dns_changes` row (random ID, sequence number, time) is pruned after an hour.
+One-tap accounts (branch, for the iPhone app 1.2; not released yet). Every account has a verified email:
+`POST accounts/email/start {email}` (no token; the same per-client sign-up limit as `POST accounts`) always
+answers 202 `{sent: true}` and emails a 6-digit code (15 minutes, 5 tries, 5 codes an hour per address), new
+address or not; `POST accounts/email/verify {email, code, label?}` answers 201 `{account_id, token, created:
+true}` (a new account, made only now, email verified) or 200 `{account_id, token, created: false}` (a sign-in to
+the address's existing account), 401 for a wrong, used or expired code (nothing made). There is no email-less
+account. `GET accounts/me` adds `email_verified` and `display_name`. `PUT accounts/me/partner` takes an optional
+`from_name` (one line, at most 40 characters, no control characters or links; 422 otherwise), and every email to
+the trusted person names the holder by it, else by their email. `PUT devices/{id}/escrow {removal_password}`
+(20-256 characters, owner's token) replaces the secret Pax holds for a device: 200 device status; 409
+`conflict` with `reason` `released` | `retired` | `removal_request_open` | `emergency_open` while it can't; 404
+`not_found` for another account's device; logged, never loosens anything. Storage: two added columns and a
+hashes-only `signup_codes` table; `accounts.email` stays NOT NULL. Details, request/response JSON and a note on
+Sign in with Apple: [docs/ONETAP_ACCOUNTS.md](docs/ONETAP_ACCOUNTS.md).
 Blocklist (v0.3): `GET blocklist`, `POST blocklist {domain}` (instant), `POST blocklist/remove
 {domain}` (202, waits), `POST allowlist {domain}` (202, waits), `POST allowlist/remove {domain}`
 (instant), `POST blocklist/requests/{id}/cancel`, `GET dns` (your DoH URL; creates the token),

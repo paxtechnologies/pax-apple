@@ -135,7 +135,7 @@ def test_partner_told_after_grace_does_not_start_a_no_wait_unlock(tmp_path):
 # ------------------------------------------------------- production server
 def test_guard_defaults_to_the_production_server():
     assert pg.GuardConfig().server_url == "https://api.paxpeace.com/"
-    assert pg.VERSION == "0.8.30"
+    assert pg.VERSION == "0.8.31"
 
 
 def test_guard_still_takes_a_self_hosted_server(tmp_path):

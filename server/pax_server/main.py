@@ -18,14 +18,14 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from . import __version__
 from .config import HOUR, Settings
 from .blocklist import Blocklist
 from .sync import ListSync
 from .db import Database
-from .escrow import Clock, Escrow, EscrowError, NotFound, RateLimited
+from .escrow import DISPLAY_NAME_MAX, Clock, Escrow, EscrowError, NotFound, RateLimited, clean_display_name
 from .limits import client_ip
 from . import replica as replica_mod
 from . import stats as stats_mod
@@ -65,6 +65,26 @@ class WaitIn(BaseModel):
 
 class PartnerIn(BaseModel):
     email: Optional[EmailStr] = None  # null removes the partner (after the wait)
+    # v0.8.31: the holder's first name for the trusted person's emails (accounts.display_name).
+    # Left out or null: unchanged. "" (after stripping): cleared. One line, at most 40 characters,
+    # no control/format characters, no links; anything else is refused with 422.
+    from_name: Optional[str] = Field(None, max_length=200)
+
+    @field_validator("from_name")
+    @classmethod
+    def _one_line_name(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        cleaned = clean_display_name(v)
+        if cleaned is None:
+            raise ValueError(f"from_name must be one line of at most {DISPLAY_NAME_MAX} characters, "
+                             "with no control characters or links")
+        return cleaned
+
+
+class EscrowIn(BaseModel):
+    """v0.8.31 PUT /v1/devices/{id}/escrow: same rules as registration."""
+    removal_password: str = Field(..., min_length=20, max_length=256)
 
 
 class DeviceIn(BaseModel):
@@ -139,6 +159,10 @@ class SigninIn(BaseModel):
     email: EmailStr
     code: str = Field(..., min_length=4, max_length=12)
     label: str = Field("", max_length=100)
+
+
+class EmailVerifyIn(SigninIn):
+    """v0.8.31 POST /v1/accounts/email/verify (same fields as a sign-in)."""
 
 
 class DnsSettingsIn(BaseModel):
@@ -453,7 +477,7 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
 
     @app.put("/v1/accounts/me/partner")
     def set_partner(body: PartnerIn, acct=Depends(current_account)):
-        return escrow.set_partner(acct, str(body.email) if body.email else None)
+        return escrow.set_partner(acct, str(body.email) if body.email else None, from_name=body.from_name)
 
     @app.put("/v1/accounts/me/adblock")
     def set_adblock(body: AdblockIn, acct=Depends(current_account)):
@@ -507,6 +531,14 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.get("/v1/devices/{device_id}")
     def get_device(device_id: str, acct=Depends(current_account)):
         return escrow.device_status(acct, device_id)
+
+    @app.put("/v1/devices/{device_id}/escrow")
+    def replace_escrow(device_id: str, body: EscrowIn, acct=Depends(current_account)):
+        """v0.8.31: replace the secret Pax holds for this device (20-256 characters,
+        re-encrypted for this device). 200 device status. 404 not_found for another
+        account's (or no) device; 409 conflict with `reason` released | retired |
+        removal_request_open | emergency_open. Never loosens anything; logged."""
+        return escrow.replace_escrow(acct, device_id, body.removal_password)
 
     @app.post("/v1/devices/{device_id}/retire")
     def retire_device(device_id: str, acct=Depends(current_account)):
@@ -630,6 +662,28 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.post("/v1/accounts/signin")
     def signin(body: SigninIn):
         return list_sync.signin_finish(str(body.email), body.code, body.label)
+
+    # v0.8.31: one email-code flow that makes a new account or signs in to the
+    # existing one, so every account it makes has a verified email (the iPhone app).
+    @app.post("/v1/accounts/email/start", status_code=202)
+    def email_start(body: SigninStartIn, request: Request,
+                    x_forwarded_for: Optional[str] = Header(None)):
+        """A 6-digit code to the address, new or not; always 202 {"sent": true}.
+        Shares the per-IP sign-up limit with POST /v1/accounts and signin/start."""
+        ip = client_ip(request.client.host if request.client else None, x_forwarded_for)
+        why = escrow.limits.check_signup(ip)
+        if why:
+            raise RateLimited(why)
+        list_sync.email_start(str(body.email))
+        return {"sent": True}
+
+    @app.post("/v1/accounts/email/verify")
+    def email_verify(body: EmailVerifyIn):
+        """201 {account_id, token, created: true} for a new account (email verified);
+        200 {account_id, token, created: false} for a sign-in to an existing one;
+        401 when the code is wrong, used or expired (nothing is made)."""
+        out, created = list_sync.email_verify(str(body.email), body.code, body.label)
+        return JSONResponse(out, status_code=201 if created else 200)
 
     # ------------------------------------------------ categories (v0.5)
     @app.get("/v1/categories")

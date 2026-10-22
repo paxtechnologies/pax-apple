@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     last_emergency_at      INTEGER,
     adblock                INTEGER NOT NULL DEFAULT 1,  -- v0.4: Mac ad/tracker blocking
     block_remote_desktop   INTEGER NOT NULL DEFAULT 1,  -- v0.5: remote-desktop category
-    trial_started_at       INTEGER                      -- v0.8.18: when this account's trial day began
+    trial_started_at       INTEGER,                     -- v0.8.18: when this account's trial day began
+    display_name           TEXT,                        -- v0.8.31: first name for the trusted person's emails
+    email_verified_at      INTEGER                      -- v0.8.31: when a one-time code to the email last worked
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -161,6 +163,20 @@ CREATE TABLE IF NOT EXISTS signin_codes (
     used_at     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_signin_acct ON signin_codes(account_id, created_at);
+-- v0.8.31: a one-time code to an address that has no account yet (POST
+-- /v1/accounts/email/start). The account is only made once the code comes back,
+-- so every account it makes has a verified email. Hashes only: the address is
+-- never stored here, and rows go a day after they expire.
+CREATE TABLE IF NOT EXISTS signup_codes (
+    id          TEXT PRIMARY KEY,
+    email_hash  TEXT NOT NULL,
+    code_hash   TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    used_at     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_signup_email ON signup_codes(email_hash, created_at);
 
 -- v0.8.15: verified support release. Every nonce ever redeemed, kept for good, so
 -- a code works once whatever any clock says.
@@ -241,6 +257,11 @@ class Database:
             self._conn.execute("ALTER TABLE devices ADD COLUMN retired_at INTEGER")
         if "trial_started_at" not in cols:
             self._conn.execute("ALTER TABLE accounts ADD COLUMN trial_started_at INTEGER")
+        # v0.8.31: plain column adds (no table rebuild; accounts.email stays NOT NULL UNIQUE).
+        if "display_name" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN display_name TEXT")
+        if "email_verified_at" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN email_verified_at INTEGER")
         # v0.8.13 (project decision): pictures and video on X and Bluesky are always
         # blocked. Force every account back on and close any waiting request to turn
         # them off. Runs at every start; a no-op once done.
