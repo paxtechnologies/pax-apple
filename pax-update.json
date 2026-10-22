@@ -1,0 +1,47 @@
+{
+ "key_id": "3369066c",
+ "payload": {
+  "minimum_version": "0.8.0",
+  "mirrors": [],
+  "parts": {
+   "base_urls": [
+    "https://cdn.jsdelivr.net/gh/paxtechnologies/pax-apple@releases/parts/0.8.31/",
+    "https://github.com/paxtechnologies/pax-apple/releases/download/v0.8.31/"
+   ],
+   "files": [
+    {
+     "name": "Pax-0.8.31.zip.part-000",
+     "sha256": "1b426d3ab69498955003c384939226b74e1c948d405cd8aef72aece325858009",
+     "size": 15728640
+    },
+    {
+     "name": "Pax-0.8.31.zip.part-001",
+     "sha256": "d17b67c29492bbbc5cc3cbd09d519460eb85402c03e9752b5dfb8b8195761010",
+     "size": 15728640
+    },
+    {
+     "name": "Pax-0.8.31.zip.part-002",
+     "sha256": "b29366ef783e6618c75352b14bd7914be8ea004e34d7a5b4f593799063c5feaa",
+     "size": 15728640
+    },
+    {
+     "name": "Pax-0.8.31.zip.part-003",
+     "sha256": "0214b8b23d25bd9ade99e4a49c75da8f2cb8d02876392a96db9f391acdfaecb8",
+     "size": 15728640
+    },
+    {
+     "name": "Pax-0.8.31.zip.part-004",
+     "sha256": "7d18925f70ba439d3d03d6a816b8d316cb003b66336d8325e718c81157111d7a",
+     "size": 13640625
+    }
+   ]
+  },
+  "published_at": "2026-10-22T21:03:32+00:00",
+  "schema": "pax.update.v1",
+  "sha256": "1ca17e459e275368a5529a76f8a2b39dccc2a06ff306798e2d45a0300fa840da",
+  "size": 76555185,
+  "url": "https://github.com/paxtechnologies/pax-apple/releases/download/v0.8.31/Pax-0.8.31.zip",
+  "version": "0.8.31"
+ },
+ "signature": "FaHeXFxqILjuELcFgfLefctOUDP75QjcKb3DeTpxQcPJWvNa1Jg3yI8+9M9cwgkgH4mWI8CTfIorVoqQZogEAQ=="
+}
