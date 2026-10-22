@@ -264,8 +264,9 @@ class Escrow:
     @classmethod
     def who(cls, acct, mid: bool = False) -> str:
         """The account holder as emails to their trusted person name them: the first
-        name they gave (display_name), else their email, else "Someone using Pax"
-        (a private account that gave no name). Never "None"."""
+        name they gave (display_name), else their email. Every account has an email
+        (accounts.email is NOT NULL), so "Someone using Pax" is only a defensive
+        fallback for a row without one; no email can ever say "None"."""
         keys = acct.keys() if hasattr(acct, "keys") else ()
         name = (acct["display_name"] if "display_name" in keys else None) or ""
         name = clean_display_name(name) or ""
@@ -277,20 +278,6 @@ class Escrow:
         return "someone using Pax" if mid else cls.ANONYMOUS_HOLDER   # mid-sentence
 
     # --------------------------------------------------------------- accounts
-    def register_private_account(self, label: str = "") -> tuple[str, str]:
-        """v0.8.31 POST /v1/accounts/device: an account with no email, for the iPhone
-        app's one-tap set-up. The token is the device's secret (the app keeps it in
-        that device's Keychain only). No welcome email, no code; nothing is ever
-        mailed to the holder of a private account (they have no address)."""
-        account_id, token = _id(), new_token()
-        self.db.execute(
-            "INSERT INTO accounts(id, email, token_hash, created_at, wait_seconds) VALUES (?,?,?,?,?)",
-            (account_id, None, hash_token(token), self.clock.now(), self.settings.default_wait_seconds),
-        )
-        tag = clean_display_name(label or "", limit=40) or ""
-        self._log(account_id, "account_registered", detail=("private: " + tag) if tag else "private")
-        return account_id, token
-
     def register_account(self, email: str) -> tuple[str, str]:
         email = email.strip().lower()
         if self.db.one("SELECT 1 FROM accounts WHERE email=?", (email,)):
@@ -360,8 +347,8 @@ class Escrow:
     def account_status(self, acct) -> dict:
         return {
             "account_id": acct["id"],
-            "email": acct["email"],                      # v0.8.31: null for a private account
-            "private": acct["email"] is None,            # v0.8.31
+            "email": acct["email"],
+            "email_verified": acct["email_verified_at"] is not None,   # v0.8.31: a code to it has worked
             "display_name": acct["display_name"],        # v0.8.31: null unless given (from_name)
             "wait_seconds": acct["wait_seconds"],
             "pending_wait_seconds": acct["pending_wait_seconds"],
@@ -449,8 +436,7 @@ class Escrow:
         use for the holder (accounts.display_name, via who()). None leaves it as it
         is; "" clears it. Stored before any email below goes out."""
         new = (partner_email or "").strip().lower() or None
-        own = (acct["email"] or "").strip().lower()
-        if new and own and new == own:     # only an account with an email can be its own partner
+        if new and new == (acct["email"] or "").strip().lower():
             raise EscrowError("you cannot be your own accountability partner")
         if from_name is not None:
             name = clean_display_name(from_name)
@@ -996,10 +982,6 @@ class Escrow:
                 "usual), then delete your account.",
                 count=n, devices=blocked)
         log.info("account deleted (%d device(s))", gone["devices"])
-        if not email:
-            # v0.8.31: a private account has no address, so nothing is sent.
-            self.prune_deleted()
-            return gone
         sent = self._mail(email, "account_deleted", "Your Pax account has been deleted",
                           "Your Pax account has been deleted, as you asked. Your devices, blocked "
                           "sites, history and sign-ins have been removed from Pax's server, and the "

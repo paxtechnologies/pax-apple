@@ -63,11 +63,6 @@ class WaitIn(BaseModel):
     wait_days: Optional[int] = Field(None, ge=1)
 
 
-class PrivateAccountIn(BaseModel):
-    """v0.8.31 POST /v1/accounts/device: a private account (no email)."""
-    label: str = Field("", max_length=100)
-
-
 class PartnerIn(BaseModel):
     email: Optional[EmailStr] = None  # null removes the partner (after the wait)
     # v0.8.31: the holder's first name for the trusted person's emails (accounts.display_name).
@@ -164,6 +159,10 @@ class SigninIn(BaseModel):
     email: EmailStr
     code: str = Field(..., min_length=4, max_length=12)
     label: str = Field("", max_length=100)
+
+
+class EmailVerifyIn(SigninIn):
+    """v0.8.31 POST /v1/accounts/email/verify (same fields as a sign-in)."""
 
 
 class DnsSettingsIn(BaseModel):
@@ -453,21 +452,6 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         account_id, token = escrow.register_account(str(body.email))
         return {"account_id": account_id, "token": token}
 
-    @app.post("/v1/accounts/device", status_code=201)
-    def register_private_account(request: Request, body: Optional[PrivateAccountIn] = None,
-                                 x_forwarded_for: Optional[str] = Header(None)):
-        """v0.8.31: a private account with no email, for the iPhone app's one-tap
-        set-up. No token needed, so it shares POST /v1/accounts's per-IP sign-up
-        limit (429 rate_limited). No email of any kind is ever sent to it. The token
-        is the only way into the account: lose it and the account can't be reached
-        (the turn-off wait still releases nothing without it)."""
-        ip = client_ip(request.client.host if request.client else None, x_forwarded_for)
-        why = escrow.limits.check_signup(ip)
-        if why:
-            raise RateLimited(why)
-        account_id, token = escrow.register_private_account(body.label if body else "")
-        return {"account_id": account_id, "token": token, "private": True}
-
     @app.get("/v1/accounts/me")
     def me(acct=Depends(current_account)):
         return escrow.account_status(acct)
@@ -678,6 +662,28 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.post("/v1/accounts/signin")
     def signin(body: SigninIn):
         return list_sync.signin_finish(str(body.email), body.code, body.label)
+
+    # v0.8.31: one email-code flow that makes a new account or signs in to the
+    # existing one, so every account it makes has a verified email (the iPhone app).
+    @app.post("/v1/accounts/email/start", status_code=202)
+    def email_start(body: SigninStartIn, request: Request,
+                    x_forwarded_for: Optional[str] = Header(None)):
+        """A 6-digit code to the address, new or not; always 202 {"sent": true}.
+        Shares the per-IP sign-up limit with POST /v1/accounts and signin/start."""
+        ip = client_ip(request.client.host if request.client else None, x_forwarded_for)
+        why = escrow.limits.check_signup(ip)
+        if why:
+            raise RateLimited(why)
+        list_sync.email_start(str(body.email))
+        return {"sent": True}
+
+    @app.post("/v1/accounts/email/verify")
+    def email_verify(body: EmailVerifyIn):
+        """201 {account_id, token, created: true} for a new account (email verified);
+        200 {account_id, token, created: false} for a sign-in to an existing one;
+        401 when the code is wrong, used or expired (nothing is made)."""
+        out, created = list_sync.email_verify(str(body.email), body.code, body.label)
+        return JSONResponse(out, status_code=201 if created else 200)
 
     # ------------------------------------------------ categories (v0.5)
     @app.get("/v1/categories")

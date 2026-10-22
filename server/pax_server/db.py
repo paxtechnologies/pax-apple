@@ -2,19 +2,15 @@
 """SQLite storage. All timestamps are integer Unix seconds (UTC)."""
 from __future__ import annotations
 
-import logging
-import re
 import sqlite3
 import threading
-
-log = logging.getLogger("pax.db")
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS accounts (
     id                     TEXT PRIMARY KEY,
-    email                  TEXT UNIQUE,  -- v0.8.31: NULL = a private (device-only) account
+    email                  TEXT NOT NULL UNIQUE,
     token_hash             TEXT NOT NULL,
     created_at             INTEGER NOT NULL,
     wait_seconds           INTEGER NOT NULL,
@@ -27,7 +23,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     adblock                INTEGER NOT NULL DEFAULT 1,  -- v0.4: Mac ad/tracker blocking
     block_remote_desktop   INTEGER NOT NULL DEFAULT 1,  -- v0.5: remote-desktop category
     trial_started_at       INTEGER,                     -- v0.8.18: when this account's trial day began
-    display_name           TEXT                         -- v0.8.31: first name for the trusted person's emails
+    display_name           TEXT,                        -- v0.8.31: first name for the trusted person's emails
+    email_verified_at      INTEGER                      -- v0.8.31: when a one-time code to the email last worked
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -166,6 +163,20 @@ CREATE TABLE IF NOT EXISTS signin_codes (
     used_at     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_signin_acct ON signin_codes(account_id, created_at);
+-- v0.8.31: a one-time code to an address that has no account yet (POST
+-- /v1/accounts/email/start). The account is only made once the code comes back,
+-- so every account it makes has a verified email. Hashes only: the address is
+-- never stored here, and rows go a day after they expire.
+CREATE TABLE IF NOT EXISTS signup_codes (
+    id          TEXT PRIMARY KEY,
+    email_hash  TEXT NOT NULL,
+    code_hash   TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    used_at     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_signup_email ON signup_codes(email_hash, created_at);
 
 -- v0.8.15: verified support release. Every nonce ever redeemed, kept for good, so
 -- a code works once whatever any clock says.
@@ -246,11 +257,11 @@ class Database:
             self._conn.execute("ALTER TABLE devices ADD COLUMN retired_at INTEGER")
         if "trial_started_at" not in cols:
             self._conn.execute("ALTER TABLE accounts ADD COLUMN trial_started_at INTEGER")
-        # v0.8.31: the name a private account gives for its trusted person's emails.
+        # v0.8.31: plain column adds (no table rebuild; accounts.email stays NOT NULL UNIQUE).
         if "display_name" not in cols:
             self._conn.execute("ALTER TABLE accounts ADD COLUMN display_name TEXT")
-        # v0.8.31: private (device-only) accounts have no email.
-        self._email_nullable()
+        if "email_verified_at" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN email_verified_at INTEGER")
         # v0.8.13 (project decision): pictures and video on X and Bluesky are always
         # blocked. Force every account back on and close any waiting request to turn
         # them off. Runs at every start; a no-op once done.
@@ -258,77 +269,6 @@ class Database:
                            "WHERE dns_x_media != 1 OR dns_bluesky_media != 1")
         self._conn.execute("UPDATE blocklist_requests SET status='refused', closed_at=CAST(strftime('%s','now') AS INTEGER) "
                            "WHERE status='pending' AND action IN ('x_media_off', 'bluesky_media_off')")
-
-    # v0.8.31: the column definition the rebuild below replaces, as every database
-    # since v0.1 has it (SQLite keeps the CREATE TABLE text it was given).
-    _EMAIL_NOT_NULL = re.compile(r"\bemail(\s+)TEXT\s+NOT\s+NULL\s+UNIQUE\b", re.IGNORECASE)
-    _CREATE_ACCOUNTS = re.compile(r"^\s*CREATE\s+TABLE\s+(?:\"accounts\"|accounts)\s*\(", re.IGNORECASE)
-
-    def _email_nullable(self) -> None:
-        """v0.8.31: make accounts.email nullable (a private account has none), with
-        SQLite's documented table-rebuild procedure, once. Idempotent: does nothing
-        when the column already allows NULL (new databases, or after the first run).
-
-        * One BEGIN IMMEDIATE transaction: a crash or any failed check rolls it all
-          back and the old table stays exactly as it was (the server then refuses to
-          start, rather than run on a half-migrated table).
-        * The new table is the stored CREATE TABLE text with only `NOT NULL` taken off
-          the email column, so every other column, default, the UNIQUE constraint on
-          email (SQLite allows many NULLs under UNIQUE) and the column order stay.
-        * Rows are copied by column name and counted; ids are unchanged, so every
-          REFERENCES accounts(id) in the other tables still points at the same rows.
-          foreign_keys is off only for the rebuild (as SQLite requires) and
-          PRAGMA foreign_key_check must find no new broken reference before COMMIT.
-        * Readers (pax-dns's read-only SqliteSource) see the old or the new table,
-          never neither (WAL). The DoH-only second server (role "dns") has no
-          database, so this never runs there.
-        """
-        info = self._conn.execute("PRAGMA table_info(accounts)").fetchall()
-        email = [r for r in info if r[1] == "email"]
-        if not email or not email[0][3]:          # notnull flag
-            return
-        sql = self._conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='accounts'").fetchone()[0]
-        new_sql, n = self._EMAIL_NOT_NULL.subn(r"email\1TEXT UNIQUE", sql, count=1)
-        new_sql, m = self._CREATE_ACCOUNTS.subn("CREATE TABLE accounts_v0831_rebuild (", new_sql, count=1)
-        if n != 1 or m != 1:
-            raise RuntimeError("accounts table has an unexpected shape; email NOT NULL not removed")
-        cols = ", ".join('"%s"' % r[1] for r in info)
-        extra = self._conn.execute(
-            "SELECT sql FROM sqlite_master WHERE tbl_name='accounts' AND type IN ('index','trigger') "
-            "AND sql IS NOT NULL").fetchall()
-        self._conn.execute("PRAGMA foreign_keys=OFF")
-        try:
-            self._conn.execute("BEGIN IMMEDIATE")
-            try:
-                before = self._conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
-                # Rows that already break a foreign key (none expected) don't stop the
-                # rebuild; only a new break does.
-                bad_before = {tuple(r) for r in self._conn.execute("PRAGMA foreign_key_check")}
-                self._conn.execute("DROP TABLE IF EXISTS accounts_v0831_rebuild")
-                self._conn.execute(new_sql)
-                self._conn.execute(f"INSERT INTO accounts_v0831_rebuild ({cols}) SELECT {cols} FROM accounts")
-                after = self._conn.execute("SELECT COUNT(*) FROM accounts_v0831_rebuild").fetchone()[0]
-                if after != before:
-                    raise RuntimeError(f"accounts rebuild copied {after} of {before} rows")
-                self._conn.execute("DROP TABLE accounts")
-                self._conn.execute("ALTER TABLE accounts_v0831_rebuild RENAME TO accounts")
-                for (x,) in extra:
-                    self._conn.execute(x)
-                bad = {tuple(r) for r in self._conn.execute("PRAGMA foreign_key_check")} - bad_before
-                if bad:
-                    raise RuntimeError(f"foreign key check failed after the accounts rebuild ({len(bad)} rows)")
-                if bad_before:
-                    log.warning("accounts rebuild: %d row(s) already broke a foreign key before it", len(bad_before))
-                if self._conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] != before:
-                    raise RuntimeError("accounts row count changed in the rebuild")
-            except BaseException:
-                self._conn.execute("ROLLBACK")
-                raise
-            self._conn.execute("COMMIT")
-        finally:
-            self._conn.execute("PRAGMA foreign_keys=ON")
-        log.info("accounts.email now allows NULL (private accounts); %d account(s) kept", before)
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:

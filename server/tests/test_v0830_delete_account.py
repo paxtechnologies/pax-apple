@@ -145,7 +145,9 @@ def test_schema_has_exactly_the_tables_we_delete(tmp_path):
     e = _env(tmp_path)
     names = {r[0] for r in e.db.all("SELECT name FROM sqlite_master WHERE type='table' "
                                     "AND name NOT LIKE 'sqlite_%'")}
-    kept = {"support_nonces", "trial_hardware", "signup_attempts", "mail_log", "stats_daily"}
+    # v0.8.31 signup_codes: codes for addresses with no account yet (hashes only, never an
+    # account id; gone a day after they expire), so like signup_attempts it isn't per account.
+    kept = {"support_nonces", "trial_hardware", "signup_attempts", "mail_log", "stats_daily", "signup_codes"}
     assert names == set(TABLES) | kept
     from pax_server.escrow import Escrow
     assert {t for t, _ in Escrow._DELETE_SQL} == set(TABLES)
