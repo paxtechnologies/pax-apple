@@ -1,11 +1,132 @@
 {
- "code": "a87d56f7ee03fc2327350b0475d372d4f6330493",
- "failures": [
-  "the run stopped: HTTPError: HTTP Error 404: Not Found"
- ],
- "finished_at": "2026.1023.0323",
+ "bench": {
+  "proxy_fresh": {
+   "pool": 662,
+   "resolving": 579,
+   "working_proxies": 65
+  },
+  "queries": {
+   "neutral": 800,
+   "reference": 784
+  },
+  "scores": {
+   "adult": {
+    "gains": 0,
+    "last": 337,
+    "last_fp": 73,
+    "losses": 0,
+    "n": 400,
+    "new": 337,
+    "new_fp": 73,
+    "new_open_ref_blocks": 34,
+    "ref": 298
+   },
+   "benign": {
+    "gains": 0,
+    "last": 15,
+    "last_fp": 6,
+    "losses": 0,
+    "n": 250,
+    "new": 15,
+    "new_fp": 6,
+    "new_open_ref_blocks": 3,
+    "ref": 12
+   },
+   "proxy": {
+    "gains": 0,
+    "last": 60,
+    "last_fp": 4,
+    "losses": 0,
+    "n": 69,
+    "new": 60,
+    "new_fp": 4,
+    "new_open_ref_blocks": 7,
+    "ref": 63
+   },
+   "proxy_fresh": {
+    "gains": 0,
+    "last": 49,
+    "last_fp": 4,
+    "losses": 0,
+    "n": 65,
+    "new": 49,
+    "new_fp": 4,
+    "new_open_ref_blocks": 11,
+    "ref": 56
+   }
+  }
+ },
+ "build": {
+  "bypass": 18401,
+  "final": 1351034,
+  "hagezi_doh_vpn": 16348,
+  "hand_list": 28,
+  "list_a": 91049,
+  "list_b": 477187,
+  "list_c": {
+   "raw": 4591365,
+   "without_blogspot": 965947
+  },
+  "loop_block_extra": 2548,
+  "loop_bypass_extra": 2000,
+  "nrd": {
+   "days_found": 14,
+   "days_requested": 14,
+   "entries": 1287
+  },
+  "pax_always": 55,
+  "pax_zones": 3,
+  "single_label": 4,
+  "union": 1358446,
+  "verified_block_extra": 8690,
+  "verified_bypass_extra": 313
+ },
+ "code": "52abe23f7b8ae3bde7562da514e10ec557c5923a",
+ "discovery": {
+  "certificates": 361,
+  "chrome_ranked": 4684,
+  "curated": 2576,
+  "links": 2336,
+  "lookalikes": 3000,
+  "majestic": 770,
+  "new_registrations": 1517,
+  "project_sites": 972,
+  "ranked": 2047,
+  "vpn_category": 6027
+ },
+ "entries": {
+  "pax-block": 1351034,
+  "pax-bypass": 18401,
+  "pax-nrd": 1287
+ },
+ "failures": [],
+ "finished_at": "2026.1023.2255",
+ "known_good": {
+  "encoded": null,
+  "known_good_blocked": 0,
+  "uk57_blocked": 0
+ },
  "last_version": "2026.1021.0322",
- "ok": false,
- "started_at": "2026.1023.0323",
- "version": "2026.1023.0323"
+ "ok": true,
+ "started_at": "2026.1023.2232",
+ "top10k": {
+  "confirmed": 11,
+  "encoded_held": "H4sIAAAAAAACA4tWyk7MTUwCQkO95PxcpVgA9wqW9REAAAA=",
+  "held_back": 1,
+  "new_blocks": 11,
+  "unconfirmed": 0
+ },
+ "verification": {
+  "added_proxy": 51,
+  "added_restricted": 107,
+  "checked": 1500,
+  "proxy_checked": 470,
+  "proxy_gone": 531,
+  "rechecked_dropped": 1,
+  "waiting": {
+   "proxy": 531,
+   "restricted": 20396
+  }
+ },
+ "version": "2026.1023.2232"
 }
