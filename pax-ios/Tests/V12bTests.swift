@@ -58,10 +58,7 @@ final class YouTubeRestrictedTests: XCTestCase {
     }
 
     func testDecodesTheServersAnswers() throws {
-        let json = #"{"now": 10, "categories": [{"id": "bypass", "title": "x", "can_turn_off": false, "enabled": true, "pending": null},
-          {"id": "youtube_restricted", "title": "YouTube Restricted Mode", "can_turn_off": true, "enabled": true,
-           "pending": {"request_id": "a", "action": "youtube_restricted_off", "domain": null, "display_domain": null,
-                       "status": "pending", "created_at": 1, "effective_at": 99, "seconds_remaining": 89}}], "delay_seconds": 604800}"#
+        let json = #"{"now": 10, "categories": [{"id": "bypass", "title": "x", "can_turn_off": false, "enabled": true, "pending": null}, {"id": "youtube_restricted", "title": "YouTube Restricted Mode", "can_turn_off": true, "enabled": true, "pending": {"request_id": "a", "action": "youtube_restricted_off", "domain": null, "display_domain": null, "status": "pending", "created_at": 1, "effective_at": 99, "seconds_remaining": 89}}], "delay_seconds": 604800}"#
         let v = try JSONDecoder().decode(CategoriesView.self, from: Data(json.utf8))
         XCTAssertTrue(YouTubeRestricted.serverHasWait(v))
         let s = try JSONDecoder().decode(DNSSettingsView.self,
