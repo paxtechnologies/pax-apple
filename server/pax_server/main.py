@@ -165,6 +165,17 @@ class EmailVerifyIn(SigninIn):
     """v0.8.31 POST /v1/accounts/email/verify (same fields as a sign-in)."""
 
 
+class ChildVerifyIn(SigninIn):
+    """v0.8.32 POST /v1/accounts/child/verify: `email` is the parent's address."""
+    child_name: Optional[str] = Field(None, max_length=40)
+    device_name: Optional[str] = Field(None, max_length=40)
+
+
+class ChildSigninIn(SigninIn):
+    """v0.8.32 POST /v1/accounts/child/signin: back in to one child account."""
+    account_id: str = Field(..., pattern=r"^[0-9a-f]{32}$")
+
+
 class DnsSettingsIn(BaseModel):
     """v0.8.8: Pax's own DNS filter (iPhone/iPad). Omit a key to leave it.
     v0.8.13: x_media / bluesky_media are accepted only as true (or left out);
@@ -686,6 +697,31 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
         401 when the code is wrong, used or expired (nothing is made)."""
         out, created = list_sync.email_verify(str(body.email), body.code, body.label)
         return JSONResponse(out, status_code=201 if created else 200)
+
+    # v0.8.32: child accounts verified by a parent (docs/CHILD_ACCOUNTS.md). New
+    # routes on purpose: a 0.8.31 server answers a plain 404, never the parent's account.
+    @app.post("/v1/accounts/child/start", status_code=202)
+    def child_start(body: SigninStartIn, request: Request,
+                    x_forwarded_for: Optional[str] = Header(None)):
+        """A 6-digit code to the parent's address; always 202 {"sent": true}. Shares
+        the per-IP sign-up limit; 5 child codes an hour per parent address."""
+        ip = client_ip(request.client.host if request.client else None, x_forwarded_for)
+        why = escrow.limits.check_signup(ip)
+        if why:
+            raise RateLimited(why)
+        list_sync.child_start(str(body.email))
+        return {"sent": True}
+
+    @app.post("/v1/accounts/child/verify", status_code=201)
+    def child_verify(body: ChildVerifyIn):
+        """201 {account_id, token, created: true, kind: "child", label, wait_seconds}:
+        always a NEW child account (never the parent's own). 401 bad code; 429 child_limit."""
+        return list_sync.child_verify(str(body.email), body.code, body.child_name, body.device_name)
+
+    @app.post("/v1/accounts/child/signin")
+    def child_signin(body: ChildSigninIn):
+        """200 {account_id, token, created: false, kind: "child", label}; 401 otherwise."""
+        return list_sync.child_signin(str(body.email), body.code, body.account_id, body.label)
 
     # ------------------------------------------------ categories (v0.5)
     @app.get("/v1/categories")

@@ -169,6 +169,12 @@ for a new code.
 * Accounts made before 0.8.32 without a proved email are grandfathered: they keep working
   (`email_verified: false`) and become verified the first time a code to them is used.
 
+## Child accounts (0.8.32)
+
+A child's device gets its own account verified by the parent's email, with separate routes
+(`/v1/accounts/child/start`, `/verify`, `/signin`): see [CHILD_ACCOUNTS.md](CHILD_ACCOUNTS.md). They never touch the
+parent's own account or the calls above.
+
 ## Storage
 
 * `accounts.email` stays `TEXT NOT NULL UNIQUE`. No table rebuild.

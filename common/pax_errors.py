@@ -352,6 +352,15 @@ CODES: list[PaxCode] = [
             "v0.8.32: POST /v1/accounts refuses new accounts (410 app_update_required); accounts are made only by "
             "POST /v1/accounts/email/start + /verify, so every email is verified. An address that already has an "
             "account still gets 409 sign_in. Seen by Pax for Mac 0.8.31 or older (shown there as PAX-ESCROW-005)."),
+    PaxCode("PAX-ESCROW-021", "A child's turn-off wait can't be shorter than 30 days.",
+            "Nothing changed. A longer wait is fine.",
+            "v0.8.32: PUT /v1/accounts/me/wait on a child account below child_wait_seconds (PAX_CHILD_WAIT_SECONDS, "
+            "default 30 days): 403 child_wait_fixed. docs/CHILD_ACCOUNTS.md."),
+    PaxCode("PAX-ESCROW-022", "This email already looks after the most child accounts Pax allows.",
+            "Delete a child account you no longer use, or use another parent's email.",
+            "v0.8.32: POST /v1/accounts/child/verify when parent_email already has child_accounts_per_parent "
+            "(PAX_CHILD_ACCOUNTS_PER_EMAIL, default 5) child accounts: 429 child_limit. Nothing made; the code "
+            "stays unused."),
     # ---------------------------------------------------------------- PROFILE
     PaxCode("PAX-PROFILE-001", "Pax couldn't prepare your protection settings.",
             "Try again. If it repeats, copy the details and send them to us.",
@@ -448,6 +457,10 @@ def escrow_code(status: int, error: str = "", message: str = "") -> str:
         return "PAX-ESCROW-010"
     if error == "app_update_required":                # v0.8.32
         return "PAX-ESCROW-020"
+    if error == "child_wait_fixed":
+        return "PAX-ESCROW-021"
+    if error == "child_limit":
+        return "PAX-ESCROW-022"
     if error in SUPPORT_ERRORS:                       # v0.8.15 verified support release
         return SUPPORT_ERRORS[error]
     if status == 401:

@@ -228,6 +228,12 @@ known key). `PAX_ROLE=dns` runs a DoH-only server.
 Email goes through a pluggable `EmailSender`: SMTP when `PAX_SMTP_HOST` is set (v0.8.0), otherwise a
 logging stub. Emails never contain the password. Since v0.8.5 every email counts against the daily
 budget above; partner alerts fail closed and account-holder emails are best-effort.
+Child accounts (v0.8.32, docs/CHILD_ACCOUNTS.md): `POST accounts/child/start {email}` (the parent's address; 202
+always), `POST accounts/child/verify {email, code, child_name?, device_name?}` (201 a new, separate child account:
+`kind: "child"`, `label`, 30-day wait; 401 bad code; 429 `child_limit`, PAX-ESCROW-022, 5 per parent address) and
+`POST accounts/child/signin {email, code, account_id}` (200 back in to that child). All of a child account's mail goes
+to the parent (fail closed for anything that loosens Pax); its wait never goes below 30 days (403
+`child_wait_fixed`, PAX-ESCROW-021); no trial day. The parent's own account is untouched.
 
 ### pax-dns (per-user filtering resolver)
 

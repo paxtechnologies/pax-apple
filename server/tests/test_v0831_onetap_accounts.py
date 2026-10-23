@@ -352,7 +352,8 @@ def test_upgrade_from_0830_only_adds_two_columns(tmp_path):
     conn.close()
     db = Database(str(path))
     cols = [r[1] for r in db.all("PRAGMA table_info(accounts)")]
-    assert cols[-2:] == ["display_name", "email_verified_at"]
+    # v0.8.31's two columns, then v0.8.32's three (child accounts), all plain adds.
+    assert cols[-5:] == ["display_name", "email_verified_at", "kind", "parent_email", "label"]
     info = {r[1]: r for r in db.all("PRAGMA table_info(accounts)")}
     assert info["email"][3] == 1
     sql = db.one("SELECT sql FROM sqlite_master WHERE name='accounts'")[0]

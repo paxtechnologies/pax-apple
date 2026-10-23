@@ -5,7 +5,8 @@
   app_update_required (PAX-ESCROW-020), nothing written, no email. An address that
   already has an account still answers 409 sign_in (the old code sign-in works).
 * The only code that writes an accounts row is ListSync.email_verify (a 6-digit
-  code to the email), which sets email_verified_at.
+  code to the email) or ListSync.child_verify (a code to the parent's email), and
+  both set email_verified_at.
 * Accounts made before 0.8.32 without a proved email are grandfathered.
 """
 import ast
@@ -23,8 +24,10 @@ from test_v0831_onetap_accounts import device, last_code, legacy_account  # noqa
 from verified_signup import verified_signup  # noqa: E402
 
 PKG = ROOT / "pax_server"
-# Functions allowed to INSERT into accounts (each proves the email with a code first).
-CREATORS = {("sync.py", "email_verify")}
+# Functions allowed to INSERT into accounts (each proves the email with a code first):
+# email_verify (the holder's own email) and child_verify (a child account, the parent's
+# email; docs/CHILD_ACCOUNTS.md).
+CREATORS = {("sync.py", "email_verify"), ("sync.py", "child_verify")}
 
 
 @pytest.fixture

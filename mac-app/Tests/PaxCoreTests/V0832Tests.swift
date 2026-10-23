@@ -135,6 +135,11 @@ final class V0832Tests: XCTestCase {
             status: 410, code: "app_update_required", message: "This version of Pax can't make new accounts any more."))
         XCTAssertEqual(e.code, "PAX-ESCROW-020")
         XCTAssertTrue(e.info.action.contains("paxpeace.com"))
+        // Child accounts (server 0.8.32): their own codes in the shared catalog.
+        XCTAssertEqual(PaxErrorClassifier.classify(EscrowClient.APIError(
+            status: 403, code: "child_wait_fixed", message: "")).code, "PAX-ESCROW-021")
+        XCTAssertEqual(PaxErrorClassifier.classify(EscrowClient.APIError(
+            status: 429, code: "child_limit", message: "")).code, "PAX-ESCROW-022")
         // An older app sees the same 410 as PAX-ESCROW-005 (status only).
         XCTAssertEqual(PaxErrorClassifier.escrowCode(status: 410), "PAX-ESCROW-005")
     }

@@ -118,6 +118,39 @@ APP_UPDATE_REQUIRED_MESSAGE = (
     "paxpeace.com (it checks your email with a 6-digit code), then set up again.")
 
 
+class ChildWaitFixed(EscrowError):
+    """v0.8.32: a child account's turn-off wait can't go below the child minimum
+    (30 days by default). Support code PAX-ESCROW-021."""
+    status, code = 403, "child_wait_fixed"
+
+
+class ChildLimit(EscrowError):
+    """v0.8.32: this parent address already looks after the most child accounts
+    (5 by default). Support code PAX-ESCROW-022."""
+    status, code = 429, "child_limit"
+
+
+# v0.8.32 child accounts: accounts.email of a child row is a unique placeholder that
+# can never receive mail (.invalid is reserved, RFC 2606) and never leaves the server.
+CHILD_EMAIL_DOMAIN = "accounts.paxpeace.invalid"
+
+
+def child_placeholder_email(account_id: str) -> str:
+    return f"child.{account_id}@{CHILD_EMAIL_DOMAIN}"
+
+
+def is_child(acct) -> bool:
+    keys = acct.keys() if hasattr(acct, "keys") else ()
+    return "kind" in keys and acct["kind"] == "child"
+
+
+def holder_email(acct) -> Optional[str]:
+    """Where an account's own mail goes: the parent for a child account, else its email."""
+    if is_child(acct):
+        return acct["parent_email"]
+    return acct["email"]
+
+
 class RateLimited(EscrowError):
     status, code = 429, "rate_limited"
 
@@ -263,11 +296,24 @@ class Escrow:
     def _notify(self, acct, kind: str, subject: str, user_body: str,
                 partner_body: Optional[str] = None, required: bool = True) -> None:
         """Partner first (fail closed when required), then the account holder's
-        copy (best-effort)."""
+        copy (best-effort). v0.8.32: on a child account the holder is the parent,
+        who is told FIRST and, when required, fail closed like a partner."""
+        if is_child(acct):
+            # The trusted-person wording (it names the child), else the holder's.
+            self._tell_parent(acct, kind, subject, partner_body or user_body, required=required)
         if acct["partner_email"]:
             self._mail_partner(acct["partner_email"], kind, f"[Pax partner] {subject}",
                                partner_body or user_body, required=required)
-        self._mail(acct["email"], kind, subject, user_body)
+        if not is_child(acct):
+            self._mail(acct["email"], kind, subject, user_body)
+
+    def _tell_parent(self, acct, kind: str, subject: str, body: str, required: bool = True) -> bool:
+        """v0.8.32: mail about a child account to its parent, before the action it
+        announces; required=True raises PartnerUnreachable when it can't be sent."""
+        if not is_child(acct):
+            return False
+        label = acct["label"] or "your child's device"
+        return self._mail_partner(acct["parent_email"], kind, f"[Pax, {label}] {subject}", body, required=required)
 
     # v0.8.31: how emails to a trusted person name the account holder.
     ANONYMOUS_HOLDER = "Someone using Pax"
@@ -283,6 +329,8 @@ class Escrow:
         name = clean_display_name(name) or ""
         if name:
             return name
+        if is_child(acct):          # v0.8.32: never the placeholder address
+            return (acct["label"] or "").strip() or ("your child" if mid else "Your child")
         email = (acct["email"] if "email" in keys else None) or ""
         if email.strip():
             return email.strip()
@@ -347,7 +395,10 @@ class Escrow:
     def account_status(self, acct) -> dict:
         return {
             "account_id": acct["id"],
-            "email": acct["email"],
+            "email": holder_email(acct),                    # v0.8.32: the parent's, for a child
+            "kind": acct["kind"] if "kind" in acct.keys() else "adult",
+            "label": acct["label"] if "label" in acct.keys() else None,
+            "parent_email": acct["parent_email"] if "parent_email" in acct.keys() else None,
             "email_verified": acct["email_verified_at"] is not None,   # v0.8.31: a code to it has worked
             "display_name": acct["display_name"],        # v0.8.31: null unless given (from_name)
             "wait_seconds": acct["wait_seconds"],
@@ -370,6 +421,11 @@ class Escrow:
     # -------------------------------------------------------------- wait time
     def set_wait(self, acct, wait_seconds: int) -> dict:
         s = self.settings
+        # v0.8.32: a child account's wait never goes below the child minimum (30 days),
+        # whatever the app asks for. Longer is allowed.
+        if is_child(acct) and wait_seconds < s.child_wait_seconds:
+            raise ChildWaitFixed(f"a child account's turn-off wait stays at least "
+                                 f"{fmt_duration(s.child_wait_seconds)}")
         if not (s.min_wait_seconds <= wait_seconds <= s.max_wait_seconds):
             raise EscrowError(
                 f"wait time must be between {fmt_duration(s.min_wait_seconds)} "
@@ -426,7 +482,7 @@ class Escrow:
         # is best-effort and dropped first when the daily budget runs low.
         if partner:
             self._mail_partner(partner, kind, f"[Pax partner] {subject}", partner_body or body)
-        self._mail(acct["email"], kind, subject, body)
+        self._mail(holder_email(acct), kind, subject, body)
         self._log(acct["id"], "notify_relayed", detail=f"{kind} partner={'yes' if partner else 'no'}")
         return {"relayed": True, "to_partner": bool(partner)}
 
@@ -436,7 +492,10 @@ class Escrow:
         use for the holder (accounts.display_name, via who()). None leaves it as it
         is; "" clears it. Stored before any email below goes out."""
         new = (partner_email or "").strip().lower() or None
-        if new and new == (acct["email"] or "").strip().lower():
+        if new and new == (holder_email(acct) or "").strip().lower():
+            if is_child(acct):
+                raise EscrowError("the parent already gets every email about this account; "
+                                  "choose someone else or no one")
             raise EscrowError("you cannot be your own accountability partner")
         if from_name is not None:
             name = clean_display_name(from_name)
@@ -525,6 +584,8 @@ class Escrow:
         device_id = _id()
         now = self.clock.now()
         ct = self.box.encrypt(removal_password, aad=device_id)
+        if is_child(acct):
+            trial = False          # v0.8.32: no trial day (no turn-off without the wait) on a child account
         trial_until = self._trial_for_new_device(acct, now, hardware_id) if trial else None
         self.db.execute(
             "INSERT INTO devices(id, account_id, name, platform, profile_identifier, "
@@ -700,6 +761,9 @@ class Escrow:
         except sqlite3.IntegrityError:
             refuse(sc.USED, "that code has already been used", c["nonce"])
         try:
+            self._tell_parent(acct, "support_release_used", f"Verified support release used for {d['name']}",
+                              f"Pax support issued a one-time code for {d['name']} and it has just been used, "
+                              "so the password to remove Pax from it is being released now.")
             if acct["partner_email"]:
                 self._mail_partner(
                     acct["partner_email"], "support_release_used",
@@ -721,7 +785,7 @@ class Escrow:
              now + self.settings.reveal_window_seconds, now))
         self.db.execute("UPDATE devices SET released_at=? WHERE id=?", (now, d["id"]))
         self._log(acct["id"], "support_release_used", d["id"], f"nonce={c['nonce']} key={c['key_id']}")
-        self._mail(acct["email"], "support_release_used", f"Verified support release used for {d['name']}",
+        self._mail(holder_email(acct), "support_release_used", f"Verified support release used for {d['name']}",
                    f"You used a one-time code from Pax support. The password to remove Pax from {d['name']} "
                    "was released in the Pax app.")
         return {
@@ -955,7 +1019,7 @@ class Escrow:
                 raise Unauthorized("invalid token")
             blocked = self._still_protected(aid)
             if not blocked:
-                email = row["email"]
+                email = holder_email(row)          # v0.8.32: the parent, for a child account
                 gone = {
                     "subjects": [f"device:{r[0]}" for r in self.db.all(
                         "SELECT id FROM devices WHERE account_id=?", (aid,))]
@@ -1163,7 +1227,11 @@ class Escrow:
         # A no-wait emergency in the grace period closes with the grace period.
         expires_at = grace_until if in_grace else unlock_at + self.settings.reveal_window_seconds
         # Partner first (fail closed): if they can't be told, the cooling-off
-        # doesn't start and the 90-day allowance isn't used up.
+        # doesn't start and the 90-day allowance isn't used up. v0.8.32: a child
+        # account's parent is told first, the same way.
+        self._tell_parent(acct, "emergency_requested", "Emergency release requested",
+                          f"An emergency release of Pax was requested on {d['name']}. It unlocks in "
+                          f"{fmt_duration(unlock_at - now)}. Please check in with your child.\n\n{crisis_text()}")
         if acct["partner_email"]:
             self._mail_partner(
                 acct["partner_email"], "emergency_requested",
@@ -1185,11 +1253,12 @@ class Escrow:
         self.db.execute("UPDATE accounts SET last_emergency_at=? WHERE id=?", (now, acct["id"]))
         self._log(acct["id"], "emergency_requested", device_id, reason[:2000])
         # Best-effort; the crisis lines are in the response too.
-        self._mail(
-            acct["email"], "emergency_auto_reply", "Pax emergency release: we got your request",
-            f"Your emergency release for {d['name']} will unlock in {fmt_duration(unlock_at - now)}."
-            f"\n\n{crisis_text()}",
-        )
+        if not is_child(acct):          # v0.8.32: the parent already got the email above
+            self._mail(
+                acct["email"], "emergency_auto_reply", "Pax emergency release: we got your request",
+                f"Your emergency release for {d['name']} will unlock in {fmt_duration(unlock_at - now)}."
+                f"\n\n{crisis_text()}",
+            )
         status = self.device_status(acct, device_id)
         status["crisis_lines"] = CRISIS_LINES
         status["message"] = crisis_text()
