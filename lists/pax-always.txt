@@ -1,0 +1,72 @@
+# Pax always-block list (filter packs, 2026-10-23). Suffix match: each entry blocks
+# itself and every subdomain. Built into pax-block (restricted: never freed by an
+# exception). Hand-picked and approved by the maintainer, so the filter workflow
+# treats these as intentional: the Tranco top-10k gate does not hold them back.
+# Add a name here only for a site that genuinely gives a way round Pax (see
+# docs/FILTER_PACKS.md, "Always-block list"). Everyday sites that are not a way
+# round Pax stay out; people block those for themselves in Blocked Sites.
+#
+# --- AI agents that drive a browser for you (Ruben 2026-10-23)
+fellou.ai
+perplexity.ai
+sigmabrowser.com
+swiftask.ai
+multiplechat.ai
+#
+# --- search engines DNS can't force into safe search (Ruben 2026-10-23)
+brave.com
+kagi.com
+qwant.com
+metager.org
+metager.de
+searx.space
+searxng.org
+startpage.com
+search.yahoo.com
+search.aol.com
+mojeek.com
+you.com
+presearch.com
+yep.com
+dogpile.com
+cn.bing.com
+html.duckduckgo.com
+lite.duckduckgo.com
+noai.duckduckgo.com
+yandex.com
+yandex.ru
+yandex.com.tr
+ya.ru
+yandex.by
+yandex.kz
+yandex.uz
+yandex.az
+yandex.com.am
+yandex.com.ge
+yandex.co.il
+yandex.ee
+yandex.lt
+yandex.lv
+yandex.md
+yandex.tj
+yandex.tm
+yandex.fr
+yandex.de
+yandex.eu
+yandex.fi
+yandex.pl
+yandex.org
+yandex.com.ru
+xn--d1acpjx3f.xn--p1ai
+#
+# --- mesh VPNs with exit nodes (Ruben 2026-10-23; tailscale.com is in pax-allowlist on purpose)
+netbird.io
+#
+# --- notebooks and cloud shells with open internet (Ruben 2026-10-23)
+colab.research.google.com
+kaggle.com
+shell.azure.com
+#
+# --- file hosts and other sites on Ruben's list (Ruben 2026-10-23)
+upbolt.to
+maisonsvictorhugo.paris.fr

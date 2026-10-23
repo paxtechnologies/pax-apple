@@ -206,6 +206,29 @@ once instead of waiting 90 days. The benchmark labeller (`homepage.verdict`) is
 unchanged, the held-out lists stay eval-only, and every gate (UK everyday sites,
 known-good set, Tranco top 10k, proxy no-net-loss, benchmark) still applies.
 
+## Always-block list (2026-10-23)
+
+`lists/pax-always.txt` is a short hand-kept list of sites that give a way round Pax:
+AI agents that drive a browser for you, search engines that DNS can't force into safe
+search, mesh VPNs with exit nodes, notebooks and cloud shells with open internet, and a
+few sites the maintainer picked. It is part of pax-block (restricted, never freed by an
+exception) and travels in filter packs, so a change reaches Macs and the DoH servers with
+no app release.
+
+- **Intentional, not held back**: the Tranco top-10k gate counts a new block covered by
+  this list as confirmed (shown as `intentional` in the run result), because a person
+  picked it. Every other gate still applies: a name on the known-good or everyday UK list
+  still fails the run, so a known-good name has to come off that list first (with a dated
+  note there), as perplexity.ai, brave.com, yandex.com, yandex.ru and ya.ru did.
+- The allowlist still wins (tailscale.com stays open), and SafeSearch rewrites change only
+  with an app release.
+- Everyday sites that are not a way round Pax (browsers' own sites, package and software
+  sites, stores, antivirus vendors) stay off it; people block those for themselves in
+  Blocked Sites.
+- UT1's web site went into maintenance on 2026-10-22 (every download 404s); a failed UT1
+  download now tries the maintainer's FTP mirror with the same files
+  (`ftp.ut-capitole.fr/pub/reseau/cache/squidguard_contrib/`).
+
 ## Running it by hand
 
 ```sh
