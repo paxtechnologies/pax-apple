@@ -63,10 +63,20 @@ class Budget:
             return True
 
 
+UT1_HTTP = "https://dsi.ut-capitole.fr/blacklists/download/"
+UT1_MIRROR = "ftp://ftp.ut-capitole.fr/pub/reseau/cache/squidguard_contrib/"
+
+
 def fetch(url: str, timeout: int = 180, limit: int | None = None) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed URLs)
-        return r.read(limit) if limit else r.read()
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed URLs)
+            return r.read(limit) if limit else r.read()
+    except Exception:  # noqa: BLE001 - 2026-10-23: UT1's web site is down; its FTP mirror has the same files
+        if not url.startswith(UT1_HTTP):
+            raise
+        with urllib.request.urlopen(UT1_MIRROR + url[len(UT1_HTTP):], timeout=timeout) as r:  # noqa: S310
+            return r.read(limit) if limit else r.read()
 
 
 def gz_bytes(lines, header: str = "") -> bytes:

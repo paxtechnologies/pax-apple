@@ -238,11 +238,18 @@ def gate_top10k(new, last, top10k: list[str], state: State, checker) -> dict:
     if len(new_blocks) > MAX_NEW_TOP10K:
         res["fail"] = f"{len(new_blocks)} new blocks in the Tranco top 10k (more than {MAX_NEW_TOP10K})"
         return res
-    todo = [d for d in new_blocks if state.recent_verdict(d) not in ("adult", "proxy")]
+    # 2026-10-23: names covered by lists/pax-always.txt were picked by hand and approved;
+    # they are intentional, so they count as confirmed (never held back).
+    always = build.always_list()
+    intentional = [d for d in new_blocks if build.allowed(d, always)]
+    res["intentional"] = len(intentional)
+    res["confirmed"] += intentional
+    new_blocks_left = [d for d in new_blocks if d not in set(intentional)]
+    todo = [d for d in new_blocks_left if state.recent_verdict(d) not in ("adult", "proxy")]
     verdicts = checker(todo) if todo else {}
     for d, v in verdicts.items():
         state.record(d, v)
-    for d in new_blocks:
+    for d in new_blocks_left:
         v = verdicts.get(d) or state.recent_verdict(d)
         if v in ("adult", "proxy"):
             res["confirmed"].append(d)

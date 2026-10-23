@@ -8,7 +8,7 @@ filters.json):
   pax-bypass  ~15.6k DoH/VPN/Tor/proxy names (HaGeZi). An exception can free one.
   pax-nrd     newly registered domains matching the name rule (daily). Restricted.
   pax-allow   tailscale.com, character.ai: never blocked by a local list
-  safesearch  385 exact-host rewrites (Google, YouTube Strict, Bing, DuckDuckGo)
+  safesearch  388 exact-host rewrites (Google, YouTube Strict, Bing, DuckDuckGo, Ecosia)
 
 "Restricted" lists (v0.8.1) are never freed by a user's exception: the
 forwarder blocks their hits even when the name is on the exception list, and

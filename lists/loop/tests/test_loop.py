@@ -662,3 +662,28 @@ def test_round6_policy_recheck_of_old_other_verdicts(tmp_path, monkeypatch):
     assert st.recent_verdict("bakery.example") == "other"
     assert st.recent_verdict("unblockedgames.example") == "other"
     assert st.recent_verdict("freevpn.example") == "down"
+
+
+def test_always_list_is_intentional_in_top10k_gate(tmp_path):
+    """2026-10-23: lists/pax-always.txt names are hand-picked, so a new top-10k block they
+    cover counts as confirmed without a homepage check and is never held back."""
+    always = build.always_list()
+    assert "perplexity.ai" in always and "yandex.com" in always
+    assert "tailscale.com" not in always          # allowlisted on purpose
+    for line in (build.HERE / "pax-always.txt").read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            assert build.clean_name(line) == line.strip()
+    st = loop.State(tmp_path)
+    top = ["perplexity.ai", "www.kagi.com", "site2.example"]
+    new = FakeDecider(top, entries={"perplexity.ai": "perplexity.ai", "www.kagi.com": "kagi.com"})
+    asked = []
+    res = loop.gate_top10k(new, FakeDecider([]), top, st, lambda ns: asked.extend(ns) or {x: "other" for x in ns})
+    assert asked == ["site2.example"]
+    assert set(res["confirmed"]) == {"perplexity.ai", "www.kagi.com"} and res["intentional"] == 2
+    assert res["hold"] == {"site2.example"} and not res["fail"]
+
+
+def test_ut1_mirror_address():
+    assert build.mirror_of("https://dsi.ut-capitole.fr/blacklists/download/x.tar.gz") == \
+        "ftp://ftp.ut-capitole.fr/pub/reseau/cache/squidguard_contrib/x.tar.gz"
+    assert build.mirror_of("https://example.com/x.tar.gz") is None

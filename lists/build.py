@@ -109,10 +109,32 @@ def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
+# 2026-10-23: the UT1 web site went into maintenance (every download 404s); the same
+# files are on the maintainer's FTP mirror, so a failed UT1 download tries it next.
+UT1_HTTP = "https://dsi.ut-capitole.fr/blacklists/download/"
+UT1_MIRROR = "ftp://ftp.ut-capitole.fr/pub/reseau/cache/squidguard_contrib/"
+
+
+def mirror_of(url: str) -> str | None:
+    """The UT1 FTP mirror address of a UT1 download, else None."""
+    for prefix in (UT1_HTTP, UT1_HTTP.replace("https://", "http://")):
+        if url.startswith(prefix):
+            return UT1_MIRROR + url[len(prefix):]
+    return None
+
+
 def fetch(url: str, timeout: int = 120) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "pax-lists-build/0.8"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed URLs)
-        return r.read()
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "pax-lists-build/0.8"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed URLs)
+            return r.read()
+    except Exception as exc:  # noqa: BLE001 - try the mirror, else re-raise
+        alt = mirror_of(url)
+        if not alt:
+            raise
+        log(f"download failed ({type(exc).__name__}); trying the UT1 FTP mirror")
+        with urllib.request.urlopen(alt, timeout=timeout) as r:  # noqa: S310 (fixed URL)
+            return r.read()
 
 
 def clean_name(raw: str) -> str | None:
@@ -142,6 +164,11 @@ def parse_names(text: str, allow_single_label: bool = True) -> set[str]:
         if n and (allow_single_label or "." in n):
             out.add(n)
     return out
+
+
+def always_list() -> set[str]:
+    """lists/pax-always.txt: hand-picked always-block names (part of pax-block)."""
+    return set(read_local_list("pax-always.txt"))
 
 
 def read_local_list(name: str) -> list[str]:
@@ -208,11 +235,13 @@ def build_block(sources_dir: Path | None, extra_block=(), extra_bypass=(),
     stats["list_c"] = {"raw": raw_third, "without_blogspot": len(third)}
     union |= third
     hand, zones = hand_list(), read_local_list("pax-zones.txt")
+    always = read_local_list("pax-always.txt")      # 2026-10-23: hand-picked always-block list
+    stats["pax_always"] = len(always)
     extra = read_verified("pax-block-extra.txt.gz")
     stats["verified_block_extra"] = len(extra)
     loop_block = {n for n in (clean_name(x) for x in extra_block) if n}
     stats["loop_block_extra"] = len(loop_block)
-    union |= set(hand) | set(zones) | set(extra) | loop_block
+    union |= set(hand) | set(zones) | set(always) | set(extra) | loop_block
     exclude, allow = set(read_local_list("pax-exclude.txt")), set(read_local_list("pax-allowlist.txt"))
     held = {n for n in (clean_name(x) for x in remove) if n}
     if held:      # an entry held back takes its subdomain entries with it

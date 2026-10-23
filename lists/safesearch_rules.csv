@@ -384,3 +384,6 @@ bing.com,strict.bing.com,Bing SafeSearch strict
 www.bing.com,strict.bing.com,Bing SafeSearch strict
 duckduckgo.com,safe.duckduckgo.com,DuckDuckGo safe search strict
 www.duckduckgo.com,safe.duckduckgo.com,DuckDuckGo safe search strict
+edgeservices.bing.com,strict.bing.com,Bing SafeSearch strict (Edge sidebar search)
+start.duckduckgo.com,safe.duckduckgo.com,DuckDuckGo safe search strict
+www.ecosia.org,strict-safe-search.ecosia.org,Ecosia strict safe search

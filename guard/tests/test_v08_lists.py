@@ -349,6 +349,6 @@ def test_real_bundled_lists_are_complete_and_as_briefed():
                   "tailscale.com", "character.ai"):
         assert never not in names, never
     assert fl.parse_domains(data["pax-allow"].decode()) == ["tailscale.com", "character.ai"]
-    assert len(fl.parse_safesearch(data["safesearch"].decode())) == 385
+    assert len(fl.parse_safesearch(data["safesearch"].decode())) == 388
     for part in (GUARD / "filters").iterdir():
         assert part.stat().st_size < 90_000, part.name       # contents-API push limit

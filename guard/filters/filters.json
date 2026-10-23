@@ -46,14 +46,14 @@
    "sha256": "70e28af02e4887ac08367dd0d57c38657a8f1a42856fd5a50f3def6c79072ddb"
   },
   "safesearch": {
-   "bytes": 30600,
-   "entries": 385,
+   "bytes": 30828,
+   "entries": 388,
    "file": "safesearch_rules.csv",
    "format": "csv",
    "kind": "safesearch",
    "max_drop": 0.1,
    "min_entries": 300,
-   "sha256": "9f6a68254f9b9b5db77d2713d3511546ff643bae1d126ddaad1b9bf1e25d44a9"
+   "sha256": "fee2c154e77c2676c8cc3fb86faa3b8627360ab1080267a877e43f941c121816"
   }
  },
  "schema": "pax.lists.v1",
