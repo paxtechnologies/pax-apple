@@ -1,4 +1,4 @@
-# Filter workflow: 2026.1022.0322 (refused)
+# Filter workflow: 2026.1023.0323 (refused)
 
 Built against the last published lists 2026.1021.0322.
 
