@@ -16,3 +16,4 @@ version,result,last_version,pax_block,pax_bypass,pax_nrd,added_restricted,added_
 2026.1022.0322,refused,2026.1021.0322,,,,,,,,,,,,,,,,,,,,,,the run stopped: HTTPError: HTTP Error 404: Not Found,,,,
 2026.1023.0323,refused,2026.1021.0322,,,,,,,,,,,,,,,,,,,,,,the run stopped: HTTPError: HTTP Error 404: Not Found,,,,
 2026.1023.2232,published,2026.1021.0322,1351034,18401,1287,107,51,0,0,11,1,400,298,337,337,69,63,60,60,250,6,6,784,,65,56,49,49
+2026.1023.2259,published,2026.1023.2232,1351106,18414,1287,71,13,0,0,1,0,400,304,336,336,69,63,60,60,249,1,1,785,,67,58,50,50
