@@ -278,7 +278,7 @@ struct BlockedSitesView: View {
         VStack(alignment: .leading, spacing: 10) {
             SectionTitle("Blocked (\(blocklist.blocked.count))")
             if blocklist.blocked.isEmpty {
-                Text("No sites yet. Restricted content is already blocked; add anything else that pulls you in.")
+                Text("No sites yet. Explicit content is already blocked; add anything else that pulls you in.")
                     .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
             } else {
                 VStack(spacing: 0) {
@@ -310,7 +310,7 @@ struct BlockedSitesView: View {
             SectionTitle("Exceptions")
             Text("If Pax blocks a site you need, you can ask for an exception. Like a removal, "
                  + "it takes \(blocklist.delayText). Removing an exception is instant. Some categories, "
-                 + "such as restricted content, media converters and remote AI browsers, can't be excepted.")
+                 + "such as explicit content, media converters and remote AI browsers, can't be excepted.")
                 .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {

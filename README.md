@@ -2,11 +2,13 @@
 
 **Less scrolling. More living.**
 
+Free, open-source explicit content blocker for Mac, iPhone and iPad.
+
 **Requirements:** a Mac with **macOS 12 Monterey or later**, Intel or Apple silicon (the iPhone
 or iPad is set up from that Mac). Hardware testing on a real Monterey Mac is still pending; see
 [docs/MONTEREY.md](docs/MONTEREY.md).
 
-Pax (Latin for *peace*) is a free, open-source (GPL-3.0) content blocker for restricted content on
+Pax (Latin for *peace*) is a free, open-source (GPL-3.0) **explicit content blocker** for
 **iPhone and iPad**, set up from a Mac, and since v0.4 on **the Mac itself** ([Pax for Mac](#pax-for-mac)). It's built for people who choose this for themselves.
 Turning it off is never impossible. It just takes a **turn-off wait** you picked in advance: if you
 ever decide to switch Pax off, you ask first, then wait that long before it turns off, and you can
@@ -15,7 +17,7 @@ wait applies before a blocked site or app is unblocked.)
 
 *Decentralised. Open source. Free for everyone. Power at the local level.* (Pax Peace: [paxpeace.com](https://paxpeace.com))
 
-Positioning: Pax does **restricted-content filtering** and nothing else. Time limits and focus tools
+Positioning: Pax is an **explicit content blocker** and nothing else. Time limits and focus tools
 are on the [roadmap](ROADMAP.md). Pax is free. We may add an optional donation later, but there are
 no payments in this code.
 
@@ -573,7 +575,7 @@ the DMG and the update zip. Clean set-up still needs Apple Configurator's `cfgut
 
 ## Pax for Mac
 
-"Protect this Mac" makes restricted sites effectively unreachable on the Mac you run Pax on, with the same
+"Protect this Mac" makes explicit sites effectively unreachable on the Mac you run Pax on, with the same
 unlock model as the iPhone: an escrowed password, your turn-off wait, partner emails, the first-hour
 grace period and the emergency release.
 
@@ -1047,7 +1049,7 @@ There's no separate payload for it.
 
 DNS resolver (default since v0.2): **CleanBrowsing Family Filter**,
 `https://doh.cleanbrowsing.org/doh/family-filter/` (checked on cleanbrowsing.org/filters on
-2026-10-12). It blocks restricted content, proxy/VPN domains and mixed-content sites such as Reddit
+2026-10-12). It blocks explicit content, proxy/VPN domains and mixed-content sites such as Reddit
 (fully blocked), and forces SafeSearch on Google, Bing and YouTube. `--filter core` uses CleanBrowsing's
 narrower filter (its address is kept encoded in `common/pax_restricted.py`), which leaves Reddit and VPN/proxy domains reachable. `--resolver-url`
 uses a self-hosted Pax DNS or any https DoH resolver instead, and `--user-token` uses your own

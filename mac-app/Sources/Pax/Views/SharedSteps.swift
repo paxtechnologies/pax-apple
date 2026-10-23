@@ -35,7 +35,7 @@ struct ChooseBlocksStep: View {
             StepHeader(eyebrow: "", title: "Choose what to block",
                        subtitle: "Sensible choices are already made. Change anything you like.")
             Card {
-                ToggleRow(title: "Restricted content", detail: "Sites Pax always blocks, in every browser and app.",
+                ToggleRow(title: "Explicit content", detail: "Sites Pax always blocks, in every browser and app.",
                           isOn: .constant(true), locked: true)
                 Divider().overlay(Theme.border)
                 if platform == .mac {
@@ -101,9 +101,9 @@ struct ChooseBlocksStep: View {
             }
             DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
                 Picker("Filter strength", selection: $filter) {
-                    Text("Family (recommended): restricted content, proxies and VPN sites, Reddit; safe search on")
+                    Text("Family (recommended): explicit content, proxies and VPN sites, Reddit; safe search on")
                         .tag(DNSFilter.family)
-                    Text("Core: restricted content only; Reddit and VPN sites stay reachable")
+                    Text("Core: explicit content only; Reddit and VPN sites stay reachable")
                         .tag(DNSFilter.core)
                 }
                 .pickerStyle(.radioGroup)
