@@ -32,6 +32,7 @@ from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
 import make_profile as mp  # noqa: E402
 import seed  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 PARTNER = "friend@example.org"
 
@@ -76,7 +77,7 @@ def test_iphone_profile_pairing_change_and_unlock(server):
     assert strict["AllowPairing"] is False
 
     # ---- 3. the server: account, witness partner, device ----------------------
-    r = client.post("/v1/accounts", json={"email": "alex@example.org"})
+    r = verified_signup(client, "alex@example.org")
     h = {"Authorization": f"Bearer {r.json()['token']}"}
     assert client.put("/v1/accounts/me/partner", headers=h, json={"email": PARTNER}).status_code == 200
     r = client.post("/v1/devices", headers=h, json={

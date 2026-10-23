@@ -26,6 +26,7 @@ from pax_server.notify import MemoryEmailSender  # noqa: E402
 
 import dns_forwarder as dnsf  # noqa: E402  (guard/, on sys.path via doh)
 import filter_lists as fl  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 T0 = 1_800_000_000
 REPLICA_KEY = "test-replica-key-" + "x" * 40
@@ -105,7 +106,7 @@ def env(tmp_path, filterset):
     e = E()
     e.client, e.clock, e.mail, e.settings, e.doh, e.up, e.yt = TestClient(app), clock, mail, settings, doh, up, yt
     e.app = app
-    r = e.client.post("/v1/accounts", json={"email": "user@example.com"})
+    r = verified_signup(e.client, "user@example.com")
     e.h = {"Authorization": f"Bearer {r.json()['token']}"}
     e.token = e.client.get("/v1/dns", headers=e.h).json()["token"]
     return e

@@ -53,9 +53,8 @@ public struct EscrowClient: Sendable {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    public func registerAccount(email: String) async throws -> Account {
-        try await send("POST", "v1/accounts", body: ["email": email])
-    }
+    // v0.8.32: no registerAccount. POST /v1/accounts no longer makes accounts (410
+    // app_update_required); every account is made by an emailed code (EmailCode.swift).
 
     public func setWait(days: Int) async throws {
         let _: [String: AnyDecodable] = try await send("PUT", "v1/accounts/me/wait", body: ["wait_days": days])

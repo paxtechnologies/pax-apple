@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.31
+# Pax Peace (Apple), v0.8.32
 
 **Less scrolling. More living.**
 
@@ -166,7 +166,8 @@ decrease, which itself waits and tells the partner).
 | `PAX_INTERNAL_KEY` | (empty = off) | shared secret for pax-dns's `/internal/v1/dns/changes` feed |
 
 API (all under `/v1`, Bearer token except the first three): `GET health`, `GET crisis-lines`,
-`POST accounts` (limited per client address, v0.8.5), `GET accounts/me`, `PUT accounts/me/wait {wait_days|wait_hours}`,
+`POST accounts` (v0.8.32: makes no accounts; 410 `app_update_required` / PAX-ESCROW-020 for a new address,
+409 `sign_in` for an existing one; limited per client address), `GET accounts/me`, `PUT accounts/me/wait {wait_days|wait_hours}`,
 `PUT accounts/me/partner {email|null}`, `POST devices`, `GET devices`, `GET devices/{id}`,
 `POST devices/{id}/removal-request`, `POST devices/{id}/removal-request/cancel`,
 `POST devices/{id}/removal-request/confirm {confirm:true}`, `POST devices/{id}/emergency {reason}`.
@@ -192,7 +193,8 @@ tries in an hour. Kept by design: the hashed hardware code (`trial_hardware`, no
 support codes (`support_nonces`, a code works once); `mail_log`/`signup_attempts` hashes go within two days.
 The DNS feed carries the account once with `"deleted": true` so both DNS servers drop it at their next
 poll; that `dns_changes` row (random ID, sequence number, time) is pruned after an hour.
-One-tap accounts (branch, for the iPhone app 1.2; not released yet). Every account has a verified email:
+Verified-email accounts (v0.8.31 for the iPhone app 1.2; v0.8.32 also Pax for Mac, and the only way to make an
+account). Every new account has a verified email:
 `POST accounts/email/start {email}` (no token; the same per-client sign-up limit as `POST accounts`) always
 answers 202 `{sent: true}` and emails a 6-digit code (15 minutes, 5 tries, 5 codes an hour per address), new
 address or not; `POST accounts/email/verify {email, code, label?}` answers 201 `{account_id, token, created:

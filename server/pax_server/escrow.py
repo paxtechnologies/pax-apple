@@ -107,6 +107,17 @@ class Gone(EscrowError):
     status, code = 410, "gone"
 
 
+class AppUpdateRequired(EscrowError):
+    """v0.8.32: POST /v1/accounts (account without a verified email) is retired for
+    new accounts; the app must use /v1/accounts/email/*. Support code PAX-ESCROW-020."""
+    status, code = 410, "app_update_required"
+
+
+APP_UPDATE_REQUIRED_MESSAGE = (
+    "This version of Pax can't make new accounts any more. Download the latest Pax from "
+    "paxpeace.com (it checks your email with a 6-digit code), then set up again.")
+
+
 class RateLimited(EscrowError):
     status, code = 429, "rate_limited"
 
@@ -278,24 +289,13 @@ class Escrow:
         return "someone using Pax" if mid else cls.ANONYMOUS_HOLDER   # mid-sentence
 
     # --------------------------------------------------------------- accounts
-    def register_account(self, email: str) -> tuple[str, str]:
+    def refuse_unverified_signup(self, email: str) -> None:
+        """v0.8.32: POST /v1/accounts no longer makes accounts. Nothing here writes an
+        account row: the only creator is ListSync.email_verify (a code to the email)."""
         email = email.strip().lower()
         if self.db.one("SELECT 1 FROM accounts WHERE email=?", (email,)):
             raise Conflict("an account with this email already exists", sign_in=True)
-        account_id, token = _id(), new_token()
-        self.db.execute(
-            "INSERT INTO accounts(id, email, token_hash, created_at, wait_seconds) "
-            "VALUES (?,?,?,?,?)",
-            (account_id, email, hash_token(token), self.clock.now(),
-             self.settings.default_wait_seconds),
-        )
-        self._log(account_id, "account_registered")
-        # v0.8.5: best-effort. The account exists either way (201); a failed or
-        # dropped welcome (daily budget, one per address per day) changes nothing.
-        if not self._mail(email, "welcome", "Welcome to Pax",
-                          "Your Pax account is set up. Keep your Pax app sign-in safe."):
-            self._log(account_id, "welcome_not_sent")
-        return account_id, token
+        raise AppUpdateRequired(APP_UPDATE_REQUIRED_MESSAGE)
 
     def authenticate(self, token: Optional[str]):
         if not token:

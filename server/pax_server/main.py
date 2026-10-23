@@ -442,15 +442,17 @@ def create_app(settings: Optional[Settings] = None, clock: Optional[Clock] = Non
     @app.post("/v1/accounts", status_code=201)
     def register_account(body: AccountIn, request: Request,
                          x_forwarded_for: Optional[str] = Header(None)):
-        """No token needed, so v0.8.5 limits it per client IP (X-Forwarded-For
-        only from the local reverse proxy). The welcome email is best-effort:
-        the account is created (201) even when it isn't sent."""
+        """Retired for new accounts in v0.8.32: every account is made by an emailed
+        code (POST /v1/accounts/email/start + /verify), so its email is verified.
+        Still limited per client IP (v0.8.5). An address that already has an account
+        still answers 409 sign_in (nothing made), so a Mac on 0.8.31 or older can sign
+        in to an existing account with a code; anything else is 410
+        app_update_required (PAX-ESCROW-020) and nothing is made."""
         ip = client_ip(request.client.host if request.client else None, x_forwarded_for)
         why = escrow.limits.check_signup(ip)
         if why:
             raise RateLimited(why)
-        account_id, token = escrow.register_account(str(body.email))
-        return {"account_id": account_id, "token": token}
+        escrow.refuse_unverified_signup(str(body.email))
 
     @app.get("/v1/accounts/me")
     def me(acct=Depends(current_account)):

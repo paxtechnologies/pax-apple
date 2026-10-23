@@ -346,6 +346,12 @@ CODES: list[PaxCode] = [
             "Wait a little, then try again.",
             "v0.8.15: pax-guard allows 3 codes a minute; the server allows 10 refused codes an hour per "
             "device (429 support_rate_limited)."),
+    # v0.8.32: verified-email accounts (docs/ONETAP_ACCOUNTS.md).
+    PaxCode("PAX-ESCROW-020", "This version of Pax can't make new accounts any more.",
+            "Download the latest Pax from paxpeace.com, then set up again. It checks your email with a 6-digit code.",
+            "v0.8.32: POST /v1/accounts refuses new accounts (410 app_update_required); accounts are made only by "
+            "POST /v1/accounts/email/start + /verify, so every email is verified. An address that already has an "
+            "account still gets 409 sign_in. Seen by Pax for Mac 0.8.31 or older (shown there as PAX-ESCROW-005)."),
     # ---------------------------------------------------------------- PROFILE
     PaxCode("PAX-PROFILE-001", "Pax couldn't prepare your protection settings.",
             "Try again. If it repeats, copy the details and send them to us.",
@@ -440,6 +446,8 @@ def escrow_code(status: int, error: str = "", message: str = "") -> str:
         return "PAX-DNS-016"
     if error == "partner_unreachable":
         return "PAX-ESCROW-010"
+    if error == "app_update_required":                # v0.8.32
+        return "PAX-ESCROW-020"
     if error in SUPPORT_ERRORS:                       # v0.8.15 verified support release
         return SUPPORT_ERRORS[error]
     if status == 401:

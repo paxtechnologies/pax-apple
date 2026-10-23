@@ -179,9 +179,10 @@ final class MacProtectModel: ObservableObject {
 
     // MARK: Set-up
 
-    func registerAccountIfNeeded() async throws {
-        // A token saved for a server whose database was reset no longer works:
-        // forget it and register again (common with a local test server).
+    /// True when this Mac holds a working account token. v0.8.32: nothing here makes an
+    /// account any more (that needs the emailed code on the turn-off wait step), so a token
+    /// the server no longer knows (e.g. a reset test server) sends the user back there.
+    func accountStillValid() async throws -> Bool {
         if setup.hasAccount {
             do {
                 _ = try await escrow.accountSummary()
@@ -190,10 +191,7 @@ final class MacProtectModel: ObservableObject {
                 setup.coordinator.escrow.token = nil
             }
         }
-        if !setup.hasAccount {
-            try await setup.coordinator.registerAccount(setup.config)
-            if let token = setup.coordinator.escrow.token { try? setup.tokenStore.save(token) }
-        }
+        return setup.hasAccount
     }
 
     /// Called when the set-up screen appears: drops a saved token the server no
@@ -259,7 +257,15 @@ final class MacProtectModel: ObservableObject {
         perform(retry: { [weak self] in self?.phase = .intro }) { [self] in
             do {
                 // Local escrow needs no server account (v0.8.0); the server path does.
-                if !local { try await registerAccountIfNeeded() }
+                if !local {
+                    let ok = try await accountStillValid()
+                    if !ok {
+                        setup.emailCode.problem = "Pax needs to check your email again. Press Continue for a new code."
+                        phase = .intro
+                        step = 1
+                        return
+                    }
+                }
                 let env = ProcessInfo.processInfo.environment
                 let fm = FileManager.default
                 let dir = fm.temporaryDirectory.appendingPathComponent("pax-mac-\(UUID().uuidString)", isDirectory: true)
@@ -680,20 +686,39 @@ final class MacProtectModel: ObservableObject {
     }
 
     /// v0.8.5: partner emails through a Pax server's /v1/notify relay, by default
-    /// the server this app uses, with this Mac's account on it (registered with
-    /// `ownerEmail` the first time; the server only relays, it keeps no key).
+    /// the server this app uses, with this Mac's account on it (the server only relays,
+    /// it keeps no key). v0.8.32: the first time, that account comes from a 6-digit code
+    /// emailed to `ownerEmail` (the sheet shows the code field); `done` runs once saved.
     func saveRelayEmailSettings(url typed: String, token typedToken: String, ownerEmail: String,
-                                partner: String?) {
+                                partner: String?, done: @escaping () -> Void = {}) {
         perform { [self] in
             let appServer = escrow.baseURL
             let relay = try PartnerRelay.url(typed: typed, appServer: appServer).get()
             var token = typedToken.trimmingCharacters(in: .whitespacesAndNewlines)
             if PartnerRelay.usesAppAccount(relay: relay, typedToken: token, appServer: appServer) {
-                try await ensureRelayAccount(email: ownerEmail)
+                guard try await ensureRelayAccount(email: ownerEmail) else { return }
                 token = setup.coordinator.escrow.token ?? ""
             }
             try await applyEmailSettings(PartnerRelay.transport(relay: relay, token: token),
                                          ownerEmail: ownerEmail.isEmpty ? nil : ownerEmail, partner: partner)
+            done()
+        }
+    }
+
+    /// v0.8.32: the code step for the relay account (Settings › Accountability partner email).
+    @Published var relayCode = EmailCodeState()
+
+    func resendRelayCode(email: String) {
+        guard !busy, relayCode.secondsUntilResend(now: Date()) == 0 else { return }
+        perform { [self] in try await sendRelayCode(email: email) }
+    }
+
+    private func sendRelayCode(email: String) async throws {
+        do {
+            try await escrow.startEmailCode(email: email)
+            relayCode.didSend(to: email, at: Date())
+        } catch let error where EmailCodeCopy.message(for: error, checking: false) != nil {
+            relayCode.problem = EmailCodeCopy.message(for: error, checking: false)
         }
     }
 
@@ -706,22 +731,36 @@ final class MacProtectModel: ObservableObject {
     }
 
     /// An account on the app's server for the relay only: no wait, no partner and
-    /// no device there (the Mac's key stays on the Mac).
-    private func ensureRelayAccount(email: String) async throws {
-        if setup.hasAccount {
-            do {
-                _ = try await escrow.accountSummary()
-                return
-            } catch let e as EscrowClient.APIError where e.status == 401 {
-                setup.tokenStore.clear()
-                setup.coordinator.escrow.token = nil
-            }
-        }
+    /// no device there (the Mac's key stays on the Mac). v0.8.32: made (or signed in to)
+    /// only with the code emailed to `email`. false = a code was just sent, or the typed
+    /// code needs another look; the sheet stays open with the code field.
+    private func ensureRelayAccount(email: String) async throws -> Bool {
+        if try await accountStillValid() { return true }
         let address = email.isEmpty ? setup.config.email : email
-        let account = try await escrow.registerAccount(email: address)
-        setup.coordinator.escrow.token = account.token
-        try? setup.tokenStore.save(account.token)
-        objectWillChange.send()
+        guard EmailCodeState.looksLikeEmail(address) else {
+            relayCode.problem = EmailCodeCopy.enterEmail
+            return false
+        }
+        if !relayCode.awaitingCode(for: address) {
+            try await sendRelayCode(email: address)
+            return false
+        }
+        guard relayCode.codeComplete else {
+            relayCode.problem = EmailCodeCopy.enterCode
+            return false
+        }
+        do {
+            let account = try await escrow.verifyEmailCode(email: address, code: relayCode.code,
+                                                           label: ProcessInfo.processInfo.hostName)
+            setup.coordinator.escrow.token = account.token
+            try? setup.tokenStore.save(account.token)
+            relayCode.finish()
+            objectWillChange.send()
+            return true
+        } catch let error where EmailCodeCopy.message(for: error, checking: true) != nil {
+            relayCode.problem = EmailCodeCopy.message(for: error, checking: true)
+            return false
+        }
     }
 
     func removePax() {

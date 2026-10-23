@@ -121,6 +121,7 @@ from it by `python3 common/gen_error_codes.py` (CI runs it with `--check`).
 | `PAX-ESCROW-017` | Verified support release is off on this device. | Nothing was released. Your usual turn-off wait still works from Request a change. | v0.8.15: the device's "Allow verified support release" is off (devices set up before 0.8.15 start off; turning it on waits the full wait). Every code is refused. Server: 403 support_release_off. |
 | `PAX-ESCROW-018` | Your partner couldn't be told, so nothing was released. | Check your internet connection and try the same code again shortly. | v0.8.15: the partner email for a support release failed. Not queued (unlike PAX-ESCROW-010) and the nonce isn't used up; the code works again until it expires. Server: 503 support_partner_unreachable. |
 | `PAX-ESCROW-019` | Too many support code tries in a short time. | Wait a little, then try again. | v0.8.15: pax-guard allows 3 codes a minute; the server allows 10 refused codes an hour per device (429 support_rate_limited). |
+| `PAX-ESCROW-020` | This version of Pax can't make new accounts any more. | Download the latest Pax from paxpeace.com, then set up again. It checks your email with a 6-digit code. | v0.8.32: POST /v1/accounts refuses new accounts (410 app_update_required); accounts are made only by POST /v1/accounts/email/start + /verify, so every email is verified. An address that already has an account still gets 409 sign_in. Seen by Pax for Mac 0.8.31 or older (shown there as PAX-ESCROW-005). |
 
 ## PROFILE: Protection settings (profiles)
 

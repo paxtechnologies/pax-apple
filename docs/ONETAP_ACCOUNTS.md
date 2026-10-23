@@ -1,13 +1,14 @@
-# One-tap accounts: verified email, first name, escrow replace (server, for iPhone app 1.2)
+# One-tap accounts: verified email, first name, escrow replace (server, for iPhone app 1.2 and Pax for Mac)
 
-Status: on branch `server/private-accounts`, not released. It will ship as part of a later server release.
+Status: released in server 0.8.31 (22 Oct 2026) for the iPhone app 1.2. 0.8.32 moves Pax for Mac to the same
+two calls and retires account creation on `POST /v1/accounts` (see "The Mac app" below).
 
 ## The rule: every account has a verified email
 
 An account's sign-in token lives in the device's Keychain. If that were the only way in, a lost, wiped or
 replaced phone would mean a lost account: no sign-in on the new phone, and support could not restore it.
-So every Pax account has an email, and every account the iPhone app makes has proved that email with a
-one-time code before it exists. There is no email-less ("private") account and no `POST /v1/accounts/device`.
+So every Pax account has an email, and since 0.8.32 every new account (iPhone app or Mac app) has proved
+that email with a one-time code before it exists. There is no email-less ("private") account and no `POST /v1/accounts/device`.
 `accounts.email` stays `TEXT NOT NULL UNIQUE`.
 
 The iPhone app 1.2 keeps one-tap set-up quick: Welcome → email → 6-digit code → Apple's Screen Time sheet →
@@ -128,17 +129,45 @@ PUT /v1/devices/{id}/escrow      {"removal_password": "paxios1.…"}      (20–
 
 The app can tell a server without these routes from FastAPI's plain `404 {"detail": "Not Found"}` (no Pax
 `error` code); Pax's own 404s always carry `{"error": "not_found", "message": …, "pax_code": …}`. On a
-0.8.30 server the app should make the account with `POST /v1/accounts {email}` and, when that answers 409
-`sign_in: true`, sign in with `POST /v1/accounts/signin/start` + `POST /v1/accounts/signin`; without the
-escrow route it can fall back to a second device record for the passcode.
+0.8.30 server the app can't make a verified account; Pax for Mac 0.8.32 says "This Pax server can't check
+email addresses yet. It needs Pax server 0.8.31 or later." (only self-hosted servers can be that old).
 
-## The Mac app (unchanged)
+## The Mac app (0.8.32)
 
-`POST /v1/accounts {email}` (201 `{account_id, token}`, welcome email; 409 `sign_in: true` if the address has
-an account), `POST /v1/accounts/signin/start` and `POST /v1/accounts/signin` work exactly as before. An
-account made by `POST /v1/accounts` has an email but hasn't proved it (`email_verified: false`) until a
-code to it is used once (any sign-in by code sets `email_verified_at`). Moving the Mac app to
-`/v1/accounts/email/*` and then retiring unverified creation is a follow-up for a Mac release.
+Pax for Mac 0.8.32 makes (or joins) the account with the same two calls, on the turn-off wait step of both
+set-ups (this Mac, and an iPhone or iPad from this Mac) and, on a Mac with its own key, in Settings ›
+Accountability partner email the first time partner emails go through Pax's server:
+
+1. One email field. The button reads **Send code**; it calls `POST /v1/accounts/email/start`.
+2. The code field appears under it on the same step ("We emailed a 6-digit code to …. It works for 15
+   minutes."). Pasting `123 456`, `123-456` or the whole email works (only the 6 digits are kept). Return or
+   **Continue** calls `POST /v1/accounts/email/verify` (label = the Mac's name). 201: a new account; 200: this
+   Mac signs in to the account the address already has (one shared list), with no extra screen.
+3. **Resend code** waits 30 seconds between sends and, after 5 codes in an hour (the server's limit), until
+   the first is an hour old. Editing the email hides the code field; the next press sends a new code.
+4. Plain lines under the field: a wrong or expired code ("That code isn't right or has expired. Check the
+   newest email from Pax, or send a new code."), too many codes, an address the server can't use, or a server
+   older than 0.8.31. Other failures use the usual error card with its support code.
+
+A Mac that already holds an account token is untouched (no email step). If the saved token stops working
+(a reset test server) the Mac no longer re-registers silently: Protect this Mac goes back to the wait step
+for a new code.
+
+### `POST /v1/accounts` is retired for new accounts (0.8.32)
+
+* New address: **410** `{"error": "app_update_required", "message": "This version of Pax can't make new
+  accounts any more. Download the latest Pax from paxpeace.com (it checks your email with a 6-digit code),
+  then set up again.", "pax_code": "PAX-ESCROW-020"}`. Nothing is written and no email is sent.
+* An address that already has an account: still **409** `sign_in: true` (nothing made), so a Mac on 0.8.31 or
+  older can still join an existing account with `POST /v1/accounts/signin/start` + `/signin`.
+* Still limited per client address (the shared sign-up bucket), as before.
+* Pax for Mac 0.8.31 and older shows the 410 by status only: **PAX-ESCROW-005** "Pax's server said no to that
+  request." (the message above is in *Copy details*). iPhone app 1.1 shows the message text. Support: download
+  the latest Pax from paxpeace.com and set up again.
+* The only code that writes an `accounts` row is `ListSync.email_verify` (a code to the email; sets
+  `email_verified_at`); `server/tests/test_v0832_verified_only.py` checks this from the source.
+* Accounts made before 0.8.32 without a proved email are grandfathered: they keep working
+  (`email_verified: false`) and become verified the first time a code to them is used.
 
 ## Storage
 
@@ -166,6 +195,14 @@ It could replace typing an email and a code with one Apple sheet.
 * It would make an account with a verified email (Apple's), so it fits the rule above.
 
 ## Tests
+
+`server/tests/test_v0832_verified_only.py` (0.8.32): the old route refuses (410, PAX-ESCROW-020, nothing written
+or sent), still says `sign_in` for an existing address and still counts against the per-IP limit; only
+`email_verify` writes account rows (source scan); verify marks the email verified; grandfathered accounts keep
+working. `mac-app/Tests/PaxCoreTests/V0832Tests.swift`: paste-friendly code field, email check, the code field
+following the address, resend wait and the hourly limit, plain error lines, PAX-ESCROW-020, the two calls'
+paths and bodies, and no source calling `POST /v1/accounts`. Server tests make accounts with
+`server/tests/verified_signup.py` (start + the emailed code + verify).
 
 `server/tests/test_v0831_onetap_accounts.py`: new account by code (hashes only, no account before the code,
 `email_verified`, no welcome); existing account signs in with the same two calls; the same answer for known

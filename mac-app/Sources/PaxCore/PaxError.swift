@@ -348,6 +348,10 @@ public enum PaxErrorCatalog {
                      message: "Too many support code tries in a short time.",
                      action: "Wait a little, then try again.",
                      cause: "v0.8.15: pax-guard allows 3 codes a minute; the server allows 10 refused codes an hour per device (429 support_rate_limited)."),
+        PaxErrorInfo(code: "PAX-ESCROW-020",
+                     message: "This version of Pax can't make new accounts any more.",
+                     action: "Download the latest Pax from paxpeace.com, then set up again. It checks your email with a 6-digit code.",
+                     cause: "v0.8.32: POST /v1/accounts refuses new accounts (410 app_update_required); accounts are made only by POST /v1/accounts/email/start + /verify, so every email is verified. An address that already has an account still gets 409 sign_in. Seen by Pax for Mac 0.8.31 or older (shown there as PAX-ESCROW-005)."),
         PaxErrorInfo(code: "PAX-PROFILE-001",
                      message: "Pax couldn't prepare your protection settings.",
                      action: "Try again. If it repeats, copy the details and send them to us.",
@@ -506,6 +510,8 @@ public enum PaxErrorClassifier {
             if e.code == "restricted_site" { return PaxError.restrictedSiteCode }
             // v0.8.5: the server couldn't email the partner, so nothing started (fail closed).
             if e.code == "partner_unreachable" { return "PAX-ESCROW-010" }
+            // v0.8.32: this server makes accounts only by an emailed code.
+            if e.code == "app_update_required" { return "PAX-ESCROW-020" }
             // v0.8.15: a refused verified support code (one code per reason).
             if let c = VerifiedSupportRelease.apiErrors[e.code] { return c }
             // v0.8.13: pictures and video on X and Bluesky are always blocked.

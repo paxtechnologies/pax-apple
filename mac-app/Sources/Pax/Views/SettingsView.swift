@@ -516,6 +516,15 @@ private struct PartnerEmailForm: View {
                 Text("Add your email: Pax's server needs it to send on your behalf.")
                     .font(Theme.body(12)).foregroundStyle(Theme.mutedText)
             }
+            // v0.8.32: the relay account on Pax's server checks this email with a code first.
+            if needsRelayCode {
+                EmailCodeEntry(state: $mac.relayCode, busy: mac.busy,
+                               resend: { mac.resendRelayCode(email: owner) },
+                               submit: { save() })
+            }
+            if let problem = mac.relayCode.problem {
+                EmailCodeProblem(text: problem)
+            }
             if let p = mac.partnerView?.pending_partner {
                 Text("Changing to \(p.email ?? "no one") on "
                      + Date(timeIntervalSince1970: TimeInterval(p.effective_at)).formatted(date: .abbreviated,
@@ -549,8 +558,8 @@ private struct PartnerEmailForm: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.buttonStyle(SecondaryButtonStyle())
-                Button("Save") { save(); dismiss() }.buttonStyle(PrimaryButtonStyle(accent: true))
-                    .disabled(mac.busy || needsOwnerEmail)
+                Button("Save") { save() }.buttonStyle(PrimaryButtonStyle(accent: true))
+                    .disabled(mac.busy || needsOwnerEmail || (needsRelayCode && !mac.relayCode.codeComplete))
             }
         }
         .padding(24)
@@ -575,17 +584,25 @@ private struct PartnerEmailForm: View {
         return false
     }
 
+    /// v0.8.32: a code went to `owner` for the relay account and this Mac has none yet.
+    private var needsRelayCode: Bool {
+        !useSMTP && !mac.hasAccount && mac.relayCode.awaitingCode(for: owner)
+    }
+
     private func save() {
         if useSMTP {
             var t: [String: Any] = ["kind": "smtp", "host": host, "port": Int(port) ?? (ssl ? 465 : 587),
                                     "security": ssl ? "ssl" : "starttls", "username": user, "from": user]
             if !password.isEmpty { t["password"] = password }
             mac.saveEmailSettings(transport: t, ownerEmail: owner, partner: partner)
+            password = ""
+            dismiss()
         } else {
-            mac.saveRelayEmailSettings(url: relayURL, token: relayToken, ownerEmail: owner, partner: partner)
+            // Closes once saved; stays open while the email code is needed (v0.8.32).
+            let close = dismiss
+            mac.saveRelayEmailSettings(url: relayURL, token: relayToken, ownerEmail: owner, partner: partner,
+                                       done: { close() })
         }
-        password = ""
-        relayToken = ""
     }
 }
 

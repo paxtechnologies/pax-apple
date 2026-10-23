@@ -65,6 +65,18 @@ def account(env, email=ME):
     return b["account_id"], {"Authorization": f"Bearer {b['token']}"}
 
 
+def legacy_account(env, email):
+    """v0.8.32: an account as POST /v1/accounts made it up to 0.8.31 (email never
+    proved). That route no longer makes accounts, so tests seed one directly; these
+    accounts are grandfathered and keep working."""
+    from pax_server.crypto import hash_token, new_token
+    import uuid
+    aid, tok = uuid.uuid4().hex, new_token()
+    env.escrow.db.execute("INSERT INTO accounts(id, email, token_hash, created_at, wait_seconds) VALUES (?,?,?,?,?)",
+                          (aid, email, hash_token(tok), env.clock.now(), env.settings.default_wait_seconds))
+    return {"account_id": aid, "token": tok}
+
+
 def device(env, h, name="iPhone", platform="ios", support=False):
     r = env.client.post("/v1/devices", headers=h, json={
         "name": name, "platform": platform, "profile_identifier": "org.paxpeace.pax.appstore.t",
@@ -117,8 +129,8 @@ def test_new_account_by_email_code(env):
 
 
 def test_existing_account_signs_in_with_the_same_two_calls(env):
-    r = env.client.post("/v1/accounts", json={"email": ME})                 # the Mac app's route
-    old = {"Authorization": f"Bearer {r.json()['token']}"}
+    made = legacy_account(env, ME)                                          # made by a Mac before 0.8.32
+    old = {"Authorization": f"Bearer {made['token']}"}
     assert env.client.get("/v1/accounts/me", headers=old).json()["email_verified"] is False
     assert start(env, ME).status_code == 202
     assert env.mail.outbox[-1].kind == "signin_code"
@@ -136,7 +148,7 @@ def test_existing_account_signs_in_with_the_same_two_calls(env):
 
 
 def test_start_answers_the_same_for_new_and_existing(env):
-    env.client.post("/v1/accounts", json={"email": "known@example.com"})
+    legacy_account(env, "known@example.com")
     a, b = start(env, "known@example.com"), start(env, "unknown@example.com")
     assert (a.status_code, a.json()) == (b.status_code, b.json()) == (202, {"sent": True})
 
@@ -192,7 +204,7 @@ def test_five_codes_an_hour_per_address(tmp_path):
 
 
 def test_shares_the_per_ip_sign_up_limit(env):
-    assert env.client.post("/v1/accounts", json={"email": "a@example.com"}).status_code == 201
+    assert env.client.post("/v1/accounts", json={"email": "a@example.com"}).status_code == 410   # still counts
     assert env.client.post("/v1/accounts/signin/start", json={"email": "a@example.com"}).status_code == 202
     for e in ("b@example.com", "c@example.com", "d@example.com"):
         assert start(env, e).status_code == 202
@@ -214,7 +226,7 @@ def test_signup_code_then_someone_made_the_account_signs_in(env):
     """A code sent while the address had no account still proves the address."""
     start(env, ME)
     code = last_code(env, ME)
-    made = env.client.post("/v1/accounts", json={"email": ME}).json()
+    made = legacy_account(env, ME)
     r = verify(env, ME, code)
     assert r.status_code == 200 and r.json()["created"] is False
     assert r.json()["account_id"] == made["account_id"]
@@ -229,7 +241,7 @@ def test_unique_email_race_signs_in_instead(env):
 
     def racing(email, c):
         row = real(email, c)
-        env.client.post("/v1/accounts", json={"email": email})             # lands in between
+        legacy_account(env, email)                                         # lands in between
         return row
     ls._signup_code = racing
     r = verify(env, ME, code)
@@ -263,16 +275,26 @@ def test_validation(env):
                            json={"email": ME, "code": "123456", "label": "x" * 101}).status_code == 422
 
 
-def test_mac_routes_unchanged(env):
+def test_old_mac_route_no_longer_makes_accounts(env):
+    """v0.8.32: POST /v1/accounts refuses new accounts (410 app_update_required,
+    PAX-ESCROW-020); an existing address still gets 409 sign_in, and the old code
+    sign-in keeps working for grandfathered (unverified) accounts."""
     r = env.client.post("/v1/accounts", json={"email": ME})
-    assert r.status_code == 201 and set(r.json()) == {"account_id", "token"}
-    assert env.mail.outbox[-1].kind == "welcome"
-    assert env.client.post("/v1/accounts", json={"email": ME}).json()["sign_in"] is True
+    assert r.status_code == 410
+    b = r.json()
+    assert b["error"] == "app_update_required" and b["pax_code"] == "PAX-ESCROW-020"
+    assert "Download the latest Pax" in b["message"] and "token" not in b
+    assert env.escrow.db.one("SELECT COUNT(*) FROM accounts")[0] == 0
+    assert env.mail.outbox == []                                            # no welcome, nothing
+    legacy_account(env, ME)
+    r = env.client.post("/v1/accounts", json={"email": ME.upper()})
+    assert r.status_code == 409 and r.json()["sign_in"] is True and "token" not in r.json()
     assert env.client.post("/v1/accounts/signin/start", json={"email": ME}).status_code == 202
     r = env.client.post("/v1/accounts/signin", json={"email": ME, "code": last_code(env, ME), "label": "Mac"})
     assert r.status_code == 200 and set(r.json()) == {"account_id", "token"}
     h = {"Authorization": f"Bearer {r.json()['token']}"}
     assert env.client.get("/v1/accounts/me", headers=h).json()["email_verified"] is True
+    assert env.escrow.db.one("SELECT COUNT(*) FROM accounts")[0] == 1
 
 
 def test_no_email_less_accounts(env):

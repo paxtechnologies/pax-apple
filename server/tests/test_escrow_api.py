@@ -12,6 +12,7 @@ from pax_server.config import DAY, HOUR, Settings  # noqa: E402
 from pax_server.crypto import generate_key_b64  # noqa: E402
 from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 PW = "abcde-fghjk-mnpqr-stuvw-xyz23-45678"
 T0 = 1_800_000_000  # fixed start time (2027-01-15)
@@ -44,7 +45,7 @@ def env(tmp_path):
 
 
 def make_account(env, email="user@example.com"):
-    r = env.client.post("/v1/accounts", json={"email": email})
+    r = verified_signup(env.client, email)
     assert r.status_code == 201, r.text
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
@@ -391,7 +392,7 @@ def test_emergency_cooloff_configurable(tmp_path):
     s = Settings(db_path=str(tmp_path / "x.db"), server_key_b64=generate_key_b64(),
                  emergency_cooloff_seconds=2 * HOUR)
     c = TestClient(create_app(s, clock=clock, sender=mail))
-    tok = c.post("/v1/accounts", json={"email": "u@example.com"}).json()["token"]
+    tok = verified_signup(c, "u@example.com").json()["token"]
     h = {"Authorization": f"Bearer {tok}"}
     did = c.post("/v1/devices", headers=h, json={"name": "i", "platform": "ios",
                  "profile_identifier": "x.y.z", "removal_password": PW}).json()["device_id"]

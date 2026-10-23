@@ -48,7 +48,11 @@ def server(tmp_path):
                         blocklist_sweep_seconds=0)
     app = create_server(settings, clock=clock, sender=MemoryEmailSender())
     c = TestClient(app)
-    h = {"Authorization": "Bearer " + c.post("/v1/accounts", json={"email": "u@e.co"}).json()["token"]}
+    # v0.8.32: accounts are made only by an emailed code.
+    assert c.post("/v1/accounts/email/start", json={"email": "u@e.co"}).status_code == 202
+    code = re.search(r"\b(\d{6})\b", app.state.escrow.sender.outbox[-1].body).group(1)
+    h = {"Authorization": "Bearer " + c.post("/v1/accounts/email/verify",
+                                             json={"email": "u@e.co", "code": code}).json()["token"]}
     token = c.get("/v1/dns", headers=h).json()["token"]
     return app, c, h, token, clock, db
 

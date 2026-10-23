@@ -129,12 +129,11 @@ public final class SetupCoordinator: @unchecked Sendable {
         self.escrow = escrow
     }
 
-    /// Account + wait + partner. Called before touching the phone.
-    public func registerAccount(_ config: SetupConfiguration) async throws {
-        if escrow.token == nil {
-            let account = try await escrow.registerAccount(email: config.email)
-            escrow.token = account.token
-        }
+    /// Wait + partner on the account. Called before touching the phone. v0.8.32: the
+    /// account itself comes first from the emailed code (EscrowClient.verifyEmailCode);
+    /// nothing here makes one.
+    public func saveAccountSettings(_ config: SetupConfiguration) async throws {
+        guard escrow.token != nil else { throw EmailNotConfirmed() }
         try await escrow.setWait(days: config.waitDays)
         if let partner = config.partnerEmail, !partner.isEmpty {
             try await escrow.setPartner(email: partner)

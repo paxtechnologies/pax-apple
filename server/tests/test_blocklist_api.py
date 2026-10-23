@@ -13,6 +13,7 @@ from pax_server.config import HOUR, Settings  # noqa: E402
 from pax_server.crypto import generate_key_b64, hash_token  # noqa: E402
 from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 T0 = 1_800_000_000
 KEY = "internal-test-key"
@@ -42,7 +43,7 @@ def env(tmp_path):
 
     e = Env()
     e.client, e.clock, e.mail, e.settings, e.app = TestClient(app), clock, mail, settings, app
-    r = e.client.post("/v1/accounts", json={"email": "user@example.com"})
+    r = verified_signup(e.client, "user@example.com")
     e.h = {"Authorization": f"Bearer {r.json()['token']}"}
     return e
 
@@ -152,7 +153,7 @@ def test_other_users_cannot_cancel(env):
     env.client.post("/v1/blocklist", headers=env.h, json={"domain": "bad.example"})
     rid = env.client.post("/v1/blocklist/remove", headers=env.h,
                           json={"domain": "bad.example"}).json()["request"]["request_id"]
-    other = env.client.post("/v1/accounts", json={"email": "other@example.com"}).json()["token"]
+    other = verified_signup(env.client, "other@example.com").json()["token"]
     r = env.client.post(f"/v1/blocklist/requests/{rid}/cancel",
                         headers={"Authorization": f"Bearer {other}"})
     assert r.status_code == 404
@@ -207,7 +208,7 @@ def test_delay_is_configurable(tmp_path):
     settings = Settings(db_path=str(tmp_path / "p.sqlite3"), server_key_b64=generate_key_b64(),
                         blocklist_delay="fixed", blocklist_delay_seconds=24 * HOUR)
     c = TestClient(create_app(settings, clock=clock, sender=MemoryEmailSender()))
-    h = {"Authorization": "Bearer " + c.post("/v1/accounts", json={"email": "a@b.co"}).json()["token"]}
+    h = {"Authorization": "Bearer " + verified_signup(c, "a@b.co").json()["token"]}
     c.post("/v1/blocklist", headers=h, json={"domain": "bad.example"})
     r = c.post("/v1/blocklist/remove", headers=h, json={"domain": "bad.example"})
     assert r.json()["request"]["seconds_remaining"] == 24 * HOUR
@@ -293,8 +294,7 @@ def test_sweeper_runs_in_lifespan(tmp_path):
                         blocklist_sweep_seconds=1)
     app = create_app(settings, clock=clock, sender=MemoryEmailSender())
     with TestClient(app) as c:
-        h = {"Authorization": "Bearer " + c.post("/v1/accounts",
-                                                  json={"email": "a@b.co"}).json()["token"]}
+        h = {"Authorization": "Bearer " + verified_signup(c, "a@b.co").json()["token"]}
         c.post("/v1/blocklist", headers=h, json={"domain": "bad.example"})
         c.post("/v1/blocklist/remove", headers=h, json={"domain": "bad.example"})
         clock.advance(72 * HOUR)

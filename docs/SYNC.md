@@ -22,11 +22,13 @@ feed as before; a site the Mac pushes is in that feed like any other.
   not yet linked, it asks the server for a **sync token** (`POST /v1/sync/links`) and hands it to
   pax-guard over the local socket (`sync.link`). Union on link: the Mac's sites go to the account and the
   account's come to the Mac.
-* **Same email on another Mac.** Registering an email that already has an account answers 409 with
-  `sign_in: true`. The app then sends a one-time code to that email (`POST /v1/accounts/signin/start`,
-  same answer for any address) and, with the code, gets its own sign-in to that account
-  (`POST /v1/accounts/signin`; 6 digits, 15 minutes, 5 tries, 5 codes an hour). The account holder is
-  emailed when a device signs in.
+* **Same email on another Mac.** Since 0.8.32 the Mac always sends a one-time code to the email
+  (`POST /v1/accounts/email/start`, same answer for any address); with the code
+  (`POST /v1/accounts/email/verify`; 6 digits, 15 minutes, 5 tries, 5 codes an hour) it gets a new account
+  for a new address or its own sign-in to the address's existing account (docs/ONETAP_ACCOUNTS.md). The
+  account holder is emailed when a device signs in. (Up to 0.8.31 the Mac registered with
+  `POST /v1/accounts`, got 409 `sign_in: true`, then used `/v1/accounts/signin/start` + `/signin`, which
+  still work.)
 * A **sync token** (`pxs_…`, stored hashed) can only read the account's blocked sites, add to them, ask
   to remove one and cancel. It can't reveal a password, change the wait or the partner, or touch
   exceptions. pax-guard keeps it in `/Library/PaxGuard/state/sync.json` (root, 0600) and never logs or
