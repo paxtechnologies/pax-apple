@@ -28,6 +28,13 @@ enum StrongerList {
     /// Always the same order (Ruben, 2026-10-21): lock, trusted person, DNS, apps, wait, computer.
     static let order: [StrongerCard] = StrongerCard.allCases
 
+    /// The cards Home shows. A device set up from a Mac already has the stronger protection
+    /// (locked profile, filter, restrictions), so only what adds to the account is offered there:
+    /// never Screen Time, a DNS configuration of this app's own, or another set-up.
+    static func cards(macSetUp: Bool) -> [StrongerCard] {
+        macSetUp ? order.filter { $0 == .trustedPerson || $0 == .turnOffWait } : order
+    }
+
     /// The nudge shows on the Lock Screen Time card until it's done.
     static func nudge(_ p: PaxPolicy) -> Bool { p.isActive && !p.passcodeEscrowed }
 

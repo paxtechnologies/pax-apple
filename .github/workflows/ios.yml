@@ -35,6 +35,9 @@ jobs:
           xcodebuild -project Pax.xcodeproj -scheme Pax -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | tee "$RUNNER_TEMP/build.log"
+      - name: 1.2 never creates accounts with POST /v1/accounts or opens private Settings URLs
+        run: |
+          ! grep -rnE '"/v1/accounts"|App-[Pp]refs:|prefs:root' App Shared
       - name: Unit tests
         run: |
           set -o pipefail
@@ -129,6 +132,15 @@ jobs:
             shoot "$U" "$P" 3-done -PaxShotStep 7
             shoot "$U" "$P" 4-child -PaxShotStep 1
             shoot "$U" "$P" 6-email -PaxShotStep 3
+            # 1.2 (23 Oct 2026): blocked sites with a removal waiting, the DNS steps, the end of Home
+            # (no "Good to know"), the child path, and a device already set up from a Mac.
+            shoot "$U" "$P" 7-sites-removing -PaxShotHome YES -PaxShotSites YES -PaxShotScroll sites
+            shoot "$U" "$P" 8-dns-steps -PaxShotHome YES -PaxShotDNS YES
+            shoot "$U" "$P" 9-home-end -PaxShotHome YES -PaxShotScroll end
+            shoot "$U" "$P" 10-child-code -PaxShotStep 2
+            shoot "$U" "$P" 11-child-needs-update -PaxShotStep 1 -PaxShotChildUpdate YES
+            shoot "$U" "$P" 12-mac-home -PaxShotMac YES
+            shoot "$U" "$P" 13-mac-welcome-back -PaxShotStep 5 -PaxShotMacWelcome YES
             xcrun simctl ui "$U" appearance dark
             shoot "$U" "$P" 5-home-dark -PaxShotHome YES
             xcrun simctl shutdown "$U" || true

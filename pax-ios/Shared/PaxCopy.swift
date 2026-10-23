@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The words the app shows, in one place, so they can be checked by tests: calm and
 // warm, for individuals and families, "adult and explicit content", "someone you
-// trust", "turn-off wait", and honest about the limits.
+// trust", "turn-off wait". Nothing in the app explains how to remove, get round or switch Pax
+// off other than through the turn-off wait (Ruben, 23 Oct 2026): honest limits are on the
+// website and with support, not here.
 import Foundation
 
 enum PaxCopy {
@@ -29,6 +31,19 @@ enum PaxCopy {
             + "Pax emails you if anyone asks to turn it off."
     }
     static let childWaitNote = "On a child's device the turn-off wait starts at 30 days. You can change it later."
+    static let childNamePlaceholder = "Your child's first name (optional)"
+    static let childNameHint = "So the emails to you say whose device it is."
+    static let childNeedsUpdate = "Setting up for a child needs a Pax update that isn't out yet, so nothing has been "
+        + "set up. Please try again in a few days."
+    static let childLimit = "Your email already looks after five children's devices on Pax, the most for now. "
+        + "Nothing new has been set up. Email Pax support if you need more."
+    static let childWaitFixed = "On a child's device the turn-off wait can't be shorter than 30 days. Nothing has changed."
+    static let childNoAccountKnown = "Pax couldn't tell which account this device was set up with, so it can't sign "
+        + "in here. Please email Pax support."
+    static func childOnMacSetUp(isPad: Bool) -> String {
+        "Pax is already on this \(device(isPad: isPad)), set up from a Mac. Please sign in with the email used "
+            + "on the Mac instead: go back and tap Turn Pax on."
+    }
     static let emailPlaceholder = "you@example.com"
     static let sendCode = "Send me a code"
     static let codeTitle = "Check your email"
@@ -60,20 +75,54 @@ enum PaxCopy {
         var wait = "Turn-off wait: \(TurnOffRules.waitLabel(days: a.waitDays))"
         if let p = a.pendingWaitDays, p != a.waitDays { wait += " (changing to \(TurnOffRules.waitLabel(days: p)) later)" }
         l.append(wait + ".")
-        if let longer = a.lengthenTo {
+        if let longer = a.lengthenTo, !a.joiningMac {
             l.append("Setting up here lengthens it to \(TurnOffRules.waitLabel(days: longer)), for every device on this account.")
         }
         l.append(a.trustedEmail.map { "Someone you trust: \($0)." } ?? "No one you trust added yet.")
         if a.devices.isEmpty {
             l.append("Pax isn't on any other device on this account right now.")
         } else {
-            for d in a.devices { l.append("Pax is on \(d.name) (\(d.kind)).") }
+            for d in a.devices {
+                l.append("Pax is on \(d.name) (\(d.kind)\(d.fromMac ? ", set up from a Mac" : "")).")
+            }
         }
         return l
     }
     static let welcomeBackNote = "Setting up here never shortens your wait or removes anything."
     static let welcomeBackContinue = "Continue"
     static let welcomeBackLoadFailed = "Pax couldn't read your account just now. Check your connection, then try again."
+
+    // MARK: already set up from a Mac (Pax for Mac's iPhone path)
+
+    static let macSetUpTag = "Set up from a Mac"
+    static func macWelcomeBackBody(isPad: Bool) -> String {
+        "This \(device(isPad: isPad)) was set up from a Mac with this Pax account. Those settings stay exactly as they are."
+    }
+    static func macWelcomeBackNote(isPad: Bool) -> String {
+        "Here you can see your protection and add to it: more blocked sites, someone you trust or a longer wait. "
+            + "Nothing set up from the Mac is changed or replaced on this \(device(isPad: isPad))."
+    }
+    static func macOtherAccount(isPad: Bool) -> String {
+        "Pax is already on this \(device(isPad: isPad)), set up from a Mac with a different Pax account. "
+            + "Nothing has been set up here. Please use the email you used on the Mac."
+    }
+    static func macCheckAgain(isPad: Bool) -> String {
+        "Pax couldn't check how this \(device(isPad: isPad)) is protected just now, so nothing has been set up yet. "
+            + "Check your connection, then try again."
+    }
+    static func macDoneLines(isPad: Bool, waitDays: Int) -> [String] {
+        [
+            "This \(device(isPad: isPad)) was set up from a Mac, and that protection stays as it is.",
+            "Adult and explicit websites are blocked.",
+            "Turning Pax off takes your turn-off wait: \(TurnOffRules.waitLabel(days: waitDays)).",
+        ]
+    }
+    static let homeMacSetUp = "Set up from a Mac"
+    static let homeMacFilter = "Pax's filter is locked on"
+    static func macTurnOff(isPad: Bool) -> String {
+        "This \(device(isPad: isPad)) was set up from a Mac, so it's turned off from Pax on that Mac. "
+            + "It takes your turn-off wait."
+    }
 
     // MARK: turning on (Apple's Screen Time sheet, then the quiet work)
 
@@ -123,13 +172,13 @@ enum PaxCopy {
     static let homeOn = "Pax is on"
     static let homeAccessLost = "Pax's Screen Time access is off"
     static func homeAccessLostBody(isPad: Bool, trusted: Bool) -> String {
-        "Someone switched it off in Settings, so Pax can't protect this \(device(isPad: isPad)) right now."
+        "It was switched off, so Pax can't protect this \(device(isPad: isPad)) right now."
             + (trusted ? " The person you trust has been told." : "")
     }
     static let homeFilter = "Adult and explicit sites are blocked"
     static let homeDelete = "Pax can't be deleted"
     static let homePasscodeKept = "Pax keeps the Screen Time passcode"
-    static let homeNoPasscode = "Screen Time isn't locked yet: Face ID can switch Pax off"
+    static let homeNoPasscode = "Screen Time isn't locked yet"
     static let homeDNSOn = "Encrypted DNS is on"
     static let homeDNSOff = "Encrypted DNS is off. Turn it on in Settings › General › VPN & Device Management › DNS."
     static let homeDNSNotAdded = "Encrypted DNS isn't added yet"
@@ -138,7 +187,6 @@ enum PaxCopy {
         return "No one you trust added yet"
     }
     static func homeWait(_ days: Int) -> String { "Turn-off wait: \(TurnOffRules.waitLabel(days: days))" }
-    static let homeGrace = "First hour: you can still turn Pax off with no wait."
 
     // MARK: Make Pax stronger
 
@@ -149,8 +197,8 @@ enum PaxCopy {
 
     // (a) Lock Screen Time
     static let lockTitle = "Lock Screen Time"
-    static let lockBody = "Right now, Face ID alone can switch Pax off in Settings. A Screen Time passcode that "
-        + "Pax keeps for you stops that, until your turn-off wait ends."
+    static let lockBody = "A Screen Time passcode that Pax keeps for you locks Pax's Screen Time settings, "
+        + "until your turn-off wait ends."
     static let lockButton = "Lock Screen Time"
     static let lockDone = "Pax keeps your Screen Time passcode. It's shown again only when your turn-off wait ends."
     static let lockIntro = "Pax makes up a four-digit Screen Time passcode and keeps it safe on its server. "
@@ -160,7 +208,7 @@ enum PaxCopy {
         [
             "Open Settings › Screen Time and tap Lock Screen Time Settings (or Use Screen Time Passcode).",
             "Type the four digits below. Hold a box to see its digit.",
-            "When \(device(isPad: isPad)) asks for an Apple Account for recovery, tap Cancel. Otherwise the passcode could be reset.",
+            "When \(device(isPad: isPad)) asks for an Apple Account for recovery, tap Cancel.",
         ]
     }
     static let passcodeDone = "I've set it"
@@ -205,11 +253,31 @@ enum PaxCopy {
     static let dnsBody = "An extra layer that filters apps as well as websites, through Pax's own filter. "
         + "After you tap Add, open Settings › General › VPN & Device Management › DNS and choose Pax."
     static func dnsHonest(trusted: Bool) -> String {
-        "Anyone can switch this layer off in Settings. If it's off, Pax shows it here"
-            + (trusted ? " and emails the person you trust." : ".")
+        "If this layer is ever off, Pax shows it here" + (trusted ? " and emails the person you trust." : ".")
     }
     static let dnsAdd = "Add encrypted DNS"
     static let dnsOpenSettings = "Open Settings"
+    static let dnsShowSteps = "Show me how"
+
+    // Encrypted DNS: turning it on in Settings (an app can only open its own page in Settings,
+    // so the steps start there; Apple's names, iOS 16 to 26)
+    static let dnsGuideTitle = "Turn on encrypted DNS"
+    static func dnsGuideIntro(isPad: Bool) -> String {
+        "Pax has added its encrypted DNS. \(device(isPad: isPad)) asks you to switch it on yourself, once, in Settings:"
+    }
+    /// `osMajor`: the iOS / iPadOS major version (18 and later open an app's page under Apps).
+    static func dnsGuideSteps(isPad: Bool, osMajor: Int) -> [String] {
+        [
+            "Tap Open Settings below. Settings opens on Pax's own page.",
+            osMajor >= 18 ? "Tap ‹ Apps at the top left, then ‹ Settings, to reach the main list."
+                          : "Tap ‹ Settings at the top left to reach the main list.",
+            "Tap General.",
+            "Tap VPN & Device Management. On some \(device(isPad: isPad))s it's called VPN, DNS & Device Management.",
+            "Tap DNS, then choose Pax.",
+            "Come back to Pax. It checks for you.",
+        ]
+    }
+    static let dnsGuideClose = "I'll do it later"
 
     // (d) Apps to keep closed
     static let appsTitle = "Choose apps to keep closed"
@@ -240,37 +308,38 @@ enum PaxCopy {
     static let computerTitle = "Make Pax unremovable"
     static let computerSubtitle = "Set up from a Mac or Windows PC"
     static func computerBody(isPad: Bool) -> String {
-        "Setting Pax up from a computer locks this \(device(isPad: isPad)) more firmly: it can't be switched "
-            + "off in Settings, and your photos and messages stay. It's free, like this app."
+        "Setting Pax up from a computer locks this \(device(isPad: isPad)) more firmly, and your photos and "
+            + "messages stay. It's free, like this app."
     }
     static let computerOpen = "Open paxpeace.com/setup"
     static let macLink = "Steps for a Mac"
     static let macSheetTitle = "Set up from a Mac"
     static func macSheetIntro(isPad: Bool) -> String {
-        "Setting Pax up from a Mac locks this \(device(isPad: isPad)) more firmly: it can't be "
-            + "switched off in Settings, and your photos and messages stay. It's free, like this app."
+        "Setting Pax up from a Mac locks this \(device(isPad: isPad)) more firmly, and your photos and "
+            + "messages stay. It's free, like this app."
     }
     static let macSheetMore = "More at paxpeace.com"
-
-    // MARK: honest limits (Home)
-
-    static let limitsTitle = "Good to know"
-    static func limits(isPad: Bool, passcode: Bool) -> [String] {
-        let d = device(isPad: isPad)
-        var l = [
-            "A full erase or a restore from a computer removes Pax.",
-            "Anyone holding this \(d) can switch the encrypted DNS off in Settings. Pax notices and says so.",
-        ]
-        if !passcode { l.append(passcodeSkipWarning) }
-        return l
-    }
-    static let passcodeSkipWarning = "Until Screen Time is locked, Face ID can switch Pax's Screen Time access off at any time."
 
     // MARK: blocked sites
 
     static let sitesTitle = "Your blocked sites"
     static let sitesFooter = "Adding a site is instant. Removing one takes your turn-off wait."
     static let sitesAdd = "Add"
+    static let sitesRemove = "Remove"
+    static func sitesRemoving(_ left: String) -> String { "Removing, available in \(left)" }
+    static let sitesRemovingSoon = "Removing, available in a moment"
+    static let sitesCancel = "Cancel"
+    static func sitesRemoveTitle(_ domain: String) -> String { "Remove \(domain)?" }
+    static func sitesRemoveBody(waitDays: Int, trusted: Bool) -> String {
+        "It stays blocked for your turn-off wait (\(TurnOffRules.waitLabel(days: waitDays))), then comes off. "
+            + (trusted ? "The person you trust is emailed first. If the email can't be sent, nothing starts. " : "")
+            + "You can cancel at any time during the wait."
+    }
+    static let sitesKeep = "Keep it blocked"
+    static let sitesSignInFirst = "Sign in to Pax again to remove a site. It stays blocked until then."
+    static let sitesRemoveFailed = "Pax couldn't start the turn-off wait for this site just now, so it stays blocked. "
+        + "Please try again."
+    static let sitesInvalid = "That doesn't look like a web address."
 
     // MARK: turning off
 
@@ -357,7 +426,7 @@ enum PaxCopy {
             doneTitle, doneNext, doneButton,
             homeOn, homeAccessLost, homeAccessLostBody(isPad: isPad, trusted: true), homeFilter, homeDelete,
             homePasscodeKept, homeNoPasscode, homeDNSOn, homeDNSOff, homeDNSNotAdded, homeTrusted(nil),
-            homeTrusted("friend@example.com"), homeWait(7), homeGrace,
+            homeTrusted("friend@example.com"), homeWait(7),
             strongerTitle, strongerProgress(done: 1, total: 4), recommended, doneTag,
             lockTitle, lockBody, lockButton, lockDone, lockIntro, lockMake, passcodeDone, passcodeAfter, passcodeLater,
             trustedTitle, trustedBody, trustedWitness, trustedEmailPlaceholder, trustedNamePlaceholder,
@@ -369,8 +438,15 @@ enum PaxCopy {
             waitShorterBody(currentDays: 7), waitShorterConfirm, waitLonger(days: 30),
             computerTitle, computerSubtitle, computerBody(isPad: isPad), computerOpen, macLink, macSheetTitle,
             macSheetIntro(isPad: isPad), macSheetMore,
-            limitsTitle, passcodeSkipWarning,
-            sitesTitle, sitesFooter, sitesAdd,
+            sitesTitle, sitesFooter, sitesAdd, sitesRemove, sitesRemoving("3 days"), sitesRemovingSoon, sitesCancel,
+            sitesRemoveTitle("example.com"), sitesRemoveBody(waitDays: 7, trusted: true),
+            sitesRemoveBody(waitDays: 7, trusted: false), sitesKeep, sitesSignInFirst, sitesRemoveFailed, sitesInvalid,
+            dnsShowSteps, dnsGuideTitle, dnsGuideIntro(isPad: isPad), dnsGuideClose,
+            childNamePlaceholder, childNameHint, childNeedsUpdate, childLimit, childWaitFixed, childNoAccountKnown,
+            childOnMacSetUp(isPad: isPad),
+            macSetUpTag, macWelcomeBackBody(isPad: isPad), macWelcomeBackNote(isPad: isPad),
+            macOtherAccount(isPad: isPad), macCheckAgain(isPad: isPad), homeMacSetUp, homeMacFilter,
+            macTurnOff(isPad: isPad),
             turnOffTitle, turnOffIdle(trusted: true), turnOffIdle(trusted: false), turnOffAsk, turnOffConfirmTitle,
             turnOffConfirmBody(trusted: true), turnOffStart, keepOn, turnOffWaiting("3 days"), turnOffReady,
             turnOffNow, turnOffUnknown, releasedTitle, releasedPasscode, releasedHowTo, releasedNoPasscode,
@@ -391,7 +467,11 @@ enum PaxCopy {
         out += welcomeBackLines(ExistingAccount(waitSeconds: 30 * 86_400, pendingWaitSeconds: 7 * 86_400,
                                                 trustedEmail: nil, devices: [], child: false))
         out += doneLines(isPad: isPad, waitDays: 7)
-        out += limits(isPad: isPad, passcode: false)
+        out += macDoneLines(isPad: isPad, waitDays: 7)
+        out += dnsGuideSteps(isPad: isPad, osMajor: 17) + dnsGuideSteps(isPad: isPad, osMajor: 18)
+        out += welcomeBackLines(ExistingAccount(waitSeconds: 14 * 86_400, pendingWaitSeconds: nil, trustedEmail: nil,
+                                                devices: [(name: "iPhone", platform: "ios", released: false)],
+                                                child: false, profiles: ["org.paxpeace.pax.ios.abc"], joiningMac: true))
         return out
     }
 }

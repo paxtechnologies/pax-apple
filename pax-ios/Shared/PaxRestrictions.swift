@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Applies the person's choices through Managed Settings. Only `clearAll()` removes
-// anything, and the app calls it only after the server has released the escrowed
-// secret (AppModel.confirmTurnOff). Everything else only ever adds: never fail open.
+// anything wholesale, and the app calls it only after the server has released the escrowed
+// secret (AppModel.confirmTurnOff). One of the person's own sites leaves `blockedDomains` only
+// after the server's turn-off wait for it ended (SiteRemoval). Never fail open.
 import Foundation
 import ManagedSettings
 import FamilyControls

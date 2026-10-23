@@ -33,9 +33,33 @@ Turning it off works like on a Mac: you ask, your trusted person (if you have on
 first, the wait you chose runs on the Pax server, then everything is removed and the Screen Time
 passcode is shown. The first hour after set-up has no wait. If anything fails, Pax stays on.
 
-Honest limits: a computer restore or full erase removes it, and anyone can switch the DNS layer
-off in Settings (Pax notices and tells your trusted person). For the strongest protection, set
-Pax up from a Mac: the Mac app sets up a supervised iPhone or iPad over a cable.
+Honest limits (on paxpeace.com and with support; since 1.2 not shown in the app): a computer restore
+or full erase removes it, and anyone can switch the DNS layer off in Settings (Pax notices and tells
+your trusted person). For the strongest protection, set Pax up from a Mac: the Mac app sets up a
+supervised iPhone or iPad over a cable.
+
+**1.2 additions (23 Oct 2026):**
+
+- *Child accounts* (server 0.8.32, [docs/CHILD_ACCOUNTS.md](../docs/CHILD_ACCOUNTS.md)): "Setting up for a
+  child?" → the parent's email (`POST /v1/accounts/child/start`) → the code (`/child/verify`, with the
+  child's optional first name and the device name) → Screen Time → Done. Always a new child account with
+  the server's 30-day wait (no `PUT /me/wait`, no trial day, no "Welcome back"); the token is kept only if
+  `kind == "child"`. Signing in again uses `/child/start` + `/child/signin` with this device's account id.
+  A server without these routes answers a plain 404: the app says it needs a Pax update and never falls
+  back to the parent's own account. 1.2 never calls `POST /v1/accounts` (CI checks).
+- *Removing your own blocked sites* uses the server's rule (`POST /v1/blocklist/remove`, the same as Pax
+  for Mac): the person you trust is emailed first (fail closed), the site stays blocked for the turn-off
+  wait ("Removing, available in …", Cancel), and this device takes it off only once the server's list no
+  longer has it and the server's clock is past the wait (`Shared/SiteRemoval.swift`). Adding stays instant.
+- *Encrypted DNS steps*: an app can open only its own page in Settings, so "Show me how" lists the exact
+  path from there (General › VPN & Device Management › DNS › Pax; iOS 18+ via ‹ Apps › ‹ Settings).
+- *A device already set up from a Mac* (supervised, Pax's locked profile): after the email code the app
+  checks for Pax's filter on the device (without its own DNS) and a Mac set-up on the account
+  (`org.paxpeace.pax.ios.*` device record). Both: it joins that set-up ("Set up from a Mac") and only
+  shows and adds to it: no Screen Time request, no device record, no DNS configuration, no wait sent.
+  Pax's filter with no Mac set-up on the account: another account's, so nothing is set up
+  (`Shared/StrictSync.swift`).
+- No "Good to know" section; nothing in the app explains a way round the turn-off wait.
 
 Account deletion is in the app (Account › Delete my account), using the server's
 `DELETE /v1/accounts/me` (0.8.30); older servers get an emailed request to Pax support.

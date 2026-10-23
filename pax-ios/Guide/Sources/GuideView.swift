@@ -141,20 +141,12 @@ struct DownloadButtons: View {
     }
 }
 
-/// The quieter part at the bottom: good to know, Pax without a Mac, links.
+/// The quieter part at the bottom: Pax without a Mac, links. (No "Good to know": 1.2, Ruben 23 Oct 2026.)
 struct SecondaryInfo: View {
     let isPad: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            section(GuideCopy.goodToKnowTitle) {
-                ForEach(GuideCopy.goodToKnow(isPad: isPad), id: \.self) { line in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("·").foregroundStyle(Palette.accent)
-                        Text(line).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
             section(GuideCopy.comingTitle) {
                 Text(GuideCopy.comingBody).fixedSize(horizontal: false, vertical: true)
             }

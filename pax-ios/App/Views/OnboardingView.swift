@@ -5,6 +5,8 @@
 // email. An email that already has an account shows "Welcome back" (what's already set) first.
 // After the code everything happens quietly in AppModel.turnOn, escrow first: if the server can't
 // be reached nothing is switched on and a calm "Try again" is shown.
+// 1.2: the child path uses the parent's email on its own routes (a NEW child account, 0.8.32), and
+// a device already set up from a Mac joins that set-up instead of a second one (StrictSync).
 import SwiftUI
 import UIKit
 
@@ -16,6 +18,7 @@ struct OnboardingView: View {
     @State private var code = ""
     @State private var resent = false
     @State private var started = false
+    @State private var childName = ""
 
     private var isPad: Bool { model.isPad }
 
@@ -41,9 +44,15 @@ struct OnboardingView: View {
         .onAppear {
             guard !started else { return }
             started = true
-            step = SetupRules.resume(isActive: model.policy.isActive)
+            step = SetupRules.resume(isActive: model.policy.isActive || model.policy.macSetUp)
             #if DEBUG
-            if let s = ScreenshotMode.step { step = s; if s == .childEmail { child = true } }   // App Store screenshots only
+            if let s = ScreenshotMode.step {                                   // screenshots only
+                step = s
+                if s == .childEmail || s == .childCode { child = true }
+                if s == .childCode { email = "parent@example.com" }
+                if ScreenshotMode.childUpdate { email = "parent@example.com"; model.message = PaxCopy.childNeedsUpdate }
+                if ScreenshotMode.macWelcome { model.existing = ScreenshotMode.sampleMacExisting }
+            }
             #endif
         }
     }
@@ -65,8 +74,8 @@ struct OnboardingView: View {
         switch step {
         case .welcome: welcome
         case .childEmail: emailStep(title: PaxCopy.childTitle, body: PaxCopy.childBody(isPad: isPad),
-                                    note: PaxCopy.childWaitNote)
-        case .email: emailStep(title: PaxCopy.emailTitle, body: PaxCopy.emailBody(isPad: isPad), note: nil)
+                                    note: PaxCopy.childWaitNote, askName: true)
+        case .email: emailStep(title: PaxCopy.emailTitle, body: PaxCopy.emailBody(isPad: isPad), note: nil, askName: false)
         case .childCode, .code: codeStep
         case .welcomeBack: welcomeBack
         case .turningOn: turningOn
@@ -100,14 +109,20 @@ struct OnboardingView: View {
         }
     }
 
-    private func emailStep(title: String, body: String, note: String?) -> some View {
+    private func emailStep(title: String, body: String, note: String?, askName: Bool) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionTitle(title)
             BodyText(body)
             if let note { BodyText(note, small: true) }
             PaxTextField(placeholder: PaxCopy.emailPlaceholder, text: $email, email: true)
+            if askName {
+                PaxTextField(placeholder: PaxCopy.childNamePlaceholder, text: $childName)
+                BodyText(PaxCopy.childNameHint, small: true)
+            }
             Button(PaxCopy.sendCode) {
-                Task { if await model.sendCode(email: email) { code = ""; go(SetupRules.codeStep(child: child)) } }
+                Task {
+                    if await model.sendCode(email: email, child: child) { code = ""; go(SetupRules.codeStep(child: child)) }
+                }
             }
             .buttonStyle(PaxPrimaryButton())
             .disabled(!SetupRules.isEmail(email))
@@ -126,7 +141,7 @@ struct OnboardingView: View {
                 .background(RoundedRectangle(cornerRadius: 14).fill(Palette.card))
             Button(PaxCopy.codeContinue) {
                 Task {
-                    let v = await model.verifyCode(email: email, code: code)
+                    let v = await model.verifyCode(email: email, code: code, child: child, childName: childName)
                     guard let next = SetupRules.after(v, child: child) else { return }
                     if next == .welcomeBack {
                         go(.welcomeBack)
@@ -140,7 +155,7 @@ struct OnboardingView: View {
             .disabled(!SetupRules.isCode(code))
             BodyText(resent ? PaxCopy.codeSent : PaxCopy.codeResendNote, small: true)
             Button(PaxCopy.codeResend) {
-                Task { if await model.sendCode(email: email) { code = ""; resent = true } }
+                Task { if await model.sendCode(email: email, child: child) { code = ""; resent = true } }
             }
             .buttonStyle(PaxSecondaryButton())
         }
@@ -150,10 +165,15 @@ struct OnboardingView: View {
     private var welcomeBack: some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionTitle(PaxCopy.welcomeBackTitle)
-            BodyText(PaxCopy.welcomeBackBody(isPad: isPad))
+            if model.existing?.joiningMac == true {
+                StatusRow(text: PaxCopy.macSetUpTag, symbol: "laptopcomputer", good: true)
+                BodyText(PaxCopy.macWelcomeBackBody(isPad: isPad))
+            } else {
+                BodyText(PaxCopy.welcomeBackBody(isPad: isPad))
+            }
             if let a = model.existing {
                 PaxCard { BulletList(lines: PaxCopy.welcomeBackLines(a)) }
-                BodyText(PaxCopy.welcomeBackNote, small: true)
+                BodyText(a.joiningMac ? PaxCopy.macWelcomeBackNote(isPad: isPad) : PaxCopy.welcomeBackNote, small: true)
                 Button(PaxCopy.welcomeBackContinue) { turnOn() }.buttonStyle(PaxPrimaryButton())
             } else if !model.busy {
                 Button(PaxCopy.retryButton) { Task { _ = await model.loadExisting(child: child) } }
@@ -188,7 +208,9 @@ struct OnboardingView: View {
                 SectionTitle(PaxCopy.doneTitle)
             }
             PaxCard {
-                BulletList(lines: PaxCopy.doneLines(isPad: isPad, waitDays: model.policy.waitDays))
+                BulletList(lines: model.policy.macSetUp
+                           ? PaxCopy.macDoneLines(isPad: isPad, waitDays: model.policy.waitDays)
+                           : PaxCopy.doneLines(isPad: isPad, waitDays: model.policy.waitDays))
             }
             BodyText(PaxCopy.doneNext)
             Button(PaxCopy.doneButton) { model.finishSetUp() }.buttonStyle(PaxPrimaryButton())
@@ -205,6 +227,8 @@ struct SignInAgainView: View {
     @State private var code = ""
     @State private var sent = false
     @State private var resent = false
+    /// A child's device signs in again on the child routes, to exactly its own child account.
+    private var isChild: Bool { model.policy.audience == .child }
 
     var body: some View {
         NavigationView {
@@ -215,7 +239,7 @@ struct SignInAgainView: View {
                     .disabled(sent)
                 if !sent {
                     Button(PaxCopy.sendCode) {
-                        Task { if await model.sendCode(email: email) { code = ""; sent = true } }
+                        Task { if await model.sendCode(email: email, child: isChild) { code = ""; sent = true } }
                     }
                     .buttonStyle(PaxPrimaryButton())
                     .disabled(!SetupRules.isEmail(email))
@@ -229,7 +253,7 @@ struct SignInAgainView: View {
                         .background(RoundedRectangle(cornerRadius: 14).fill(Palette.card))
                     Button(PaxCopy.signInButton) {
                         Task {
-                            let v = await model.verifyCode(email: email, code: code, again: true)
+                            let v = await model.verifyCode(email: email, code: code, again: true, child: isChild)
                             if v != .failed {
                                 await model.onActive()
                                 model.message = PaxCopy.signedIn
@@ -241,7 +265,7 @@ struct SignInAgainView: View {
                     .disabled(!SetupRules.isCode(code))
                     BodyText(resent ? PaxCopy.codeSent : PaxCopy.codeResendNote, small: true)
                     Button(PaxCopy.codeResend) {
-                        Task { if await model.sendCode(email: email) { code = ""; resent = true } }
+                        Task { if await model.sendCode(email: email, child: isChild) { code = ""; resent = true } }
                     }
                     .buttonStyle(PaxSecondaryButton())
                 }

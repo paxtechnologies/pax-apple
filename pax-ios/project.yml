@@ -183,6 +183,8 @@ targets:
       - Shared/Stronger.swift
       - Shared/PaxCopy.swift
       - Shared/AccountDeletion.swift
+      - Shared/SiteRemoval.swift
+      - Shared/StrictSync.swift
       - Guide/Sources/Core
     settings:
       base:

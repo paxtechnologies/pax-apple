@@ -23,7 +23,7 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if model.policy.isActive && model.policy.setUpFinished {
+            if (model.policy.isActive || model.policy.macSetUp) && model.policy.setUpFinished {
                 HomeView()
             } else {
                 OnboardingView()

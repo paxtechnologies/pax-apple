@@ -17,7 +17,7 @@ final class CopyTests: XCTestCase {
         XCTAssertEqual(PaxCopy.computerTitle, "Make Pax unremovable")
         XCTAssertEqual(PaxCopy.computerSubtitle, "Set up from a Mac or Windows PC")
         XCTAssertEqual(Pax.computerSetupURL.absoluteString, "https://paxpeace.com/setup")
-        XCTAssertTrue(PaxCopy.lockBody.contains("Face ID alone can switch Pax off"))
+        XCTAssertTrue(PaxCopy.lockBody.contains("until your turn-off wait ends"))
     }
 
     func testMacStepsComeFromTheGuide() {
@@ -45,13 +45,19 @@ final class CopyTests: XCTestCase {
         XCTAssertTrue(PaxCopy.waitTitle.contains("turn-off wait"))
     }
 
-    func testHonestLimits() {
-        let l = PaxCopy.limits(isPad: false, passcode: false).joined(separator: " ")
-        XCTAssertTrue(l.contains("full erase"))
-        XCTAssertTrue(l.contains("switch the encrypted DNS off in Settings"))
-        XCTAssertTrue(l.contains("Face ID"))
-        XCTAssertFalse(PaxCopy.limits(isPad: false, passcode: true).joined().contains("Face ID"))
-        XCTAssertTrue(PaxCopy.dnsHonest(trusted: true).contains("switch this layer off"))
+    /// 1.2 (Ruben, 23 Oct 2026): no "Good to know", and nothing in the app explains how to
+    /// remove, get round or switch Pax off other than through the turn-off wait.
+    func testNoWayRoundTheWaitInTheApp() {
+        let banned = ["Good to know", "unlock", "full erase", "restore from a computer", "Face ID can",
+                      "Face ID alone", "switch this layer off", "can switch the encrypted DNS off",
+                      "switched off in Settings", "with no wait", "could be reset", "First hour"]
+        for line in every {
+            for b in banned {
+                XCTAssertNil(line.range(of: b, options: .caseInsensitive), "“\(b)” in: \(line)")
+            }
+        }
+        XCTAssertTrue(PaxCopy.dnsHonest(trusted: true).contains("Pax shows it here"))
+        XCTAssertEqual(PaxCopy.homeNoPasscode, "Screen Time isn't locked yet")
     }
 
     func testDeviceWordMatches() {

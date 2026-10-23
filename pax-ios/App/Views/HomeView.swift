@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Home: what's on, then "Make Pax stronger" (optional cards in a fixed order: Lock Screen
 // Time, someone you trust, encrypted DNS, apps to keep closed, turn-off wait, set up from a
-// computer), your blocked sites, turning off (server wait, the person you trust emailed
-// first, fail closed), honest limits, account.
+// computer), your blocked sites (removing one takes the turn-off wait on the server), turning
+// off (server wait, the person you trust emailed first, fail closed), account. 1.2: no "Good to
+// know" section, and a device set up from a Mac shows that set-up and only adds to it.
 import SwiftUI
 import UIKit
 import FamilyControls
@@ -19,14 +20,26 @@ struct HomeView: View {
     @State private var macShown = false
     @State private var signInShown = false
     @State private var moreApps = FamilyActivitySelection()
+    @State private var dnsGuideShown = false
+    @State private var removing: String?
     @State private var now = Date()
     private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     private var isPad: Bool { model.isPad }
     private var p: PaxPolicy { model.policy }
+    /// Set up from a Mac and joined by this app (StrictSync): show it, add to it, nothing else.
+    private var mac: Bool { p.macSetUp && !p.isActive }
+
+    private var scrollTarget: String? {
+        #if DEBUG
+        return ScreenshotMode.scroll
+        #else
+        return nil
+        #endif
+    }
 
     var body: some View {
-        PaxPage {
+        PaxPage(scrollTo: scrollTarget) {
             HStack {
                 PaxLogo(height: 54)
                 Spacer()
@@ -39,10 +52,10 @@ struct HomeView: View {
             if !model.signedIn { signInAgain }
             status
             stronger
-            sites
+            sites.id("sites")
             turnOff
-            limits
             MessageText(text: model.message)
+            Color.clear.frame(height: 1).id("end")
         }
         .refreshable { await model.onActive() }
         .onReceive(tick) { now = $0 }
@@ -62,6 +75,12 @@ struct HomeView: View {
         .sheet(isPresented: $waitShown) { WaitChangeView().environmentObject(model) }
         .sheet(isPresented: $macShown) { MacSetupView(isPad: isPad) }
         .sheet(isPresented: $signInShown) { SignInAgainView().environmentObject(model) }
+        .sheet(isPresented: $dnsGuideShown) { DNSGuideView(isPad: isPad) }
+        .onAppear {
+            #if DEBUG
+            if ScreenshotMode.dnsGuide { dnsGuideShown = true }
+            #endif
+        }
     }
 
     /// The sign-in on this device was lost: Pax stays on; the same email and code sign in again.
@@ -76,6 +95,22 @@ struct HomeView: View {
 
     private var status: some View {
         PaxCard {
+            if mac {
+                Text(PaxCopy.homeOn)
+                    .font(PaxFont.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                StatusRow(text: PaxCopy.homeMacSetUp, symbol: "laptopcomputer", good: true)
+                StatusRow(text: PaxCopy.homeFilter, symbol: "checkmark.shield")
+                if model.filteredHere != false {
+                    StatusRow(text: PaxCopy.homeMacFilter, symbol: "lock", good: true)
+                }
+                StatusRow(text: PaxCopy.homeWait(p.waitDays), symbol: "hourglass", good: true)
+            } else {
+                appStatus
+            }
+        }
+    }
+
+    @ViewBuilder private var appStatus: some View {
             if model.accessLost {
                 Text(PaxCopy.homeAccessLost)
                     .font(PaxFont.heading(26, relativeTo: .title2)).foregroundStyle(Palette.caution)
@@ -89,8 +124,6 @@ struct HomeView: View {
             StatusRow(text: p.passcodeEscrowed ? PaxCopy.homePasscodeKept : PaxCopy.homeNoPasscode,
                       symbol: p.passcodeEscrowed ? "key" : "exclamationmark.circle", good: p.passcodeEscrowed)
             StatusRow(text: PaxCopy.homeWait(p.waitDays), symbol: "hourglass", good: true)
-            if model.inGrace { BodyText(PaxCopy.homeGrace, small: true) }
-        }
     }
 
     // MARK: Make Pax stronger
@@ -100,9 +133,11 @@ struct HomeView: View {
             Text(PaxCopy.strongerTitle)
                 .font(PaxFont.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 .accessibilityAddTraits(.isHeader)
-            let prog = StrongerList.progress(p, hasApps: model.hasApps)
-            BodyText(PaxCopy.strongerProgress(done: prog.done, total: prog.total), small: true)
-            ForEach(StrongerList.order, id: \.self) { card in
+            if !mac {
+                let prog = StrongerList.progress(p, hasApps: model.hasApps)
+                BodyText(PaxCopy.strongerProgress(done: prog.done, total: prog.total), small: true)
+            }
+            ForEach(StrongerList.cards(macSetUp: mac), id: \.self) { card in
                 strongerCard(card)
             }
         }
@@ -139,16 +174,16 @@ struct HomeView: View {
                 if !p.dnsInstalled {
                     BodyText(PaxCopy.dnsBody)
                     BodyText(PaxCopy.dnsHonest(trusted: p.hasTrustedPerson), small: true)
-                    Button(PaxCopy.dnsAdd) { Task { _ = await model.installDNS() } }
-                        .buttonStyle(PaxSecondaryButton())
+                    Button(PaxCopy.dnsAdd) {
+                        Task { if await model.installDNS(), model.dnsOn != true { dnsGuideShown = true } }
+                    }
+                    .buttonStyle(PaxSecondaryButton())
                 } else {
                     StatusRow(text: model.dnsOn == true ? PaxCopy.homeDNSOn : PaxCopy.homeDNSOff,
                               symbol: model.dnsOn == true ? "checkmark.circle" : "exclamationmark.circle",
                               good: model.dnsOn == true)
                     if model.dnsOn != true {
-                        Button(PaxCopy.dnsOpenSettings) {
-                            if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
-                        }.buttonStyle(PaxSecondaryButton())
+                        Button(PaxCopy.dnsShowSteps) { dnsGuideShown = true }.buttonStyle(PaxSecondaryButton())
                     }
                 }
             }
@@ -209,16 +244,61 @@ struct HomeView: View {
                 .foregroundStyle(Palette.accent)
                 .disabled(PaxPolicy.normalise(newSite) == nil)
             }
-            ForEach(p.blockedDomains, id: \.self) { d in
-                Text(d).font(PaxFont.body(16)).foregroundStyle(Palette.body)
-            }
+            ForEach(p.blockedDomains, id: \.self) { d in siteRow(d) }
             BodyText(PaxCopy.sitesFooter, small: true)
         }
+        .confirmationDialog(PaxCopy.sitesRemoveTitle(removing ?? ""),
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            titleVisibility: .visible) {
+            Button(PaxCopy.turnOffStart) {
+                let d = removing ?? ""
+                removing = nil
+                Task { await model.requestSiteRemoval(d) }
+            }
+            Button(PaxCopy.sitesKeep, role: .cancel) { removing = nil }
+        } message: {
+            Text(PaxCopy.sitesRemoveBody(waitDays: p.waitDays, trusted: p.hasTrustedPerson))
+        }
+    }
+
+    /// One of your own sites: Remove (starts the turn-off wait on the server), or, while it
+    /// waits, "Removing, available in …" with Cancel. It comes off only after the wait.
+    private func siteRow(_ d: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(d).font(PaxFont.body(16)).foregroundStyle(Palette.body)
+                if let pr = SiteRemoval.pending(d, in: p) {
+                    let left = SiteRemoval.remaining(pr, serverOffset: model.serverOffset, now: now)
+                    Text(left > 60 ? PaxCopy.sitesRemoving(TurnOffRules.describe(remaining: left)) : PaxCopy.sitesRemovingSoon)
+                        .font(PaxFont.body(14, relativeTo: .footnote)).foregroundStyle(Palette.caution)
+                }
+            }
+            Spacer(minLength: 8)
+            if SiteRemoval.pending(d, in: p) != nil {
+                Button(PaxCopy.sitesCancel) { Task { await model.cancelSiteRemoval(d) } }
+                    .font(PaxFont.body(15, weight: .semibold)).foregroundStyle(Palette.accent)
+            } else {
+                Button(PaxCopy.sitesRemove) {
+                    if model.signedIn { removing = d } else { model.message = PaxCopy.sitesSignInFirst }
+                }
+                .font(PaxFont.body(15, weight: .medium)).foregroundStyle(Palette.accent)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var turnOff: some View {
         PaxCard {
             Text(PaxCopy.turnOffTitle).font(PaxFont.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+            if mac {
+                BodyText(PaxCopy.macTurnOff(isPad: isPad))
+            } else {
+                appTurnOff
+            }
+        }
+    }
+
+    @ViewBuilder private var appTurnOff: some View {
             switch model.phase {
             case .none:
                 BodyText(PaxCopy.turnOffIdle(trusted: p.hasTrustedPerson))
@@ -241,16 +321,41 @@ struct HomeView: View {
                 BodyText(PaxCopy.turnOffUnknown)
                 Button("Try again") { Task { await model.refreshStatus() } }.buttonStyle(PaxSecondaryButton())
             }
-        }
     }
+}
 
-    private var limits: some View {
-        PaxCard {
-            Text(PaxCopy.limitsTitle)
-                .font(PaxFont.body(15, weight: .semibold, relativeTo: .subheadline))
-                .foregroundStyle(Palette.accent)
-            BulletList(lines: PaxCopy.limits(isPad: isPad, passcode: p.passcodeEscrowed))
+/// Encrypted DNS: the steps to switch it on in Settings. Apple lets an app open only its own page
+/// in Settings (UIApplication.openSettingsURLString), so the steps start there and say how to get
+/// to General › VPN & Device Management › DNS on this iOS version. No private Settings URLs.
+struct DNSGuideView: View {
+    let isPad: Bool
+    @Environment(\.dismiss) private var dismiss
+    private var osMajor: Int { ProcessInfo.processInfo.operatingSystemVersion.majorVersion }
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.dnsGuideTitle)
+                BodyText(PaxCopy.dnsGuideIntro(isPad: isPad))
+                PaxCard {
+                    ForEach(Array(PaxCopy.dnsGuideSteps(isPad: isPad, osMajor: osMajor).enumerated()), id: \.offset) { i, line in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text("\(i + 1).").font(PaxFont.body(17, weight: .semibold)).foregroundStyle(Palette.accent)
+                            BodyText(line)
+                        }
+                    }
+                }
+                Button(PaxCopy.dnsOpenSettings) {
+                    if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+                }
+                .buttonStyle(PaxPrimaryButton())
+                Button(PaxCopy.dnsGuideClose) { dismiss() }.buttonStyle(PaxSecondaryButton())
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+            }
         }
+        .navigationViewStyle(.stack)
     }
 }
 
@@ -410,7 +515,7 @@ struct WaitChangeView: View {
                 SectionTitle(PaxCopy.waitTitle)
                 BodyText(PaxCopy.waitBody(currentDays: model.policy.waitDays))
                 PaxCard {
-                    ForEach(Pax.waitChoices, id: \.self) { d in
+                    ForEach(SetupRules.waitChoices(child: model.policy.audience == .child), id: \.self) { d in
                         Button { days = d } label: {
                             HStack {
                                 Text(TurnOffRules.waitLabel(days: d))

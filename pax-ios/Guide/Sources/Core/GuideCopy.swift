@@ -71,19 +71,6 @@ public enum GuideCopy {
     public static let copyLink = "Copy link"
     public static let copied = "Copied"
 
-    public static let goodToKnowTitle = "Good to know"
-    public static func goodToKnow(isPad: Bool) -> [String] {
-        let d = device(isPad: isPad)
-        return [
-            "Setting up needs a Mac. After that, this \(d) stays protected on its own.",
-            "“Keep my data” is the default: your apps, photos and Apple Account stay.",
-            "On your first day, you can change your mind instantly.",
-            "You can add someone you trust: a friend, a partner or a parent. They're emailed if anyone asks to turn Pax off. They never have to approve anything.",
-            "For your family: set Pax up on your child's \(d), choose a long turn-off wait and add yourself as the trusted person. No browsing history is kept, so it protects without spying.",
-            "A full restore from a computer erases the \(d) and removes Pax.",
-        ]
-    }
-
     public static let comingTitle = "Pax without a Mac"
     public static let comingBody = "We're working on a version of Pax that sets itself up on iPhone and iPad, "
         + "with no Mac needed. Until then, Pax Strict above is the way to protect this device."

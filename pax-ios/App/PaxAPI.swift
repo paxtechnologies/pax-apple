@@ -23,7 +23,14 @@ final class PaxAPI {
 
     /// POST /v1/accounts/email/verify: 201 created:true (a new account, its email verified) or
     /// 200 created:false (signed in to the account this email already has).
-    struct Verified: Decodable { let account_id: String; let token: String; let created: Bool? }
+    /// The child routes (0.8.32) add `kind` ("child") and `label` ("Sam's iPhone (child)").
+    struct Verified: Decodable {
+        let account_id: String
+        let token: String
+        let created: Bool?
+        var kind: String? = nil
+        var label: String? = nil
+    }
     struct AccountStatus: Decodable {
         let account_id: String
         let email: String?
@@ -36,12 +43,17 @@ final class PaxAPI {
         let pending_wait_seconds: Int?
         let pending_wait_effective_at: Double?
         let pending_partner_effective_at: Double?
+        /// 0.8.32: "adult" or "child" (older servers: absent).
+        var kind: String? = nil
+        var label: String? = nil
     }
     /// The server's device status (escrow.device_status).
     struct DeviceStatus: Decodable {
         let device_id: String
         let name: String?
         let platform: String?
+        /// "org.paxpeace.pax.appstore.<install>" (this app) or "org.paxpeace.pax.ios.<uuid>" (set up from a Mac).
+        var profile_identifier: String? = nil
         let in_grace_period: Bool?
         let grace_until: Double?
         let released: Bool?
@@ -80,6 +92,29 @@ final class PaxAPI {
     func keep(token: String) { Keychain.set(token, for: "account-token") }
 
     func signOutLocally() { Keychain.delete("account-token") }
+
+    // MARK: child accounts (server 0.8.32, docs/CHILD_ACCOUNTS.md). Separate routes on purpose:
+    // a server without them answers a plain 404 and the app never lands on the parent's account.
+    // 1.2 never calls POST /v1/accounts (0.8.32 answers it 410 app_update_required).
+
+    func startChild(parentEmail: String) async throws {
+        let _: Empty = try await send("POST", "/v1/accounts/child/start", ["email": parentEmail], auth: false)
+    }
+
+    /// Always a NEW child account with a 30-day wait (set by the server). Nothing is kept here.
+    func verifyChild(parentEmail: String, code: String, label: String, childName: String?, deviceName: String) async throws -> Verified {
+        var body: [String: Any] = ["email": parentEmail, "code": code, "label": String(label.prefix(100)),
+                                   "device_name": String(deviceName.prefix(40))]
+        if let n = childName, !n.isEmpty { body["child_name"] = n }
+        return try await send("POST", "/v1/accounts/child/verify", body, auth: false)
+    }
+
+    /// Signing in again on a child's device: only that child account (policy.accountID).
+    func signInChild(parentEmail: String, code: String, accountID: String, label: String) async throws -> Verified {
+        try await send("POST", "/v1/accounts/child/signin",
+                       ["email": parentEmail, "code": code, "account_id": accountID, "label": String(label.prefix(100))],
+                       auth: false)
+    }
 
     func me() async throws -> AccountStatus { try await send("GET", "/v1/accounts/me", nil) }
 
@@ -153,6 +188,18 @@ final class PaxAPI {
 
     func addBlocked(domain: String) async throws {
         let _: Empty = try await send("POST", "/v1/blocklist", ["domain": domain])
+    }
+
+    func blocklist() async throws -> BlocklistViewInfo { try await send("GET", "/v1/blocklist", nil) }
+
+    /// A request, never a removal: the person you trust is emailed first (503 if that fails, and
+    /// nothing starts), then the site stays blocked for the turn-off wait. See SiteRemoval.
+    func requestUnblock(domain: String) async throws -> BlocklistRequestResult {
+        try await send("POST", "/v1/blocklist/remove", ["domain": domain])
+    }
+
+    func cancelBlocklistRequest(id: String) async throws -> BlocklistViewInfo {
+        try await send("POST", "/v1/blocklist/requests/\(id)/cancel", [String: Any]())
     }
 
     func dnsInfo() async throws -> URL {

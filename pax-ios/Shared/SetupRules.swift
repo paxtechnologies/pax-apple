@@ -47,6 +47,8 @@ enum TurnOnOutcome: Equatable {
     case signedOut
     /// The server couldn't be reached or refused. Nothing switched on (fail closed).
     case failed
+    /// This device was already set up from a Mac: joined that set-up, nothing added (StrictSync).
+    case macSetUp
 }
 
 enum SetupRules {
@@ -72,7 +74,7 @@ enum SetupRules {
     /// Where the set-up goes after the quiet work.
     static func after(_ outcome: TurnOnOutcome, child: Bool) -> SetupStep {
         switch outcome {
-        case .on: return .done
+        case .on, .macSetUp: return .done
         case .denied: return .denied
         case .signedOut: return emailStep(child: child)
         case .failed: return .retry
@@ -163,6 +165,12 @@ enum SetupRules {
         return nil
     }
 
+    /// The turn-off waits offered on Home. A child's device never goes below 30 days (the
+    /// server refuses it: 403 child_wait_fixed), so shorter ones aren't offered there.
+    static func waitChoices(child: Bool) -> [Int] {
+        child ? Pax.waitChoices.filter { $0 >= Pax.childDefaultWaitDays } : Pax.waitChoices
+    }
+
     /// The account's wait is shared by all its devices. Set-up only ever lengthens it: nil when
     /// the account's wait is already as long or longer (nothing is sent).
     static func waitToSend(chosenDays: Int, currentSeconds: Int?) -> Int? {
@@ -191,6 +199,8 @@ struct ExistingAccount: Equatable {
     struct Device: Equatable {
         let name: String
         let kind: String        // iPhone, iPad, Mac or Device
+        /// Set up from a Mac (Pax for Mac's iPhone path), not from this app.
+        var fromMac = false
     }
     var waitDays: Int
     /// A shorter wait the account already asked for, coming in later.
@@ -200,16 +210,26 @@ struct ExistingAccount: Equatable {
     var devices: [Device]
     /// The wait set-up will lengthen the account's to (nil: it stays as it is).
     var lengthenTo: Int?
+    /// This device was already set up from a Mac on this account: the app joins it and changes
+    /// nothing (no wait is sent, nothing is lengthened or shortened).
+    var joiningMac = false
 
+    /// `profiles`: each device's profile identifier, in the same order as `devices` (optional).
     init(waitSeconds: Int, pendingWaitSeconds: Int?, trustedEmail: String?,
-         devices: [(name: String?, platform: String?, released: Bool?)], child: Bool) {
+         devices: [(name: String?, platform: String?, released: Bool?)], child: Bool,
+         profiles: [String?] = [], joiningMac: Bool = false) {
         waitDays = TurnOffRules.days(fromSeconds: waitSeconds)
         pendingWaitDays = pendingWaitSeconds.map(TurnOffRules.days(fromSeconds:))
         self.trustedEmail = (trustedEmail ?? "").isEmpty ? nil : trustedEmail
-        self.devices = devices.filter { $0.released != true }.map {
-            Device(name: ($0.name ?? "").isEmpty ? "A device" : $0.name!, kind: ExistingAccount.kind($0.platform ?? ""))
+        var list: [Device] = []
+        for (i, d) in devices.enumerated() where d.released != true {
+            list.append(Device(name: (d.name ?? "").isEmpty ? "A device" : d.name!, kind: ExistingAccount.kind(d.platform ?? ""),
+                               fromMac: StrictSync.isMacSetUp(profileIdentifier: i < profiles.count ? profiles[i] : nil)))
         }
-        lengthenTo = SetupRules.waitToSend(chosenDays: SetupRules.defaultWait(child: child), currentSeconds: waitSeconds)
+        self.devices = list
+        self.joiningMac = joiningMac
+        lengthenTo = joiningMac ? nil
+            : SetupRules.waitToSend(chosenDays: SetupRules.defaultWait(child: child), currentSeconds: waitSeconds)
     }
 
     static func kind(_ platform: String) -> String {

@@ -13,6 +13,17 @@ enum PaxAudience: String, Codable, Equatable {
     case child
 }
 
+/// A blocked site the person asked to remove (1.2). The Pax server holds the request: it
+/// emailed the person they trust first and keeps the site blocked for the turn-off wait. This
+/// device removes the site only once the server's list no longer has it AND the server's own
+/// clock is past `effectiveAt` (see SiteRemoval.reconcile). Never removed on the device alone.
+struct PendingSiteRemoval: Codable, Equatable {
+    var domain: String
+    var requestID: String
+    /// Server time (Unix seconds) the wait ends.
+    var effectiveAt: Int
+}
+
 struct PaxPolicy: Codable, Equatable {
     var isActive = false
     /// Set-up finished (passcode and DNS steps done or skipped). Home shows only then.
@@ -45,6 +56,14 @@ struct PaxPolicy: Codable, Equatable {
     var pendingReleaseKeyHash: String?
     /// The first name the trusted person sees in Pax's emails (`from_name`), if one was given.
     var displayName: String?
+    /// 1.2: removals waiting on the server (the turn-off wait), see PendingSiteRemoval.
+    var pendingSiteRemovals: [PendingSiteRemoval] = []
+    /// 1.2: this device was already set up from a Mac (supervised, Pax's locked profile). The app
+    /// joined that set-up's account and only shows it and adds to it: no Screen Time request, no
+    /// device record, no DNS configuration of its own (see StrictSync).
+    var macSetUp = false
+    /// The Mac set-up's device record on the server, when exactly one matched.
+    var macDeviceID: String?
 
     /// Every release key hash this device accepts for its main record.
     var acceptedReleaseHashes: [String] { [releaseKeyHash, pendingReleaseKeyHash].compactMap { $0 }.filter { !$0.isEmpty } }
@@ -56,7 +75,8 @@ struct PaxPolicy: Codable, Equatable {
     private enum K: String, CodingKey {
         case isActive, setUpFinished, audience, accountEmail, setUpAt, waitDays, blockedDomains,
              trustedEmail, passcodeEscrowed, deviceID, releaseKeyHash, dnsInstalled, dnsSeenOn,
-             dnsOffSince, dnsAlertSent, accessAlertSent, accountID, pendingReleaseKeyHash, displayName
+             dnsOffSince, dnsAlertSent, accessAlertSent, accountID, pendingReleaseKeyHash, displayName,
+             pendingSiteRemovals, macSetUp, macDeviceID
     }
 
     init(from decoder: Decoder) throws {
@@ -88,6 +108,9 @@ struct PaxPolicy: Codable, Equatable {
         accountID = o(.accountID)
         pendingReleaseKeyHash = o(.pendingReleaseKeyHash)
         displayName = o(.displayName)
+        pendingSiteRemovals = v(.pendingSiteRemovals, [PendingSiteRemoval]())
+        macSetUp = v(.macSetUp, false)
+        macDeviceID = o(.macDeviceID)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -111,6 +134,9 @@ struct PaxPolicy: Codable, Equatable {
         try c.encodeIfPresent(accountID, forKey: .accountID)
         try c.encodeIfPresent(pendingReleaseKeyHash, forKey: .pendingReleaseKeyHash)
         try c.encodeIfPresent(displayName, forKey: .displayName)
+        try c.encode(pendingSiteRemovals, forKey: .pendingSiteRemovals)
+        try c.encode(macSetUp, forKey: .macSetUp)
+        try c.encodeIfPresent(macDeviceID, forKey: .macDeviceID)
     }
 
     static let key = "pax.policy.v1"
@@ -133,7 +159,7 @@ struct PaxPolicy: Codable, Equatable {
         if let data = try? JSONEncoder().encode(self) { defaults.set(data, forKey: Self.key) }
     }
 
-    /// Adding a site is instant; removing one waits (handled by the server, like on a Mac).
+    /// Adding a site is instant; removing one takes the turn-off wait on the server (SiteRemoval).
     mutating func addDomain(_ raw: String) -> Bool {
         guard let d = Self.normalise(raw), !blockedDomains.contains(d) else { return false }
         blockedDomains.append(d)

@@ -22,7 +22,7 @@ What it does:
   resolves: **Not protected**. Nothing resolves: **Couldn't check (offline)**. Anything mixed:
   **Couldn't check**. No server change needed. A device set up on CleanBrowsing directly
   (Advanced) shows "Not protected" with a line saying this check can't confirm that filter.
-* Quieter extras at the bottom: good to know, "Pax without a Mac" (no dates), links.
+* Quieter extras at the bottom: "Pax without a Mac" (no dates), links. (1.2: no "Good to know" section; honest limits live on the website and with support.)
 
 No entitlements, no extensions, no accounts, no analytics, nothing stored or sent
 (`Resources/PrivacyInfo.xcprivacy`: no tracking, no data collected). Brand v2 "Dusk/Air":
