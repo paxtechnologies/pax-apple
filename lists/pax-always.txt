@@ -12,6 +12,9 @@ perplexity.ai
 sigmabrowser.com
 swiftask.ai
 multiplechat.ai
+# OpenAI as a whole (Ruben 2026-10-24): ChatGPT agent/Operator and Atlas drive a browser;
+# chatgpt.com was already blocked, this covers openai.com and every subdomain.
+openai.com
 #
 # --- search engines DNS can't force into safe search (Ruben 2026-10-23)
 brave.com

@@ -2,6 +2,7 @@
 # (checked 2026-10-17), the 57 everyday UK sites and a few essentials. The filter workflow
 # refuses any pack that blocks one of them. Remove a name only after checking it by hand.
 # 2026-10-23: perplexity.ai, brave.com, yandex.com, yandex.ru and ya.ru removed (Ruben asked to block them; lists/pax-always.txt).
+# 2026-10-24: openai.com removed (Ruben asked to block it; lists/pax-always.txt).
 0xrpc.io
 163.com
 1rx.io
@@ -641,7 +642,6 @@ onet.pl
 onetag-sys.com
 onetrust.com
 online-metrix.net
-openai.com
 openstreetmap.org
 openx.net
 optimizely.com
