@@ -76,7 +76,8 @@ After the token, every other route works as for any account (`/me`, `/devices`, 
 * **Turn-off wait at least 30 days** (`PAX_CHILD_WAIT_SECONDS`). `PUT /v1/accounts/me/wait` below it: **403**
   `child_wait_fixed` (PAX-ESCROW-021), nothing changes. Longer is allowed at once; coming back down (never below
   30 days) follows the usual rule (it waits out the current wait, and the parent is told).
-* **No trial day**: `POST /v1/devices` with `trial: true` gets none (`trial: null`).
+* **No trial day**: `POST /v1/devices` with `trial: true` gets none (`trial: null`). The first hour after a device
+  is registered (the grace hour, for set-up mistakes) still applies, as for every device; the parent is emailed first.
 * **All its mail goes to the parent**: codes, set-up, sign-in, turn-off requests and cancellations, wait and
   trusted-person changes, emergency release, verified support release, relay copies, and the deletion
   confirmation. For anything that loosens Pax (turn-off request, wait decrease, trusted-person change,
