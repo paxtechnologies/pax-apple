@@ -134,13 +134,20 @@ jobs:
             shoot "$U" "$P" 6-email -PaxShotStep 3
             # 1.2 (23 Oct 2026): blocked sites with a removal waiting, the DNS steps, the end of Home
             # (no "Good to know"), the child path, and a device already set up from a Mac.
-            shoot "$U" "$P" 7-sites-removing -PaxShotHome YES -PaxShotSites YES -PaxShotScroll sites
+            shoot "$U" "$P" 7-sites-removing -PaxShotHome YES -PaxShotSites YES
             shoot "$U" "$P" 8-dns-steps -PaxShotHome YES -PaxShotDNS YES
-            shoot "$U" "$P" 9-home-end -PaxShotHome YES -PaxShotScroll end
             shoot "$U" "$P" 10-child-code -PaxShotStep 2
             shoot "$U" "$P" 11-child-needs-update -PaxShotStep 1 -PaxShotChildUpdate YES
             shoot "$U" "$P" 12-mac-home -PaxShotMac YES
             shoot "$U" "$P" 13-mac-welcome-back -PaxShotStep 5 -PaxShotMacWelcome YES
+            # 1.2 (24 Oct 2026): simplified Home + Settings, YouTube Restricted Mode turning off (as on a
+            # server with the wait), a child's Home, a Mac set-up's Settings, blocked apps (add, removing).
+            shoot "$U" "$P" 14-settings -PaxShotHome YES -PaxShotSettings YES
+            shoot "$U" "$P" 15-youtube-turning-off -PaxShotHome YES -PaxShotSettings YES -PaxShotYouTube pending
+            shoot "$U" "$P" 16-child-home -PaxShotChild YES
+            shoot "$U" "$P" 17-mac-settings -PaxShotMac YES -PaxShotSettings YES
+            shoot "$U" "$P" 18-apps-add -PaxShotHome YES -PaxShotApps YES -PaxShotAppSearch bai
+            shoot "$U" "$P" 19-apps-removing -PaxShotHome YES -PaxShotApps YES -PaxShotAppsRemoving YES
             xcrun simctl ui "$U" appearance dark
             shoot "$U" "$P" 5-home-dark -PaxShotHome YES
             xcrun simctl shutdown "$U" || true

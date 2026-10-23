@@ -17,8 +17,11 @@ enum PaxRestrictions {
         store.application.denyAppRemoval = true
         store.dateAndTime.requireAutomaticDateAndTime = true
         store.account.lockAccounts = true                       // hardware test T3
-        store.application.blockedApplications =                 // hardware test T6
-            Set(Pax.bypassAppBundleIDs.map { Application(bundleIdentifier: $0) })
+        // Hardware tests T6/T6b: by bundle ID, so an app that isn't installed yet is named too.
+        // Pax's untrusted browsers and the person's blocked apps (BlockedApps.swift), never
+        // Pax itself, Apple's apps or password managers.
+        store.application.blockedApplications =
+            Set(AppBlockRules.bundleIDs(policy).map { Application(bundleIdentifier: $0) })
         if let s = selection {
             store.shield.applications = s.applicationTokens.isEmpty ? nil : s.applicationTokens
             store.shield.webDomains = s.webDomainTokens.isEmpty ? nil : s.webDomainTokens

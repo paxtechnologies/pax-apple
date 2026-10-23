@@ -42,6 +42,11 @@ final class AppModel: ObservableObject {
     @Published var filteredHere: Bool?
     /// After the code: what to do about a set-up made from a Mac (nil before the check).
     @Published var macDecision: StrictSync.Decision?
+    /// YouTube Restricted Mode as Settings shows it (on, no switch, until the server says more).
+    @Published var youtube = YouTubeRow.fallback
+    /// The server keeps a blocked-apps list (GET /v1/apps answered), so removing one can take the
+    /// turn-off wait. false: blocked apps stay blocked and no removal is offered.
+    @Published var appsServerList = false
 
     let api = PaxAPI()
 
@@ -52,8 +57,13 @@ final class AppModel: ObservableObject {
         signedIn = api.signedIn
         #if DEBUG
         if ScreenshotMode.home { policy = ScreenshotMode.samplePolicy; dnsOn = true; signedIn = true }
+        if ScreenshotMode.childHome { policy = ScreenshotMode.sampleChildPolicy; dnsOn = true; signedIn = true }
         if ScreenshotMode.macHome { policy = ScreenshotMode.sampleMacPolicy; signedIn = true; filteredHere = true }
-        if ScreenshotMode.home || ScreenshotMode.macHome { serverOffset = 0 }
+        if ScreenshotMode.any {
+            serverOffset = 0
+            youtube = ScreenshotMode.sampleYouTube(policy)
+            appsServerList = ScreenshotMode.appsRemoving
+        }
         #endif
     }
 
@@ -74,7 +84,7 @@ final class AppModel: ObservableObject {
 
     func onActive() async {
         #if DEBUG
-        if ScreenshotMode.home || ScreenshotMode.macHome { return }   // screenshots: no network, no settings
+        if ScreenshotMode.any { return }   // screenshots: no network, no settings
         #endif
         signedIn = api.signedIn
         if policy.macSetUp && !policy.isActive {
@@ -85,6 +95,7 @@ final class AppModel: ObservableObject {
             filteredHere = StrictSync.filteredHere(probe: probe, ownDNSConfigured: false)
             await refreshAccount()
             await refreshSites()
+            await refreshYouTube()
             return
         }
         guard policy.isActive, !checking else { return }
@@ -95,6 +106,8 @@ final class AppModel: ObservableObject {
         await refreshStatus()
         await refreshAccount()
         await refreshSites()
+        await refreshApps()
+        await refreshYouTube()
     }
 
     func refreshAccount() async {
@@ -528,11 +541,13 @@ final class AppModel: ObservableObject {
     }
 
     /// After set-up the picker only adds: what's already closed stays closed.
+    /// The picker opens empty and its choices are merged in (SelectionRules), so un-choosing there
+    /// can never take anything off: removal isn't offered for picked apps at all.
     func addApps(_ more: FamilyActivitySelection) {
         var merged = selection
-        merged.applicationTokens = selection.applicationTokens.union(more.applicationTokens)
-        merged.webDomainTokens = selection.webDomainTokens.union(more.webDomainTokens)
-        merged.categoryTokens = selection.categoryTokens.union(more.categoryTokens)
+        merged.applicationTokens = SelectionRules.merged(selection.applicationTokens, adding: more.applicationTokens)
+        merged.webDomainTokens = SelectionRules.merged(selection.webDomainTokens, adding: more.webDomainTokens)
+        merged.categoryTokens = SelectionRules.merged(selection.categoryTokens, adding: more.categoryTokens)
         selection = merged
         saveSelection()
     }
@@ -622,6 +637,174 @@ final class AppModel: ObservableObject {
             policy.save()
             if policy.isActive { PaxRestrictions.apply(policy, selection: selection) }
         }
+    }
+
+    // MARK: blocked apps (by bundle ID, installed or not; BlockedApps.swift)
+
+    /// Instant: saved, applied (blockedApplications), its websites added to your blocked sites if
+    /// asked, and put on the server's list when it has one. Returns a calm problem, or nil.
+    func blockApp(bundleID raw: String, name: String, domains: [String]) async -> String? {
+        let bundleID = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let problem = AppBlockRules.problem(bundleID, policy: policy) {
+            return PaxCopy.blockedAppsProblem(problem, isPad: isPad)
+        }
+        policy.blockedApps.append(BlockedApp(bundleID: bundleID, name: name))
+        policy.save()
+        if policy.isActive { PaxRestrictions.apply(policy, selection: selection) }   // adding is instant
+        for d in domains where !policy.blockedDomains.contains(d) { await addSite(d) }
+        if appsServerList, api.signedIn { try? await api.addApp(bundleID: bundleID, name: name) }
+        return nil
+    }
+
+    /// "Another app": an App Store link (looked up with Apple's iTunes Lookup API) or a bundle ID.
+    func blockAppEntry(_ raw: String, alsoSites: Bool) async -> String? {
+        guard let entry = AppEntry.parse(raw) else { return PaxCopy.blockedAppsProblem(.notAnApp, isPad: isPad) }
+        let bundleID: String
+        var name: String
+        switch entry {
+        case .bundleID(let b):
+            bundleID = b
+            name = b
+        case .appStoreID(let id):
+            busy = true
+            let found = await PaxAPI.lookUpApp(appStoreID: id, country: Locale.current.regionCode)
+            busy = false
+            guard let found else { return PaxCopy.blockedAppsLookupFailed }
+            bundleID = found.bundleID
+            name = found.name
+        }
+        let known = AppCatalog.entry(bundleID: bundleID)
+        if let k = known { name = k.name }
+        return await blockApp(bundleID: bundleID, name: name, domains: alsoSites ? (known?.domains ?? []) : [])
+    }
+
+    /// Reads the server's blocked-apps list. 404: the server has none (removal not offered). An
+    /// app comes off this device only when the server no longer lists it and the server's clock is
+    /// past its wait (AppRemoval.reconcile). Other errors change nothing.
+    func refreshApps() async {
+        guard api.signedIn else { return }
+        let view: AppsViewInfo
+        do { view = try await api.apps() }
+        catch let e as PaxAPIError where e.status == 404 || e.status == 405 { appsServerList = false; return }
+        catch { return }
+        appsServerList = true
+        serverOffset = Double(view.now) - Date().timeIntervalSince1970
+        // Apps blocked before the server had a list: put them on it, so removing one takes the wait.
+        let listed = Set(view.apps.map { $0.bundle_id })
+        for a in policy.blockedApps where !listed.contains(a.bundleID)
+            && !policy.pendingAppRemovals.contains(where: { $0.bundleID == a.bundleID }) {
+            try? await api.addApp(bundleID: a.bundleID, name: a.name)
+        }
+        let r = AppRemoval.reconcile(local: policy.pendingAppRemovals, blocked: policy.blockedApps, server: view)
+        var p = policy
+        if AppRemoval.apply(r, to: &p) {
+            policy = p
+            policy.save()
+            if policy.isActive { PaxRestrictions.apply(policy, selection: selection) }
+        }
+    }
+
+    /// Asks the server to remove a blocked app. Never on the device alone: the person you trust is
+    /// emailed first (503: nothing starts), then the turn-off wait.
+    func requestAppRemoval(_ bundleID: String) async {
+        guard AppRemoval.canRemove(bundleID, policy: policy, serverHasList: appsServerList) else { return }
+        guard api.signedIn else { signedIn = false; message = PaxCopy.blockedAppsSignInFirst; return }
+        busy = true; defer { busy = false }
+        message = nil
+        do {
+            let r: AppRequestResult
+            do { r = try await api.requestAppRemoval(bundleID: bundleID) }
+            catch let e as PaxAPIError where e.status == 404 {
+                let name = policy.blockedApps.first { $0.bundleID == bundleID }?.name ?? bundleID
+                try await api.addApp(bundleID: bundleID, name: name)
+                r = try await api.requestAppRemoval(bundleID: bundleID)
+            }
+            guard let rec = AppRemoval.record(from: r, bundleID: bundleID) else { message = PaxCopy.blockedAppsRemoveFailed; return }
+            policy.pendingAppRemovals.removeAll { $0.bundleID == bundleID }
+            policy.pendingAppRemovals.append(rec)
+            policy.save()
+            serverOffset = Double(r.list.now) - Date().timeIntervalSince1970
+        } catch let e as PaxAPIError where e.status == 409 {
+            await refreshApps()
+        } catch let e as PaxAPIError {
+            if e.status == 401 { signedOutHere() }
+            message = e.status == 503 ? e.message : PaxCopy.blockedAppsRemoveFailed
+        } catch {
+            message = PaxCopy.blockedAppsRemoveFailed
+        }
+    }
+
+    func cancelAppRemoval(_ bundleID: String) async {
+        guard let p = AppRemoval.pending(bundleID, in: policy) else { return }
+        let ok = await run { _ = try await self.api.cancelBlocklistRequest(id: p.requestID) }
+        if ok {
+            policy.pendingAppRemovals.removeAll { $0.bundleID == bundleID }
+            policy.save()
+        }
+        await refreshApps()
+    }
+
+    // MARK: YouTube Restricted Mode (on the server; YouTubeRestricted)
+
+    /// Reads it from the server. Fail closed: nothing readable keeps what's shown (on, no switch,
+    /// at first). Never changes anything.
+    func refreshYouTube() async {
+        #if DEBUG
+        if ScreenshotMode.any { return }
+        #endif
+        let child = policy.audience == .child
+        let mac = policy.macSetUp && !policy.isActive
+        guard api.signedIn else {
+            youtube = YouTubeRestricted.row(categories: nil, dnsSetting: nil, child: child, macSetUp: mac)
+            return
+        }
+        let cats = try? await api.categories()
+        let dns = try? await api.dnsSettings()
+        if cats == nil, dns == nil { return }
+        if cats == nil, youtube.canSwitch { return }    // keep the switch and any waiting turn-off as shown
+        if let c = cats { serverOffset = Double(c.now) - Date().timeIntervalSince1970 }
+        youtube = YouTubeRestricted.row(categories: cats, dnsSetting: dns?.settings.youtube_restricted,
+                                        child: child, macSetUp: mac)
+    }
+
+    /// Instant, on the server.
+    func turnYouTubeOn() async {
+        guard YouTubeRestricted.flip(youtube, to: true) == .turnOnNow else { return }
+        guard api.signedIn else { signedIn = false; message = PaxCopy.youtubeSignInFirst; return }
+        let ok = await run { _ = try await self.api.setYouTubeRestricted(true) }
+        if !ok, message == nil { message = PaxCopy.youtubeFailed }
+        await refreshYouTube()
+    }
+
+    /// Starts the turn-off wait on the server (the person you trust emailed first; 503: nothing
+    /// starts). It stays on until the server's wait ends.
+    func requestYouTubeOff() async {
+        guard YouTubeRestricted.flip(youtube, to: false) == .confirmTurnOff else { return }
+        guard api.signedIn else { signedIn = false; message = PaxCopy.youtubeSignInFirst; return }
+        busy = true
+        message = nil
+        do {
+            let r = try await api.setYouTubeRestricted(false)
+            if let req = r.request, req.status == "pending", req.action == YouTubeRestricted.offAction {
+                youtube.turningOff = YouTubeTurnOff(requestID: req.request_id, effectiveAt: req.effective_at)
+            }
+            if let now = r.now { serverOffset = Double(now) - Date().timeIntervalSince1970 }
+        } catch let e as PaxAPIError where e.status == 409 {
+            // already waiting: shown after the refresh
+        } catch let e as PaxAPIError {
+            if e.status == 401 { signedOutHere() }
+            message = e.status == 503 ? e.message : PaxCopy.youtubeFailed
+        } catch {
+            message = PaxCopy.youtubeFailed
+        }
+        busy = false
+        await refreshYouTube()
+    }
+
+    func cancelYouTubeOff() async {
+        guard let t = youtube.turningOff else { return }
+        _ = await run { _ = try await self.api.cancelBlocklistRequest(id: t.requestID) }
+        await refreshYouTube()
     }
 
     // MARK: turning off (server decides; fail closed)

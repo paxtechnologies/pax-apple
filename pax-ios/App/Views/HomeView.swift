@@ -1,27 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Home: what's on, then "Make Pax stronger" (optional cards in a fixed order: Lock Screen
-// Time, someone you trust, encrypted DNS, apps to keep closed, turn-off wait, set up from a
-// computer), your blocked sites (removing one takes the turn-off wait on the server), turning
-// off (server wait, the person you trust emailed first, fail closed), account. 1.2: no "Good to
-// know" section, and a device set up from a Mac shows that set-up and only adds to it.
+// Home, simplified (Ruben, 24 Oct 2026: "simple clean minimal and functional"): the status at the
+// top ("Pax is on", the turn-off wait), the "Make Pax stronger" nudge only while Screen Time isn't
+// locked, and two actions, Blocked sites and Settings. Everything else is one-line rows in
+// Settings (HomeLayout), with Turn off Pax last: the turn-off wait, the person you trust emailed
+// first, fail closed, as before. A device set up from a Mac shows that set-up and only adds to it;
+// a child's device has YouTube Restricted Mode always on.
 import SwiftUI
 import UIKit
 import FamilyControls
 
+extension SettingsItem: Identifiable { var id: String { rawValue } }
+
 struct HomeView: View {
     @EnvironmentObject var model: AppModel
-    @State private var newSite = ""
-    @State private var confirmTurnOff = false
-    @State private var accountShown = false
-    @State private var pickerShown = false
+    @State private var settingsShown = false
+    @State private var sitesShown = false
+    @State private var appsShown = false
     @State private var lockShown = false
-    @State private var trustedShown = false
-    @State private var waitShown = false
-    @State private var macShown = false
     @State private var signInShown = false
-    @State private var moreApps = FamilyActivitySelection()
     @State private var dnsGuideShown = false
-    @State private var removing: String?
     @State private var now = Date()
     private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
@@ -30,54 +27,36 @@ struct HomeView: View {
     /// Set up from a Mac and joined by this app (StrictSync): show it, add to it, nothing else.
     private var mac: Bool { p.macSetUp && !p.isActive }
 
-    private var scrollTarget: String? {
-        #if DEBUG
-        return ScreenshotMode.scroll
-        #else
-        return nil
-        #endif
-    }
-
     var body: some View {
-        PaxPage(scrollTo: scrollTarget) {
+        PaxPage {
             HStack {
-                PaxLogo(height: 54)
+                PaxLogo(height: 46)
                 Spacer()
-                Button { accountShown = true } label: {
-                    Image(systemName: "person.crop.circle").font(.system(size: 26))
+                Button { settingsShown = true } label: {
+                    Image(systemName: "gearshape").font(.system(size: 24))
                 }
                 .foregroundStyle(Palette.accent)
-                .accessibilityLabel(PaxCopy.accountTitle)
+                .accessibilityLabel(PaxCopy.homeSettings)
             }
             if !model.signedIn { signInAgain }
             status
-            stronger
-            sites.id("sites")
-            turnOff
+            if HomeLayout.showsNudge(p, macSetUp: mac) { nudge }
+            actions
             MessageText(text: model.message)
-            Color.clear.frame(height: 1).id("end")
         }
         .refreshable { await model.onActive() }
         .onReceive(tick) { now = $0 }
-        .familyActivityPicker(isPresented: $pickerShown, selection: $moreApps)
-        .onChange(of: pickerShown) { shown in
-            if !shown { model.addApps(moreApps); moreApps = FamilyActivitySelection() }
-        }
-        .confirmationDialog(PaxCopy.turnOffConfirmTitle, isPresented: $confirmTurnOff, titleVisibility: .visible) {
-            Button(PaxCopy.turnOffStart) { Task { await model.requestTurnOff() } }
-            Button(PaxCopy.keepOn, role: .cancel) {}
-        } message: {
-            Text(PaxCopy.turnOffConfirmBody(trusted: p.hasTrustedPerson))
-        }
-        .sheet(isPresented: $accountShown) { AccountView().environmentObject(model) }
+        .sheet(isPresented: $settingsShown) { SettingsView().environmentObject(model) }
+        .sheet(isPresented: $sitesShown) { SitesView().environmentObject(model) }
+        .sheet(isPresented: $appsShown) { BlockedAppsView().environmentObject(model) }
         .sheet(isPresented: $lockShown) { LockScreenTimeView().environmentObject(model) }
-        .sheet(isPresented: $trustedShown) { TrustedPersonView().environmentObject(model) }
-        .sheet(isPresented: $waitShown) { WaitChangeView().environmentObject(model) }
-        .sheet(isPresented: $macShown) { MacSetupView(isPad: isPad) }
         .sheet(isPresented: $signInShown) { SignInAgainView().environmentObject(model) }
         .sheet(isPresented: $dnsGuideShown) { DNSGuideView(isPad: isPad) }
         .onAppear {
             #if DEBUG
+            if ScreenshotMode.settings { settingsShown = true }
+            if ScreenshotMode.sites { sitesShown = true }
+            if ScreenshotMode.apps { appsShown = true }
             if ScreenshotMode.dnsGuide { dnsGuideShown = true }
             #endif
         }
@@ -93,160 +72,392 @@ struct HomeView: View {
         }
     }
 
+    // MARK: the status
+
     private var status: some View {
         PaxCard {
-            if mac {
-                Text(PaxCopy.homeOn)
-                    .font(PaxFont.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                StatusRow(text: PaxCopy.homeMacSetUp, symbol: "laptopcomputer", good: true)
-                StatusRow(text: PaxCopy.homeFilter, symbol: "checkmark.shield")
-                if model.filteredHere != false {
-                    StatusRow(text: PaxCopy.homeMacFilter, symbol: "lock", good: true)
-                }
-                StatusRow(text: PaxCopy.homeWait(p.waitDays), symbol: "hourglass", good: true)
-            } else {
-                appStatus
-            }
-        }
-    }
-
-    @ViewBuilder private var appStatus: some View {
-            if model.accessLost {
+            if model.accessLost && !mac {
                 Text(PaxCopy.homeAccessLost)
-                    .font(PaxFont.heading(26, relativeTo: .title2)).foregroundStyle(Palette.caution)
+                    .font(PaxFont.heading(28, relativeTo: .title2)).foregroundStyle(Palette.caution)
+                    .fixedSize(horizontal: false, vertical: true)
                 BodyText(PaxCopy.homeAccessLostBody(isPad: isPad, trusted: p.hasTrustedPerson))
             } else {
-                Text(PaxCopy.homeOn)
-                    .font(PaxFont.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                StatusRow(text: PaxCopy.homeFilter, symbol: "checkmark.shield")
-                StatusRow(text: PaxCopy.homeDelete, symbol: "lock")
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(Palette.good)
+                        .accessibilityHidden(true)
+                    Text(PaxCopy.homeOn)
+                        .font(PaxFont.heading(36, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                BodyText(PaxCopy.homeFilter)
             }
-            StatusRow(text: p.passcodeEscrowed ? PaxCopy.homePasscodeKept : PaxCopy.homeNoPasscode,
-                      symbol: p.passcodeEscrowed ? "key" : "exclamationmark.circle", good: p.passcodeEscrowed)
-            StatusRow(text: PaxCopy.homeWait(p.waitDays), symbol: "hourglass", good: true)
+            VStack(alignment: .leading, spacing: 10) {
+                StatusRow(text: PaxCopy.homeWait(p.waitDays), symbol: "hourglass", good: true)
+                if mac {
+                    StatusRow(text: PaxCopy.homeMacSetUp, symbol: "laptopcomputer", good: true)
+                } else if p.audience == .child {
+                    StatusRow(text: PaxCopy.homeChild, symbol: "person.2", good: true)
+                }
+            }
+            if !mac { turnOffLine }
+        }
     }
 
-    // MARK: Make Pax stronger
+    /// Only while a turn-off is waiting or ready: the time left and Keep Pax on. Starting one is
+    /// in Settings › Turn off Pax.
+    @ViewBuilder private var turnOffLine: some View {
+        switch model.phase {
+        case .waiting(let until):
+            let left = until.timeIntervalSince(now)
+            BodyText(left > 0 ? PaxCopy.turnOffWaiting(TurnOffRules.describe(remaining: left)) : PaxCopy.turnOffReady,
+                     small: true)
+            Button(PaxCopy.keepOn) { Task { await model.cancelTurnOff() } }.buttonStyle(PaxSecondaryButton())
+        case .ready:
+            BodyText(PaxCopy.turnOffReady, small: true)
+            Button(PaxCopy.keepOn) { Task { await model.cancelTurnOff() } }.buttonStyle(PaxSecondaryButton())
+        case .none, .unknown:
+            EmptyView()
+        }
+    }
 
-    private var stronger: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(PaxCopy.strongerTitle)
-                .font(PaxFont.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                .accessibilityAddTraits(.isHeader)
-            if !mac {
-                let prog = StrongerList.progress(p, hasApps: model.hasApps)
-                BodyText(PaxCopy.strongerProgress(done: prog.done, total: prog.total), small: true)
+    // MARK: Make Pax stronger (only while Screen Time isn't locked)
+
+    private var nudge: some View {
+        PaxCard {
+            HStack(alignment: .firstTextBaseline) {
+                Text(PaxCopy.strongerTitle)
+                    .font(PaxFont.body(14, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(Palette.accent)
+                    .textCase(.uppercase)
+                    .tracking(1.1)
+                Spacer(minLength: 4)
+                Text(PaxCopy.recommended)
+                    .font(PaxFont.body(13, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(Palette.buttonText)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(Capsule().fill(Palette.accent))
             }
-            ForEach(StrongerList.cards(macSetUp: mac), id: \.self) { card in
-                strongerCard(card)
+            Text(PaxCopy.lockTitle)
+                .font(PaxFont.body(19, weight: .semibold, relativeTo: .title3)).foregroundStyle(Palette.ink)
+            BodyText(PaxCopy.lockBody, small: true)
+            Button(PaxCopy.lockButton) { lockShown = true }.buttonStyle(PaxPrimaryButton())
+        }
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Palette.accent, lineWidth: 2))
+    }
+
+    // MARK: two actions
+
+    private var actions: some View {
+        RowGroup {
+            ForEach(Array(HomeLayout.actions.enumerated()), id: \.offset) { i, a in
+                if i > 0 { RowDivider() }
+                switch a {
+                case .blockedSites:
+                    NavRow(title: PaxCopy.homeSites, symbol: "nosign",
+                           value: PaxCopy.sitesCount(p.blockedDomains.count)) { sitesShown = true }
+                case .settings:
+                    NavRow(title: PaxCopy.homeSettings, symbol: "gearshape") { settingsShown = true }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Settings: everything else, one line each
+
+struct SettingsView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var open: SettingsItem?
+    @State private var pickerShown = false
+    @State private var moreApps = FamilyActivitySelection()
+    @State private var confirmYouTubeOff = false
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    private var p: PaxPolicy { model.policy }
+    private var mac: Bool { p.macSetUp && !p.isActive }
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.settingsTitle)
+                group(PaxCopy.settingsProtection, HomeLayout.protection(macSetUp: mac))
+                group(PaxCopy.settingsAccount, HomeLayout.yourAccount(macSetUp: mac))
+                RowGroup {
+                    ForEach(HomeLayout.last) { item in row(item) }
+                }
+                MessageText(text: model.message)
+            }
+            .disabled(model.busy)
+            .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .onReceive(tick) { now = $0 }
+        .task { await model.refreshYouTube() }
+        .familyActivityPicker(isPresented: $pickerShown, selection: $moreApps)
+        .onChange(of: pickerShown) { shown in
+            if !shown { model.addApps(moreApps); moreApps = FamilyActivitySelection() }
+        }
+        .sheet(item: $open) { item in sheet(for: item) }
+        .confirmationDialog(PaxCopy.youtubeOffTitle, isPresented: $confirmYouTubeOff, titleVisibility: .visible) {
+            Button(PaxCopy.turnOffStart) { Task { await model.requestYouTubeOff() } }
+            Button(PaxCopy.youtubeKeepOn, role: .cancel) {}
+        } message: {
+            Text(PaxCopy.youtubeOffBody(waitDays: p.waitDays, trusted: p.hasTrustedPerson))
+        }
+    }
+
+    private func group(_ title: String, _ items: [SettingsItem]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(PaxFont.body(14, weight: .semibold, relativeTo: .caption))
+                .foregroundStyle(Palette.accent)
+                .textCase(.uppercase)
+                .tracking(1.1)
+                .padding(.leading, 6)
+                .accessibilityAddTraits(.isHeader)
+            RowGroup {
+                ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                    if i > 0 { RowDivider() }
+                    row(item)
+                }
             }
         }
     }
 
-    @ViewBuilder private func strongerCard(_ card: StrongerCard) -> some View {
-        let done = card.isDone(p, hasApps: model.hasApps)
-        switch card {
+    @ViewBuilder private func row(_ item: SettingsItem) -> some View {
+        switch item {
         case .lockScreenTime:
-            StrongerCardView(title: PaxCopy.lockTitle, symbol: "key", done: done,
-                             recommended: StrongerList.nudge(p)) {
-                if done {
-                    BodyText(PaxCopy.lockDone, small: true)
-                } else {
-                    BodyText(PaxCopy.lockBody)
-                    Button(PaxCopy.lockButton) { lockShown = true }.buttonStyle(PaxPrimaryButton())
-                }
-            }
-        case .trustedPerson:
-            StrongerCardView(title: PaxCopy.trustedTitle, symbol: "person.2", done: done) {
-                if done {
-                    StatusRow(text: PaxCopy.homeTrusted(p.trustedEmail), symbol: "person.2", good: true)
-                    if let pending = model.account?.pending_partner_email {
-                        BodyText(PaxCopy.trustedPending(pending), small: true)
-                    }
-                    Button(PaxCopy.trustedChange) { trustedShown = true }.buttonStyle(PaxSecondaryButton())
-                } else {
-                    BodyText(PaxCopy.trustedBody)
-                    Button(PaxCopy.trustedTitle) { trustedShown = true }.buttonStyle(PaxSecondaryButton())
-                }
-            }
+            NavRow(title: PaxCopy.rowLock, symbol: "key",
+                   value: p.passcodeEscrowed ? PaxCopy.rowOn : PaxCopy.rowNotYet) { open = .lockScreenTime }
         case .encryptedDNS:
-            StrongerCardView(title: PaxCopy.dnsTitle, symbol: "network", done: done) {
-                if !p.dnsInstalled {
-                    BodyText(PaxCopy.dnsBody)
-                    BodyText(PaxCopy.dnsHonest(trusted: p.hasTrustedPerson), small: true)
-                    Button(PaxCopy.dnsAdd) {
-                        Task { if await model.installDNS(), model.dnsOn != true { dnsGuideShown = true } }
-                    }
-                    .buttonStyle(PaxSecondaryButton())
-                } else {
-                    StatusRow(text: model.dnsOn == true ? PaxCopy.homeDNSOn : PaxCopy.homeDNSOff,
-                              symbol: model.dnsOn == true ? "checkmark.circle" : "exclamationmark.circle",
-                              good: model.dnsOn == true)
-                    if model.dnsOn != true {
-                        Button(PaxCopy.dnsShowSteps) { dnsGuideShown = true }.buttonStyle(PaxSecondaryButton())
-                    }
-                }
+            NavRow(title: PaxCopy.rowDNS, symbol: "network",
+                   value: !p.dnsInstalled ? PaxCopy.rowNotAdded : (model.dnsOn == true ? PaxCopy.rowOn : PaxCopy.rowOff)) {
+                open = .encryptedDNS
             }
         case .appsToClose:
-            StrongerCardView(title: PaxCopy.appsTitle, symbol: "app.badge", done: done) {
-                BodyText(PaxCopy.appsBody)
-                BodyText(PaxCopy.appsChosen(model.selection.applicationTokens.count
-                                            + model.selection.webDomainTokens.count
-                                            + model.selection.categoryTokens.count), small: true)
-                Button(PaxCopy.appsChoose) { pickerShown = true }.buttonStyle(PaxSecondaryButton())
-            }
+            NavRow(title: PaxCopy.rowApps, symbol: "app.badge",
+                   value: PaxCopy.rowAppsValue(model.selection.applicationTokens.count
+                                               + model.selection.webDomainTokens.count
+                                               + model.selection.categoryTokens.count)) { pickerShown = true }
+        case .blockedApps:
+            NavRow(title: PaxCopy.rowBlockedApps, symbol: "xmark.app",
+                   value: PaxCopy.rowAppsValue(p.blockedApps.count)) { open = .blockedApps }
+        case .blockedSites:
+            NavRow(title: PaxCopy.homeSites, symbol: "nosign",
+                   value: PaxCopy.sitesCount(p.blockedDomains.count)) { open = .blockedSites }
+        case .youtube:
+            youtubeRow
+        case .trustedPerson:
+            NavRow(title: PaxCopy.rowTrusted, symbol: "person.2",
+                   value: p.hasTrustedPerson ? (p.trustedEmail ?? "") : PaxCopy.rowNotAdded) { open = .trustedPerson }
         case .turnOffWait:
-            StrongerCardView(title: PaxCopy.waitTitle, symbol: "hourglass", done: false) {
-                BodyText(PaxCopy.waitBody(currentDays: p.waitDays))
-                if let line = pendingWaitLine { BodyText(line, small: true) }
-                Button(PaxCopy.waitTitle) { waitShown = true }.buttonStyle(PaxSecondaryButton())
-            }
+            NavRow(title: PaxCopy.rowWait, symbol: "hourglass",
+                   value: TurnOffRules.waitLabel(days: p.waitDays)) { open = .turnOffWait }
         case .computerSetup:
-            StrongerCardView(title: PaxCopy.computerTitle, symbol: "laptopcomputer", done: false) {
-                Text(PaxCopy.computerSubtitle)
-                    .font(PaxFont.body(16, weight: .semibold, relativeTo: .callout))
-                    .foregroundStyle(Palette.accent)
-                BodyText(PaxCopy.computerBody(isPad: isPad))
-                Link(destination: Pax.computerSetupURL) { Text(PaxCopy.computerOpen) }
-                    .buttonStyle(PaxSecondaryButton())
-                Button(PaxCopy.macLink) { macShown = true }
-                    .font(PaxFont.body(16, weight: .medium, relativeTo: .callout))
-                    .foregroundStyle(Palette.accent)
-            }
+            NavRow(title: PaxCopy.rowComputer, symbol: "laptopcomputer") { open = .computerSetup }
+        case .account:
+            NavRow(title: PaxCopy.rowAccount, symbol: "person.crop.circle") { open = .account }
+        case .turnOff:
+            NavRow(title: PaxCopy.rowTurnOff, symbol: "power", value: turnOffValue, quiet: true) { open = .turnOff }
         }
     }
 
-    private var pendingWaitLine: String? {
-        guard let s = model.account?.pending_wait_seconds, let at = model.account?.pending_wait_effective_at else { return nil }
-        let date = Date(timeIntervalSince1970: at).formatted(date: .abbreviated, time: .shortened)
-        return PaxCopy.waitPending(days: TurnOffRules.days(fromSeconds: s), on: date)
+    private var turnOffValue: String? {
+        if mac { return PaxCopy.rowFromMac }
+        if case .waiting(let until) = model.phase, until.timeIntervalSince(now) > 0 {
+            return TurnOffRules.describe(remaining: until.timeIntervalSince(now))
+        }
+        return nil
     }
 
-    // MARK: sites, turning off, limits
-
-    private var sites: some View {
-        PaxCard {
-            Text(PaxCopy.sitesTitle).font(PaxFont.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
-            HStack(spacing: 10) {
-                TextField("example.com", text: $newSite)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .font(PaxFont.body(17))
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Palette.haze.opacity(0.35)))
-                Button(PaxCopy.sitesAdd) {
-                    let s = newSite
-                    newSite = ""
-                    Task { await model.addSite(s) }
+    /// YouTube Restricted Mode: a switch only when the server does the wait (never for a child or a
+    /// Mac set-up). Off asks first and starts the wait; on is instant. While it waits it's still on.
+    @ViewBuilder private var youtubeRow: some View {
+        let y = model.youtube
+        VStack(alignment: .leading, spacing: 8) {
+            if y.canSwitch {
+                Toggle(isOn: Binding(get: { model.youtube.isOn }, set: { on in
+                    switch YouTubeRestricted.flip(model.youtube, to: on) {
+                    case .confirmTurnOff: confirmYouTubeOff = true
+                    case .turnOnNow: Task { await model.turnYouTubeOn() }
+                    case .nothing: break
+                    }
+                })) {
+                    RowLabel(title: PaxCopy.youtubeTitle, symbol: "play.rectangle")
                 }
-                .font(PaxFont.body(17, weight: .semibold))
-                .foregroundStyle(Palette.accent)
-                .disabled(PaxPolicy.normalise(newSite) == nil)
+                .tint(Palette.accent)
+                .padding(.vertical, 12)
+            } else {
+                HStack(spacing: 12) {
+                    RowLabel(title: PaxCopy.youtubeTitle, symbol: "play.rectangle")
+                    Spacer(minLength: 8)
+                    Text(y.value == .alwaysOn ? PaxCopy.youtubeAlwaysOn : (y.value == .off ? PaxCopy.rowOff : PaxCopy.rowOn))
+                        .font(PaxFont.body(16, relativeTo: .callout)).foregroundStyle(Palette.body)
+                }
+                .padding(.vertical, 14)
+                .accessibilityElement(children: .combine)
             }
-            ForEach(p.blockedDomains, id: \.self) { d in siteRow(d) }
-            BodyText(PaxCopy.sitesFooter, small: true)
+            if let t = y.turningOff {
+                let left = YouTubeRestricted.remaining(t, serverOffset: model.serverOffset, now: now)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(left > 60 ? PaxCopy.youtubeTurningOff(TurnOffRules.describe(remaining: left))
+                                   : PaxCopy.youtubeTurningOffSoon)
+                        .font(PaxFont.body(14, relativeTo: .footnote)).foregroundStyle(Palette.caution)
+                    Spacer(minLength: 8)
+                    Button(PaxCopy.youtubeCancel) { Task { await model.cancelYouTubeOff() } }
+                        .font(PaxFont.body(15, weight: .semibold)).foregroundStyle(Palette.accent)
+                }
+                .padding(.bottom, 12)
+            }
+            if !mac, !p.dnsInstalled || model.dnsOn == false {
+                Text(PaxCopy.youtubeWithDNS)
+                    .font(PaxFont.body(14, relativeTo: .footnote)).foregroundStyle(Palette.body)
+                    .padding(.bottom, 12)
+            }
         }
+    }
+
+    @ViewBuilder private func sheet(for item: SettingsItem) -> some View {
+        switch item {
+        case .lockScreenTime: LockScreenTimeView().environmentObject(model)
+        case .encryptedDNS: DNSView().environmentObject(model)
+        case .blockedSites: SitesView().environmentObject(model)
+        case .blockedApps: BlockedAppsView().environmentObject(model)
+        case .trustedPerson: TrustedPersonView().environmentObject(model)
+        case .turnOffWait: WaitChangeView().environmentObject(model)
+        case .computerSetup: ComputerSetupView(isPad: model.isPad)
+        case .account: AccountView().environmentObject(model)
+        case .turnOff: TurnOffView().environmentObject(model)
+        case .appsToClose, .youtube: EmptyView()
+        }
+    }
+}
+
+// MARK: - rows
+
+/// A white rounded card holding one-line rows.
+struct RowGroup<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) { content }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Palette.card))
+            .shadow(color: Color.black.opacity(0.05), radius: 16, y: 6)
+    }
+}
+
+struct RowDivider: View {
+    var body: some View { Rectangle().fill(Palette.haze.opacity(0.6)).frame(height: 1).padding(.leading, 36) }
+}
+
+struct RowLabel: View {
+    let title: String
+    let symbol: String
+    var quiet = false
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 17))
+                .foregroundStyle(quiet ? Palette.body : Palette.accent)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(PaxFont.body(17, weight: quiet ? .regular : .medium, relativeTo: .body))
+                .foregroundStyle(quiet ? Palette.body : Palette.ink)
+                .lineLimit(1)
+        }
+    }
+}
+
+/// One line: symbol, title, a short value, chevron.
+struct NavRow: View {
+    let title: String
+    let symbol: String
+    var value: String? = nil
+    var quiet = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                RowLabel(title: title, symbol: symbol, quiet: quiet)
+                Spacer(minLength: 8)
+                if let v = value, !v.isEmpty {
+                    Text(v)
+                        .font(PaxFont.body(16, relativeTo: .callout))
+                        .foregroundStyle(Palette.body)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.haze)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, 15)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Blocked sites
+
+/// Your blocked sites: adding is instant; removing one starts the turn-off wait on the server,
+/// "Removing, available in …" with Cancel, and it comes off only after the wait.
+struct SitesView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var newSite = ""
+    @State private var removing: String?
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    private var p: PaxPolicy { model.policy }
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.sitesTitle)
+                PaxCard {
+                    HStack(spacing: 10) {
+                        TextField("example.com", text: $newSite)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .font(PaxFont.body(17))
+                            .padding(12)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Palette.haze.opacity(0.35)))
+                        Button(PaxCopy.sitesAdd) {
+                            let s = newSite
+                            newSite = ""
+                            Task { await model.addSite(s) }
+                        }
+                        .font(PaxFont.body(17, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .disabled(PaxPolicy.normalise(newSite) == nil)
+                    }
+                    ForEach(p.blockedDomains, id: \.self) { d in siteRow(d) }
+                }
+                BodyText(PaxCopy.sitesFooter, small: true)
+                MessageText(text: model.message)
+            }
+            .disabled(model.busy)
+            .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .onReceive(tick) { now = $0 }
         .confirmationDialog(PaxCopy.sitesRemoveTitle(removing ?? ""),
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
                             titleVisibility: .visible) {
@@ -261,8 +472,6 @@ struct HomeView: View {
         }
     }
 
-    /// One of your own sites: Remove (starts the turn-off wait on the server), or, while it
-    /// waits, "Removing, available in …" with Cancel. It comes off only after the wait.
     private func siteRow(_ d: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
@@ -286,41 +495,294 @@ struct HomeView: View {
         }
         .accessibilityElement(children: .combine)
     }
+}
 
-    private var turnOff: some View {
-        PaxCard {
-            Text(PaxCopy.turnOffTitle).font(PaxFont.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
-            if mac {
-                BodyText(PaxCopy.macTurnOff(isPad: isPad))
-            } else {
-                appTurnOff
+// MARK: - Blocked apps (by bundle ID, installed or not)
+
+/// Block an app, even one that isn't installed: a short curated search, or an App Store link /
+/// bundle ID. Adding is instant. Removing one takes the turn-off wait on the server ("Removing,
+/// available in …" + Cancel), and only where the server keeps the list; otherwise it stays blocked.
+struct BlockedAppsView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+    @State private var other = ""
+    @State private var alsoSites = true
+    @State private var problem: String?
+    @State private var removing: BlockedApp?
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    private var p: PaxPolicy { model.policy }
+
+    private func isBlocked(_ bundleID: String) -> Bool {
+        p.blockedApps.contains { $0.bundleID.lowercased() == bundleID.lowercased() }
+    }
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.blockedAppsTitle)
+                BodyText(PaxCopy.blockedAppsIntro(isPad: model.isPad))
+                RowGroup {
+                    if p.blockedApps.isEmpty {
+                        BodyText(PaxCopy.blockedAppsNone).padding(.vertical, 15)
+                    } else {
+                        ForEach(Array(p.blockedApps.enumerated()), id: \.offset) { i, a in
+                            if i > 0 { RowDivider() }
+                            appRow(a)
+                        }
+                    }
+                }
+                BodyText(PaxCopy.blockedAppsFooter(serverHasList: model.appsServerList), small: true)
+                PaxCard {
+                    TextField(PaxCopy.blockedAppsSearch, text: $search)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(PaxFont.body(17))
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.haze.opacity(0.35)))
+                    Toggle(isOn: $alsoSites) {
+                        Text(PaxCopy.blockedAppsAlsoSites)
+                            .font(PaxFont.body(16, relativeTo: .callout)).foregroundStyle(Palette.ink)
+                    }
+                    .tint(Palette.accent)
+                    ForEach(AppCatalog.search(search)) { a in catalogRow(a) }
+                }
+                PaxCard {
+                    Text(PaxCopy.blockedAppsOtherTitle)
+                        .font(PaxFont.body(17, weight: .semibold, relativeTo: .headline)).foregroundStyle(Palette.ink)
+                    HStack(spacing: 10) {
+                        TextField(PaxCopy.blockedAppsOtherPlaceholder, text: $other)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .font(PaxFont.body(17))
+                            .padding(12)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(Palette.haze.opacity(0.35)))
+                        Button(PaxCopy.blockedAppsAdd) {
+                            let raw = other
+                            Task {
+                                problem = await model.blockAppEntry(raw, alsoSites: alsoSites)
+                                if problem == nil { other = "" }
+                            }
+                        }
+                        .font(PaxFont.body(17, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .disabled(other.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                BodyText(PaxCopy.blockedAppsCategoryHint, small: true)
+                MessageText(text: problem ?? model.message)
             }
+            .disabled(model.busy)
+            .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .onReceive(tick) { now = $0 }
+        .task { await model.refreshApps() }
+        .onAppear {
+            #if DEBUG
+            if ScreenshotMode.apps { search = ScreenshotMode.appSearch }
+            #endif
+        }
+        .confirmationDialog(PaxCopy.blockedAppsRemoveTitle(removing?.name ?? ""),
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                            titleVisibility: .visible) {
+            Button(PaxCopy.turnOffStart) {
+                let id = removing?.bundleID ?? ""
+                removing = nil
+                Task { await model.requestAppRemoval(id) }
+            }
+            Button(PaxCopy.sitesKeep, role: .cancel) { removing = nil }
+        } message: {
+            Text(PaxCopy.sitesRemoveBody(waitDays: p.waitDays, trusted: p.hasTrustedPerson))
         }
     }
 
-    @ViewBuilder private var appTurnOff: some View {
-            switch model.phase {
-            case .none:
-                BodyText(PaxCopy.turnOffIdle(trusted: p.hasTrustedPerson))
-                Button(PaxCopy.turnOffAsk) { confirmTurnOff = true }.buttonStyle(PaxSecondaryButton())
-            case .waiting(let until):
-                let left = until.timeIntervalSince(now)
-                if left > 0 {
-                    BodyText(PaxCopy.turnOffWaiting(TurnOffRules.describe(remaining: left)))
-                } else {
-                    BodyText(PaxCopy.turnOffReady)
-                    Button(PaxCopy.turnOffNow) { Task { await model.refreshStatus() } }
-                        .buttonStyle(PaxPrimaryButton())
-                }
-                Button(PaxCopy.keepOn) { Task { await model.cancelTurnOff() } }.buttonStyle(PaxSecondaryButton())
-            case .ready:
-                BodyText(PaxCopy.turnOffReady)
-                Button(PaxCopy.turnOffNow) { Task { await model.confirmTurnOff() } }.buttonStyle(PaxPrimaryButton())
-                Button(PaxCopy.keepOn) { Task { await model.cancelTurnOff() } }.buttonStyle(PaxSecondaryButton())
-            case .unknown:
-                BodyText(PaxCopy.turnOffUnknown)
-                Button("Try again") { Task { await model.refreshStatus() } }.buttonStyle(PaxSecondaryButton())
+    private func catalogRow(_ a: CatalogApp) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(a.name).font(PaxFont.body(17, weight: .medium)).foregroundStyle(Palette.ink)
+                Text(a.domains.joined(separator: ", "))
+                    .font(PaxFont.body(13, relativeTo: .caption)).foregroundStyle(Palette.body)
+                    .lineLimit(1)
             }
+            Spacer(minLength: 8)
+            if isBlocked(a.bundleID) {
+                Text(PaxCopy.blockedAppsAlreadyBlocked)
+                    .font(PaxFont.body(15, weight: .medium)).foregroundStyle(Palette.good)
+            } else {
+                Button(PaxCopy.blockedAppsBlock) {
+                    Task { problem = await model.blockApp(bundleID: a.bundleID, name: a.name,
+                                                          domains: alsoSites ? a.domains : []) }
+                }
+                .font(PaxFont.body(15, weight: .semibold)).foregroundStyle(Palette.accent)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func appRow(_ a: BlockedApp) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(a.name).font(PaxFont.body(17, weight: .medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                if let pr = AppRemoval.pending(a.bundleID, in: p) {
+                    let left = AppRemoval.remaining(pr, serverOffset: model.serverOffset, now: now)
+                    Text(left > 60 ? PaxCopy.sitesRemoving(TurnOffRules.describe(remaining: left)) : PaxCopy.sitesRemovingSoon)
+                        .font(PaxFont.body(14, relativeTo: .footnote)).foregroundStyle(Palette.caution)
+                }
+            }
+            Spacer(minLength: 8)
+            if AppRemoval.pending(a.bundleID, in: p) != nil {
+                Button(PaxCopy.sitesCancel) { Task { await model.cancelAppRemoval(a.bundleID) } }
+                    .font(PaxFont.body(15, weight: .semibold)).foregroundStyle(Palette.accent)
+            } else if model.appsServerList {
+                Button(PaxCopy.sitesRemove) {
+                    if model.signedIn { removing = a } else { model.message = PaxCopy.blockedAppsSignInFirst }
+                }
+                .font(PaxFont.body(15, weight: .medium)).foregroundStyle(Palette.accent)
+            }
+        }
+        .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Encrypted DNS
+
+struct DNSView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var guideShown = false
+    private var p: PaxPolicy { model.policy }
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.dnsTitle)
+                PaxCard {
+                    if !p.dnsInstalled {
+                        BodyText(PaxCopy.dnsBody)
+                        Button(PaxCopy.dnsAdd) {
+                            Task { if await model.installDNS(), model.dnsOn != true { guideShown = true } }
+                        }
+                        .buttonStyle(PaxPrimaryButton())
+                    } else {
+                        StatusRow(text: model.dnsOn == true ? PaxCopy.homeDNSOn : PaxCopy.homeDNSOff,
+                                  symbol: model.dnsOn == true ? "checkmark.circle" : "exclamationmark.circle",
+                                  good: model.dnsOn == true)
+                        if model.dnsOn != true {
+                            Button(PaxCopy.dnsShowSteps) { guideShown = true }.buttonStyle(PaxPrimaryButton())
+                        }
+                    }
+                }
+                BodyText(PaxCopy.dnsHonest(trusted: p.hasTrustedPerson), small: true)
+                MessageText(text: model.message)
+            }
+            .disabled(model.busy)
+            .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .sheet(isPresented: $guideShown) { DNSGuideView(isPad: model.isPad) }
+    }
+}
+
+// MARK: - Set up from a computer ("Make Pax unremovable")
+
+struct ComputerSetupView: View {
+    let isPad: Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var macShown = false
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.computerTitle)
+                PaxCard {
+                    Text(PaxCopy.computerSubtitle)
+                        .font(PaxFont.body(16, weight: .semibold, relativeTo: .callout))
+                        .foregroundStyle(Palette.accent)
+                    BodyText(PaxCopy.computerBody(isPad: isPad))
+                    Link(destination: Pax.computerSetupURL) { Text(PaxCopy.computerOpen) }
+                        .buttonStyle(PaxPrimaryButton())
+                    Button(PaxCopy.macLink) { macShown = true }.buttonStyle(PaxSecondaryButton())
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .sheet(isPresented: $macShown) { MacSetupView(isPad: isPad) }
+    }
+}
+
+// MARK: - Turn off Pax (the server decides; fail closed)
+
+struct TurnOffView: View {
+    @EnvironmentObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmTurnOff = false
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    private var p: PaxPolicy { model.policy }
+    private var mac: Bool { p.macSetUp && !p.isActive }
+
+    var body: some View {
+        NavigationView {
+            PaxPage {
+                SectionTitle(PaxCopy.turnOffTitle)
+                PaxCard {
+                    if mac { BodyText(PaxCopy.macTurnOff(isPad: model.isPad)) } else { phaseContent }
+                }
+                MessageText(text: model.message)
+            }
+            .disabled(model.busy)
+            .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+        .navigationViewStyle(.stack)
+        .onReceive(tick) { now = $0 }
+        .task { await model.refreshStatus() }
+        .confirmationDialog(PaxCopy.turnOffConfirmTitle, isPresented: $confirmTurnOff, titleVisibility: .visible) {
+            Button(PaxCopy.turnOffStart) { Task { await model.requestTurnOff() } }
+            Button(PaxCopy.keepOn, role: .cancel) {}
+        } message: {
+            Text(PaxCopy.turnOffConfirmBody(trusted: p.hasTrustedPerson))
+        }
+    }
+
+    @ViewBuilder private var phaseContent: some View {
+        switch model.phase {
+        case .none:
+            BodyText(PaxCopy.turnOffIdle(trusted: p.hasTrustedPerson))
+            Button(PaxCopy.turnOffAsk) { confirmTurnOff = true }.buttonStyle(PaxSecondaryButton())
+        case .waiting(let until):
+            let left = until.timeIntervalSince(now)
+            if left > 0 {
+                BodyText(PaxCopy.turnOffWaiting(TurnOffRules.describe(remaining: left)))
+            } else {
+                BodyText(PaxCopy.turnOffReady)
+                Button(PaxCopy.turnOffNow) { Task { await model.refreshStatus() } }
+                    .buttonStyle(PaxPrimaryButton())
+            }
+            Button(PaxCopy.keepOn) { Task { await model.cancelTurnOff() } }.buttonStyle(PaxSecondaryButton())
+        case .ready:
+            BodyText(PaxCopy.turnOffReady)
+            Button(PaxCopy.turnOffNow) { Task { await model.confirmTurnOff() } }.buttonStyle(PaxPrimaryButton())
+            Button(PaxCopy.keepOn) { Task { await model.cancelTurnOff() } }.buttonStyle(PaxSecondaryButton())
+        case .unknown:
+            BodyText(PaxCopy.turnOffUnknown)
+            Button("Try again") { Task { await model.refreshStatus() } }.buttonStyle(PaxSecondaryButton())
+        }
     }
 }
 
@@ -356,42 +818,6 @@ struct DNSGuideView: View {
             }
         }
         .navigationViewStyle(.stack)
-    }
-}
-
-/// One "Make Pax stronger" card: a title with a symbol, a "Recommended" or "Done" tag, content.
-struct StrongerCardView<Content: View>: View {
-    let title: String
-    let symbol: String
-    let done: Bool
-    var recommended = false
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        PaxCard {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Image(systemName: done ? "checkmark.circle.fill" : symbol)
-                    .foregroundStyle(done ? Palette.good : Palette.accent)
-                    .frame(width: 24)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(PaxFont.body(19, weight: .semibold, relativeTo: .title3))
-                    .foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                if done || recommended {
-                    Text(done ? PaxCopy.doneTag : PaxCopy.recommended)
-                        .font(PaxFont.body(13, weight: .semibold, relativeTo: .caption))
-                        .foregroundStyle(done ? Palette.good : Palette.buttonText)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(Capsule().fill(done ? Palette.good.opacity(0.15) : Palette.accent))
-                }
-            }
-            .accessibilityElement(children: .combine)
-            content
-        }
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .stroke(recommended && !done ? Palette.accent : Color.clear, lineWidth: 2))
     }
 }
 

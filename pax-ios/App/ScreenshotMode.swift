@@ -9,6 +9,13 @@
 //   -PaxShotMac YES    Home for a device already set up from a Mac (sample, in memory only)
 //   -PaxShotChildUpdate YES  with -PaxShotStep 1: the "needs a Pax update" message
 //   -PaxShotMacWelcome YES   with -PaxShotStep 5: "Welcome back" for a device set up from a Mac
+//   (24 Oct 2026, simplified Home)
+//   -PaxShotChild YES        Home for a child's device (sample, in memory only)
+//   -PaxShotSettings YES     with a Home: Settings is open
+//   -PaxShotYouTube on|pending  as if the server could do the YouTube wait: the switch, or a
+//                            turn-off waiting ("Turning off, available in …" + Cancel)
+//   -PaxShotApps YES         with a Home: Blocked apps is open; -PaxShotAppSearch <text> fills the search
+//   -PaxShotAppsRemoving YES with -PaxShotApps: as if the server kept the list, one removal waiting
 // None of this is compiled into Release, so the App Store build has no hidden mode.
 #if DEBUG
 import Foundation
@@ -23,6 +30,42 @@ enum ScreenshotMode {
 
     static var home: Bool { args.bool(forKey: "PaxShotHome") }
     static var macHome: Bool { args.bool(forKey: "PaxShotMac") }
+    static var childHome: Bool { args.bool(forKey: "PaxShotChild") }
+    static var any: Bool { home || macHome || childHome }
+    static var settings: Bool { args.bool(forKey: "PaxShotSettings") }
+    static var youtubeShot: String? { args.string(forKey: "PaxShotYouTube") }
+    static var apps: Bool { args.bool(forKey: "PaxShotApps") }
+    static var appSearch: String { args.string(forKey: "PaxShotAppSearch") ?? "" }
+    static var appsRemoving: Bool { args.bool(forKey: "PaxShotAppsRemoving") }
+
+    /// Today's servers (0.8.31 / 0.8.32): on, no switch. With -PaxShotYouTube: as a server with the wait.
+    static func sampleYouTube(_ p: PaxPolicy) -> YouTubeRow {
+        if p.audience == .child { return YouTubeRow(value: .alwaysOn, canSwitch: false, turningOff: nil) }
+        switch youtubeShot {
+        case "on": return YouTubeRow(value: .on, canSwitch: true, turningOff: nil)
+        case "pending":
+            return YouTubeRow(value: .on, canSwitch: true,
+                              turningOff: YouTubeTurnOff(requestID: "sample",
+                                                         effectiveAt: Int(Date().timeIntervalSince1970) + 30 * 86_400 - 3_600))
+        default: return .fallback
+        }
+    }
+
+    /// A child's device, set up by a parent; Screen Time not locked yet (so the nudge shows).
+    static var sampleChildPolicy: PaxPolicy {
+        var p = PaxPolicy()
+        p.isActive = true
+        p.setUpFinished = true
+        p.audience = .child
+        p.accountEmail = "parent@example.com"
+        p.setUpAt = Date().addingTimeInterval(-2 * 86_400)
+        p.waitDays = 30
+        p.blockedDomains = ["reddit.com"]
+        p.trustedEmail = "parent@example.com"
+        p.dnsInstalled = true
+        p.dnsSeenOn = true
+        return p
+    }
     static var scroll: String? { args.string(forKey: "PaxShotScroll") }
     static var sites: Bool { args.bool(forKey: "PaxShotSites") }
     static var dnsGuide: Bool { args.bool(forKey: "PaxShotDNS") }
@@ -63,6 +106,12 @@ enum ScreenshotMode {
         p.passcodeEscrowed = true
         p.dnsInstalled = true
         p.dnsSeenOn = true
+        p.blockedApps = [BlockedApp(bundleID: "com.baidu.BaiduMobile", name: "Baidu"),
+                         BlockedApp(bundleID: "com.zhiliaoapp.musically", name: "TikTok")]
+        if appsRemoving {
+            p.pendingAppRemovals = [PendingAppRemoval(bundleID: "com.zhiliaoapp.musically", requestID: "sample",
+                                                      effectiveAt: Int(Date().timeIntervalSince1970) + 30 * 86_400 - 3_600)]
+        }
         if sites {
             p.pendingSiteRemovals = [PendingSiteRemoval(domain: "youtube.com", requestID: "sample",
                                                         effectiveAt: Int(Date().timeIntervalSince1970) + 30 * 86_400 - 3_600)]

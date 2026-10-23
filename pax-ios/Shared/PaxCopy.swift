@@ -164,7 +164,7 @@ enum PaxCopy {
             "Turning Pax off takes your turn-off wait: \(TurnOffRules.waitLabel(days: waitDays)).",
         ]
     }
-    static let doneNext = "On Home there are a few optional ways to make Pax stronger, whenever you like."
+    static let doneNext = "In Settings there are a few optional ways to make Pax stronger, whenever you like."
     static let doneButton = "Done"
 
     // MARK: Home status
@@ -366,6 +366,87 @@ enum PaxCopy {
     static let releasedHowTo = "To remove it: Settings › Screen Time › Change Screen Time Passcode › Turn Off Screen Time Passcode."
     static let releasedNoPasscode = "Pax's settings have been removed from this device. You can delete the app now."
 
+    // MARK: Home (simplified, 24 Oct 2026) and Settings
+
+    static let homeChild = "Set up for a child"
+    static let homeSites = "Blocked sites"
+    static let homeSettings = "Settings"
+    static func sitesCount(_ n: Int) -> String { n == 0 ? "None yet" : "\(n)" }
+
+    static let settingsTitle = "Settings"
+    static let settingsProtection = "Protection"
+    static let settingsAccount = "Your account"
+    static let rowOn = "On"
+    static let rowOff = "Off"
+    static let rowNotYet = "Not yet"
+    static let rowNotAdded = "Not added"
+    static let rowLock = "Lock Screen Time"
+    static let rowDNS = "Encrypted DNS"
+    static let rowApps = "Apps to keep closed"
+    static func rowAppsValue(_ n: Int) -> String { n == 0 ? "None" : "\(n)" }
+    static let rowTrusted = "Someone you trust"
+    static let rowWait = "Turn-off wait"
+    static let rowComputer = "Set up from a computer"
+    static let rowAccount = "Account"
+    static let rowTurnOff = "Turn off Pax"
+    static let rowFromMac = "From the Mac"
+
+    // YouTube Restricted Mode (YouTube's own name for it). On by default; off takes the turn-off wait.
+    static let youtubeTitle = "YouTube Restricted Mode"
+    static let youtubeAlwaysOn = "Always on"
+    static let youtubeWithDNS = "Works through encrypted DNS."
+    static func youtubeTurningOff(_ left: String) -> String { "Turning off, available in \(left)" }
+    static let youtubeTurningOffSoon = "Turning off, available in a moment"
+    static let youtubeCancel = "Cancel"
+    static let youtubeOffTitle = "Turn off YouTube Restricted Mode?"
+    static func youtubeOffBody(waitDays: Int, trusted: Bool) -> String {
+        "It stays on for your turn-off wait (\(TurnOffRules.waitLabel(days: waitDays))), then turns off. "
+            + (trusted ? "The person you trust is emailed first. If the email can't be sent, nothing starts. " : "")
+            + "You can cancel at any time during the wait."
+    }
+    static let youtubeKeepOn = "Keep it on"
+    static let youtubeFailed = "Pax couldn't change YouTube Restricted Mode just now, so it stays as it is. "
+        + "Please try again."
+    static let youtubeSignInFirst = "Sign in to Pax again to change this. It stays on until then."
+
+    // MARK: blocked apps (by bundle ID, installed or not)
+
+    static let rowBlockedApps = "Blocked apps"
+    static let blockedAppsTitle = "Blocked apps"
+    static func blockedAppsIntro(isPad: Bool) -> String {
+        "Block an app, even one that isn't on this \(device(isPad: isPad)) yet. If it's installed later, it won't open."
+    }
+    static let blockedAppsSearch = "Search apps"
+    static let blockedAppsBlock = "Block"
+    static let blockedAppsAlreadyBlocked = "Blocked"
+    static let blockedAppsAlsoSites = "Also block its websites"
+    static let blockedAppsOtherTitle = "Another app"
+    static let blockedAppsOtherPlaceholder = "App Store link or bundle ID"
+    static let blockedAppsAdd = "Add"
+    static let blockedAppsNone = "No apps blocked yet."
+    static let blockedAppsLookupFailed = "Pax couldn't find that app in the App Store. Check the link and try again."
+    static func blockedAppsProblem(_ p: AppBlockRules.Problem, isPad: Bool) -> String {
+        switch p {
+        case .notAnApp: return "That doesn't look like an App Store link or a bundle ID."
+        case .pax: return "Pax can't block itself."
+        case .apple: return "Pax never blocks Apple's own apps: some keep this \(device(isPad: isPad)) working."
+        case .passwordManager: return "Pax never blocks password managers."
+        case .alreadyBlocked: return "That app is already blocked."
+        case .full: return "Pax can block up to \(AppBlockRules.maxCustomApps) apps here."
+        }
+    }
+    static func blockedAppsFooter(serverHasList: Bool) -> String {
+        serverHasList ? "Adding an app is instant. Removing one takes your turn-off wait."
+                      : "Adding an app is instant. Blocked apps stay blocked: removing one comes with a Pax update, "
+                        + "and will take your turn-off wait."
+    }
+    static let blockedAppsCategoryHint = "To keep a whole kind of app closed, including ones installed later, "
+        + "choose its category in Apps to keep closed."
+    static func blockedAppsRemoveTitle(_ name: String) -> String { "Remove \(name)?" }
+    static let blockedAppsRemoveFailed = "Pax couldn't start the turn-off wait for this app just now, so it stays blocked. "
+        + "Please try again."
+    static let blockedAppsSignInFirst = "Sign in to Pax again to remove an app. It stays blocked until then."
+
     // MARK: account
 
     static let accountTitle = "Account"
@@ -396,7 +477,7 @@ enum PaxCopy {
         count == 1 ? "Your account can't be deleted while Pax is still on one of its devices:"
                    : "Your account can't be deleted while Pax is still on \(count) of its devices:"
     }
-    static let deleteStillOnHowTo = "Turn Pax off on each one first, from Home › Turn off Pax. It takes your turn-off "
+    static let deleteStillOnHowTo = "Turn Pax off on each one first, from Settings › Turn off Pax. It takes your turn-off "
         + "wait, and deleting your account never skips it. When Pax is off everywhere, come back here to delete "
         + "your account."
     static let deleteStillOnNothingChanged = "Nothing has been deleted."
@@ -456,7 +537,21 @@ enum PaxCopy {
             deleteStillOnHowTo, deleteStillOnNothingChanged, deleteStillOnReason("pax_on", checkingIn: false),
             deleteStillOnReason("turn_off_wait", checkingIn: true), deleteStillOnReason("emergency_release", checkingIn: nil),
             deleteStillOnReason("pending_request", checkingIn: nil),
+            homeChild, homeSites, homeSettings, sitesCount(0), sitesCount(2),
+            settingsTitle, settingsProtection, settingsAccount, rowOn, rowOff, rowNotYet, rowNotAdded, rowLock,
+            rowDNS, rowApps, rowAppsValue(0), rowAppsValue(3), rowTrusted, rowWait, rowComputer, rowAccount,
+            rowTurnOff, rowFromMac,
+            youtubeTitle, youtubeAlwaysOn, youtubeWithDNS, youtubeTurningOff("29 days"), youtubeTurningOffSoon,
+            youtubeCancel, youtubeOffTitle, youtubeOffBody(waitDays: 7, trusted: true),
+            youtubeOffBody(waitDays: 30, trusted: false), youtubeKeepOn, youtubeFailed, youtubeSignInFirst,
+            rowBlockedApps, blockedAppsTitle, blockedAppsIntro(isPad: isPad), blockedAppsSearch, blockedAppsBlock,
+            blockedAppsAlreadyBlocked, blockedAppsAlsoSites, blockedAppsOtherTitle, blockedAppsOtherPlaceholder,
+            blockedAppsAdd, blockedAppsNone, blockedAppsLookupFailed, blockedAppsFooter(serverHasList: true),
+            blockedAppsFooter(serverHasList: false), blockedAppsCategoryHint, blockedAppsRemoveTitle("Baidu"),
+            blockedAppsRemoveFailed, blockedAppsSignInFirst,
         ]
+        out += [AppBlockRules.Problem.notAnApp, .pax, .apple, .passwordManager, .alreadyBlocked, .full]
+            .map { blockedAppsProblem($0, isPad: isPad) }
         out += passcodeSteps(isPad: isPad)
         out += [LockRefusal.turnOffOpen, .supportTurnOffOpen, .released, .removed, .changed, .notOnAccount]
             .map { lockRefused($0, isPad: isPad) }

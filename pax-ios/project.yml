@@ -147,6 +147,8 @@ targets:
       - Shared/PaxShared.swift
       - Shared/PaxPolicy.swift
       - Shared/PaxRestrictions.swift
+      - Shared/SiteRemoval.swift
+      - Shared/BlockedApps.swift
     info:
       path: DeviceActivityMonitor/Info.plist
       properties:
@@ -185,6 +187,9 @@ targets:
       - Shared/AccountDeletion.swift
       - Shared/SiteRemoval.swift
       - Shared/StrictSync.swift
+      - Shared/YouTubeRestricted.swift
+      - Shared/HomeLayout.swift
+      - Shared/BlockedApps.swift
       - Guide/Sources/Core
     settings:
       base:

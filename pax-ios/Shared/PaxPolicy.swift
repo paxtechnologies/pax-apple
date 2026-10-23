@@ -64,6 +64,11 @@ struct PaxPolicy: Codable, Equatable {
     var macSetUp = false
     /// The Mac set-up's device record on the server, when exactly one matched.
     var macDeviceID: String?
+    /// 1.2: apps blocked by bundle ID, installed or not (BlockedApps.swift). Adding is instant;
+    /// one comes off only after the server's turn-off wait (AppRemoval).
+    var blockedApps: [BlockedApp] = []
+    /// 1.2: app removals waiting on the server.
+    var pendingAppRemovals: [PendingAppRemoval] = []
 
     /// Every release key hash this device accepts for its main record.
     var acceptedReleaseHashes: [String] { [releaseKeyHash, pendingReleaseKeyHash].compactMap { $0 }.filter { !$0.isEmpty } }
@@ -76,7 +81,7 @@ struct PaxPolicy: Codable, Equatable {
         case isActive, setUpFinished, audience, accountEmail, setUpAt, waitDays, blockedDomains,
              trustedEmail, passcodeEscrowed, deviceID, releaseKeyHash, dnsInstalled, dnsSeenOn,
              dnsOffSince, dnsAlertSent, accessAlertSent, accountID, pendingReleaseKeyHash, displayName,
-             pendingSiteRemovals, macSetUp, macDeviceID
+             pendingSiteRemovals, macSetUp, macDeviceID, blockedApps, pendingAppRemovals
     }
 
     init(from decoder: Decoder) throws {
@@ -111,6 +116,8 @@ struct PaxPolicy: Codable, Equatable {
         pendingSiteRemovals = v(.pendingSiteRemovals, [PendingSiteRemoval]())
         macSetUp = v(.macSetUp, false)
         macDeviceID = o(.macDeviceID)
+        blockedApps = v(.blockedApps, [BlockedApp]())
+        pendingAppRemovals = v(.pendingAppRemovals, [PendingAppRemoval]())
     }
 
     func encode(to encoder: Encoder) throws {
@@ -137,6 +144,8 @@ struct PaxPolicy: Codable, Equatable {
         try c.encode(pendingSiteRemovals, forKey: .pendingSiteRemovals)
         try c.encode(macSetUp, forKey: .macSetUp)
         try c.encodeIfPresent(macDeviceID, forKey: .macDeviceID)
+        try c.encode(blockedApps, forKey: .blockedApps)
+        try c.encode(pendingAppRemovals, forKey: .pendingAppRemovals)
     }
 
     static let key = "pax.policy.v1"

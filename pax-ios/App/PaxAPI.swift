@@ -202,6 +202,54 @@ final class PaxAPI {
         try await send("POST", "/v1/blocklist/requests/\(id)/cancel", [String: Any]())
     }
 
+    // MARK: blocked apps (BlockedApps.swift, /workspace/BLOCKED_APPS_SERVER.md)
+
+    /// GET /v1/apps: the account's blocked apps with any removal waiting. A server without the list
+    /// answers 404: then blocked apps stay blocked and nothing is offered to remove them.
+    func apps() async throws -> AppsViewInfo { try await send("GET", "/v1/apps", nil) }
+
+    /// Adding is instant (more protection).
+    func addApp(bundleID: String, name: String) async throws {
+        let _: Empty = try await send("POST", "/v1/apps", ["bundle_id": bundleID, "name": String(name.prefix(80))])
+    }
+
+    /// A request, never a removal: the person you trust is emailed first (503: nothing starts), then
+    /// the app stays blocked for the turn-off wait. Cancel with cancelBlocklistRequest(id:).
+    func requestAppRemoval(bundleID: String) async throws -> AppRequestResult {
+        try await send("POST", "/v1/apps/remove", ["bundle_id": bundleID])
+    }
+
+    /// An App Store link's app, from Apple's public iTunes Lookup API (no account, no key): its
+    /// bundle ID and name. This store's country first, then the US store.
+    static func lookUpApp(appStoreID: Int, country: String?) async -> (bundleID: String, name: String)? {
+        struct R: Decodable { let results: [Item] }
+        struct Item: Decodable { let bundleId: String?; let trackName: String? }
+        for c in [country?.lowercased(), "us"].compactMap({ $0 }) {
+            guard let u = URL(string: "https://itunes.apple.com/lookup?id=\(appStoreID)&country=\(c)"),
+                  let pair = try? await URLSession.shared.data(from: u),
+                  let r = try? JSONDecoder().decode(R.self, from: pair.0),
+                  let first = r.results.first, let b = first.bundleId, !b.isEmpty else { continue }
+            return (b, first.trackName ?? b)
+        }
+        return nil
+    }
+
+    // MARK: YouTube Restricted Mode (the account's DNS filter; see YouTubeRestricted)
+
+    /// GET /v1/categories: whether this server does the wait for turning YouTube Restricted Mode
+    /// off ("youtube_restricted", can_turn_off), and any turn-off waiting.
+    func categories() async throws -> CategoriesView { try await send("GET", "/v1/categories", nil) }
+
+    /// GET /v1/dns/settings: the account's YouTube Restricted Mode as the filter applies it.
+    func dnsSettings() async throws -> DNSSettingsView { try await send("GET", "/v1/dns/settings", nil) }
+
+    /// On: instant. Off: a request, never a change (the person you trust is emailed first, 503 if
+    /// that fails and nothing starts; then the turn-off wait). Only called when `categories()`
+    /// listed the setting with can_turn_off, so an older server is never asked.
+    func setYouTubeRestricted(_ on: Bool) async throws -> CategoryChange {
+        try await send("PUT", "/v1/categories/\(YouTubeRestricted.categoryID)", ["enabled": on])
+    }
+
     func dnsInfo() async throws -> URL {
         let d: DNSInfo = try await send("GET", "/v1/dns", nil)
         guard let u = URL(string: d.doh_url), u.scheme == "https", u.host == Pax.dnsHost else {

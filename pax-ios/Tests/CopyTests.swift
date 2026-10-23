@@ -30,7 +30,9 @@ final class CopyTests: XCTestCase {
     func testNoInternalNamesOrHarshWords() {
         let banned = ["Pax Strict", "porn", "accountability partner", "your partner", "restricted",
                       "addict", "craving", "urge", "shame"]
-        for line in every {
+        for raw in every {
+            // "YouTube Restricted Mode" is YouTube's own name for its setting (24 Oct 2026).
+            let line = raw.replacingOccurrences(of: "YouTube Restricted Mode", with: "YouTube")
             for b in banned {
                 XCTAssertNil(line.range(of: b, options: .caseInsensitive), "“\(b)” in: \(line)")
             }

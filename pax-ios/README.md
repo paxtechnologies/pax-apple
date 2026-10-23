@@ -29,6 +29,18 @@ optional, in this order: Lock Screen Time (the passcode, added to this device's 
 emails), encrypted DNS, apps to keep closed, the turn-off wait (longer is instant, shorter waits),
 and setting Pax up from a Mac or Windows PC (paxpeace.com/setup).
 
+Since 24 Oct 2026 Home is minimal: "Pax is on" and the turn-off wait, the Lock Screen Time nudge only
+until it's done, and two actions, Blocked sites and Settings. Settings holds everything else as
+one-line rows (Protection: Lock Screen Time, encrypted DNS, apps to keep closed, blocked apps, blocked
+sites, YouTube Restricted Mode; Your account: someone you trust, turn-off wait, set up from a computer,
+account; then Turn off Pax). YouTube Restricted Mode is on by default and lives in the account's DNS
+filter; its switch appears only on a server that makes turning it off take the turn-off wait
+(`GET /v1/categories` lists `youtube_restricted`), never for a child or a Mac set-up. Blocked apps
+are named by bundle ID (`Application(bundleIdentifier:)` in `blockedApplications`), so an app that
+isn't installed yet can be blocked; its websites can be added to your blocked sites too. Removing one
+needs the server's blocked-apps list (`/v1/apps`) and takes the turn-off wait; without it they stay
+blocked.
+
 Turning it off works like on a Mac: you ask, your trusted person (if you have one) is emailed
 first, the wait you chose runs on the Pax server, then everything is removed and the Screen Time
 passcode is shown. The first hour after set-up has no wait. If anything fails, Pax stays on.
