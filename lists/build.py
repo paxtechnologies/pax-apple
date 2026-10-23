@@ -241,11 +241,12 @@ def build_block(sources_dir: Path | None, extra_block=(), extra_bypass=(),
     stats["verified_block_extra"] = len(extra)
     loop_block = {n for n in (clean_name(x) for x in extra_block) if n}
     stats["loop_block_extra"] = len(loop_block)
-    union |= set(hand) | set(zones) | set(always) | set(extra) | loop_block
+    union |= set(hand) | set(zones) | set(extra) | loop_block
     exclude, allow = set(read_local_list("pax-exclude.txt")), set(read_local_list("pax-allowlist.txt"))
     held = {n for n in (clean_name(x) for x in remove) if n}
     if held:      # an entry held back takes its subdomain entries with it
         union = {d for d in union if not allowed(d, held)}
+    union |= set(always)   # hand-picked: never held back (e.g. an entry held before it was picked)
     final = finalize(union, exclude, allow)
     restricted = set(final)
     bypass_raw = parse_names(source_text("hagezi_doh_vpn", sources_dir))

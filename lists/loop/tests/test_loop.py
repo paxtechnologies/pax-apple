@@ -687,3 +687,9 @@ def test_ut1_mirror_address():
     assert build.mirror_of("https://dsi.ut-capitole.fr/blacklists/download/x.tar.gz") == \
         "ftp://ftp.ut-capitole.fr/pub/reseau/cache/squidguard_contrib/x.tar.gz"
     assert build.mirror_of("https://example.com/x.tar.gz") is None
+
+
+def test_always_list_beats_an_entry_held_back_earlier(monkeypatch):
+    monkeypatch.setattr(build, "source_text", lambda sid, d: "")
+    final, _b, _s = build.build_block(None, remove=["netbird.io", "google.com"])
+    assert "netbird.io" in final and "colab.research.google.com" in final
