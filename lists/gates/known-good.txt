@@ -3,6 +3,7 @@
 # refuses any pack that blocks one of them. Remove a name only after checking it by hand.
 # 2026-10-23: perplexity.ai, brave.com, yandex.com, yandex.ru and ya.ru removed (Ruben asked to block them; lists/pax-always.txt).
 # 2026-10-24: openai.com removed (Ruben asked to block it; lists/pax-always.txt).
+# 2026-10-24: tailscale.com removed (Ruben asked to block it; lists/pax-always.txt, 0.8.32).
 0xrpc.io
 163.com
 1rx.io
@@ -824,7 +825,6 @@ t.co
 t.me
 taboola.com
 tagomi.com
-tailscale.com
 tandfonline.com
 taobao.com
 target.com

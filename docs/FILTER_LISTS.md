@@ -8,7 +8,7 @@ Built by `lists/build.py` (standard library, reproducible gzip), bundled in `gua
 | pax-block | Restricted content: HaGeZi and OISD restricted-content lists, the UT1 restricted-content category (blogspot.* dropped), (v0.8.18) checked names from the ShadowWhisperer restricted-content list, Pax's hand list, pax-zones; minus pax-exclude and pax-allowlist; parent-collapsed | yes | ≥1,000,000 entries, max 10% drop |
 | pax-bypass | HaGeZi Encrypted DNS/VPN/TOR/Proxy Bypass, plus (v0.8.18) checked web proxies from the UT1 "redirector" category, minus anything pax-block covers (v0.8.1: split out of pax-block) | no | ≥5,000, max 30% drop |
 | pax-nrd | Newly registered domains (WhoisDS, 14 days) whose first label matches the name rule at a label edge, minus its allow words | yes | optional, ≥100 |
-| pax-allow | tailscale.com, character.ai (beat every block list) | — | — |
+| pax-allow | character.ai (beats every block list; tailscale.com removed in 0.8.32) | — | — |
 | safesearch | 385 exact-host rewrites | — | — |
 
 **Restricted** (v0.8.1) means an exception never frees it: the forwarder blocks a restricted hit even when

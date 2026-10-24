@@ -2,14 +2,14 @@
  "generated_at": "2026-10-17T12:30:54+00:00",
  "lists": {
   "pax-allow": {
-   "bytes": 177,
-   "entries": 2,
+   "bytes": 210,
+   "entries": 1,
    "file": "pax-allowlist.txt",
    "format": "domains",
    "kind": "allow",
    "max_drop": 1.0,
    "min_entries": 1,
-   "sha256": "d2f522fddaea1a27b8220c36dde09b0b1f3bc38808d4ac595ec821d85efdc386"
+   "sha256": "f93900d9581e7bf74567e7b99d2f06fd5743e616846ded121a131e4b5e04b091"
   },
   "pax-block": {
    "bytes": 8036411,

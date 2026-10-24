@@ -70,7 +70,7 @@ Per query, in order:
    CleanBrowsing Adult DoH (no YouTube rewrite), then AdGuard Family (restricts again), else SERVFAIL.
 2. The user's exceptions (only after their wait) → upstream.
 3. The user's blocked sites and Pax categories (X/Bluesky media, bypass sites, remote desktop) → `0.0.0.0` / `::`.
-4. Pax allowlist (tailscale.com, character.ai) → upstream.
+4. Pax allowlist (character.ai) → upstream.
 5. Local lists (pax-block ~1.35M domains, pax-nrd, plug-ins) → blocked.
 6. Upstream over DoH: **CleanBrowsing Family**, then **AdGuard Family** on failure or timeout. Both down →
    SERVFAIL. Never plain, unfiltered DNS.

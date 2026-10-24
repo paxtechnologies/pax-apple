@@ -669,7 +669,7 @@ def test_always_list_is_intentional_in_top10k_gate(tmp_path):
     cover counts as confirmed without a homepage check and is never held back."""
     always = build.always_list()
     assert "perplexity.ai" in always and "yandex.com" in always
-    assert "tailscale.com" not in always          # allowlisted on purpose
+    assert "tailscale.com" in always              # 0.8.32: no longer allowlisted (Ruben 2026-10-24)
     for line in (build.HERE / "pax-always.txt").read_text().splitlines():
         if line.strip() and not line.startswith("#"):
             assert build.clean_name(line) == line.strip()
