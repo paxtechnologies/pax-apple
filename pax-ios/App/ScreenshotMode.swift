@@ -106,8 +106,8 @@ enum ScreenshotMode {
         p.passcodeEscrowed = true
         p.dnsInstalled = true
         p.dnsSeenOn = true
-        p.blockedApps = [BlockedApp(bundleID: "com.baidu.BaiduMobile", name: "Baidu"),
-                         BlockedApp(bundleID: "com.zhiliaoapp.musically", name: "TikTok")]
+        p.blockedApps = [BlockedApp(bundleID: "com.zhiliaoapp.musically", name: "TikTok"),
+                         BlockedApp(bundleID: "com.reddit.Reddit", name: "Reddit")]
         if appsRemoving {
             p.pendingAppRemovals = [PendingAppRemoval(bundleID: "com.zhiliaoapp.musically", requestID: "sample",
                                                       effectiveAt: Int(Date().timeIntervalSince1970) + 30 * 86_400 - 3_600)]

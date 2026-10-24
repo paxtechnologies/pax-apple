@@ -373,7 +373,9 @@ struct RowLabel: View {
                 .font(PaxFont.body(17, weight: quiet ? .regular : .medium, relativeTo: .body))
                 .foregroundStyle(quiet ? Palette.body : Palette.ink)
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)   // the value shortens first, never the title
         }
+        .layoutPriority(1)
     }
 }
 
