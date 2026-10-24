@@ -1,0 +1,97 @@
+{
+ "key_id": "ad7b58ce",
+ "payload": {
+  "built_from": "2026.1024.1307",
+  "code": "cd3cfbd6538165141679282e7cad14b1d4206921",
+  "gates": {
+   "bench": {
+    "adult": {
+     "gains": 0,
+     "last": 344,
+     "losses": 0,
+     "n": 400,
+     "new": 344,
+     "ref": 307
+    },
+    "benign": {
+     "gains": 0,
+     "last": 7,
+     "losses": 0,
+     "n": 249,
+     "new": 7,
+     "ref": 4
+    },
+    "proxy": {
+     "gains": 0,
+     "last": 60,
+     "losses": 0,
+     "n": 69,
+     "new": 60,
+     "ref": 63
+    },
+    "proxy_fresh": {
+     "gains": 0,
+     "last": 51,
+     "losses": 0,
+     "n": 67,
+     "new": 51,
+     "ref": 58
+    }
+   },
+   "known_good_blocked": 0,
+   "top10k_held_back": 0,
+   "top10k_new": 0,
+   "uk57_blocked": 0
+  },
+  "generated_at": "2026-10-24T15:13:10+00:00",
+  "inputs": {
+   "hagezi_doh_vpn": "0ba79b2659aa41eb6837a358c16adc14dd0a91fc81d53e8b637b07fee63561e9",
+   "list_a": "ece5a62c0e40dd05c30abfe5cfc71358ef260e660b32a2d621f41e5ed48da94e",
+   "list_b": "ee89d4419eb1847a87fc35951eb8ce687adf5d5a8b87e6e4ce334fb0fe7815c4",
+   "list_c": "c7f697f71eb6b010b00dd48971e8c8aac09298c06572e769c90534b940fe78d8",
+   "tranco": "3e2414dc5eb1e6a7193a3a83d2cd580f18ee0e77e4482d3ca167fc1262190eea"
+  },
+  "lists": {
+   "pax-block": {
+    "bytes": 8052283,
+    "entries": 1349823,
+    "file": "pax-block.txt.gz",
+    "format": "domains",
+    "kind": "block",
+    "max_drop": 0.1,
+    "min_entries": 1000000,
+    "object": "pax-block-813bcb52c711ebdd.txt.gz",
+    "restricted": true,
+    "sha256": "813bcb52c711ebddf4c1655ec43433ea8916ad3f987099c7b1da63a2353b327a"
+   },
+   "pax-bypass": {
+    "bytes": 120338,
+    "entries": 18392,
+    "file": "pax-bypass.txt.gz",
+    "format": "domains",
+    "kind": "block",
+    "max_drop": 0.3,
+    "min_entries": 5000,
+    "object": "pax-bypass-6b0a18e1cf9147fc.txt.gz",
+    "restricted": false,
+    "sha256": "6b0a18e1cf9147fce67eb09d42895f7b861066babfa8888fcea8f0eebe62d42e"
+   },
+   "pax-nrd": {
+    "bytes": 7650,
+    "entries": 1270,
+    "file": "pax-nrd.txt.gz",
+    "format": "domains",
+    "kind": "block",
+    "max_drop": 0.6,
+    "min_entries": 100,
+    "object": "pax-nrd-2038270b5ebe41ce.txt.gz",
+    "optional": true,
+    "restricted": true,
+    "sha256": "2038270b5ebe41cef8732d5f9ca581bb9ae163d0ef29c2d6d08a87aa020118b2"
+   }
+  },
+  "schema": "pax.filterpack.v1",
+  "version": "2026.1024.1451"
+ },
+ "signature": "v8vmH87KzB6gL8vbrb6ZT9/ts0KoqPcWoEyiJQbmknjFGojMweS4YRpXuHSxMEoL9n3pQpLzW9k2JX9VaviKBA=="
+}
