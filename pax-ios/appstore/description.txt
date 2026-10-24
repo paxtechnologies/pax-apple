@@ -1,0 +1,32 @@
+Pax is a free, open-source explicit content blocker for iPhone and iPad, for you or for your family. You choose a turn-off wait in advance, so if anyone ever wants Pax off, it turns off only after that wait. Hard moments pass; the wait lets them.
+
+Turn Pax on in a few taps: your email, a code, and Face ID. No computer, no profile, no erase.
+
+WHAT PAX DOES
+• Blocks adult and explicit websites in Safari and other apps that show web pages, using Apple's Screen Time.
+• Stops Pax itself being deleted while it is on.
+• Keeps apps you choose closed, such as social apps or browsers you don't trust.
+• Adds an optional encrypted DNS layer that filters apps as well as websites.
+• Lets you add your own sites to block, instantly. Removing one takes your turn-off wait.
+
+YOUR TURN-OFF WAIT
+7 days to start with, and you can make it longer, up to a year. You can always turn Pax off: it simply takes the wait you chose.
+
+SOMEONE YOU TRUST (OPTIONAL)
+Add a friend, a partner or a parent. They are emailed if anyone asks to turn Pax off. They never approve or stop anything, and they never see what you browse. If the email to them can't be sent, nothing is turned off.
+
+FOR FAMILIES
+A parent can set Pax up on their child's iPhone or iPad with the parent's own email. The child gets their own Pax account with a 30-day turn-off wait, and every email about it goes to the parent.
+
+LOCK SCREEN TIME (RECOMMENDED)
+Pax can make up a Screen Time passcode that you type into Settings once. Pax keeps it safe and shows it again only when your turn-off wait ends.
+
+PRIVATE BY DESIGN
+• Pax never keeps your browsing history, on the device or on our servers.
+• No ads, no tracking, no analytics tools, nothing sold.
+• Pax keeps only what it needs: your email, your trusted person's email if you add one, your devices and your blocked sites.
+• Free and open source (GPL-3.0). Anyone can read the code.
+
+For the strongest protection, Pax can also be set up from a Mac: paxpeace.com/setup
+
+Questions: hello@paxpeace.com · paxpeace.com
