@@ -77,3 +77,20 @@ shell.azure.com
 # --- file hosts and other sites on Ruben's list (Ruben 2026-10-23)
 upbolt.to
 maisonsvictorhugo.paris.fr
+#
+# --- rent-a-Mac clouds and remote-desktop relays: a remote computer outside Pax (Ruben 2026-10-24)
+rentamac.io
+rentamac.com
+macincloud.com
+macrent.cloud
+myremotemac.com
+virtualmacos.com
+jexmac.com
+remotemac.io
+spinmac.com
+x-node.com
+macstadium.com
+hostmyapple.com
+macminivault.com
+deskin.io
+zulertech.com
