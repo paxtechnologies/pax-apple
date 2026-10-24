@@ -1,0 +1,6 @@
+status: success
+workflow: Build DMG #528
+run: https://github.com/paxtechnologies/pax-apple/actions/runs/40104330216
+commit: 5e0dd467d6e82a94bbd5add14f219fcd642e6189
+ref: refs/heads/mac-verified-email
+finished: 2026-10-24T14:57:43Z
