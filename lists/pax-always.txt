@@ -94,3 +94,22 @@ hostmyapple.com
 macminivault.com
 deskin.io
 zulertech.com
+#
+# --- remote-desktop services: reach any unfiltered computer (Ruben 2026-10-24).
+# Chrome Remote Desktop by its own hosts only; google.com, googleapis.com and Chrome stay open.
+anydesk.com
+anydesk.de
+teamviewer.com
+parsec.app
+parsecgaming.com
+parsecusercontent.com
+remotedesktop.google.com
+remotedesktop-pa.googleapis.com
+rustdesk.com
+splashtop.com
+splashtop.eu
+jumpdesktop.com
+realvnc.com
+logmein.com
+nomachine.com
+screenconnect.com
