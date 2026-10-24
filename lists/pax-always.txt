@@ -15,6 +15,10 @@ multiplechat.ai
 # OpenAI as a whole (Ruben 2026-10-24): ChatGPT agent/Operator and Atlas drive a browser;
 # chatgpt.com was already blocked, this covers openai.com and every subdomain.
 openai.com
+# Grok (Ruben 2026-10-24): its image tool has a mode that makes nude images. x.ai covers
+# grok.x.ai and api.x.ai. Grok inside the X app can't be split from x.com by DNS.
+grok.com
+x.ai
 #
 # --- search engines DNS can't force into safe search (Ruben 2026-10-23)
 brave.com
