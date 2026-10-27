@@ -346,9 +346,9 @@ def test_real_bundled_lists_are_complete_and_as_briefed():
     assert man["lists"]["pax-bypass"]["entries"] > 10_000 and "nordvpn.com" in bypass
     assert not (bypass - {""}) & names
     for never in ("cosmopolitan.com", "pocketoption.com", "51.la", "dmm.com", "dynu.net", "sa.com",
-                  "tailscale.com", "character.ai"):
+                  "character.ai"):
         assert never not in names, never
-    assert fl.parse_domains(data["pax-allow"].decode()) == ["tailscale.com", "character.ai"]
-    assert len(fl.parse_safesearch(data["safesearch"].decode())) == 385
+    assert fl.parse_domains(data["pax-allow"].decode()) == ["character.ai"]
+    assert len(fl.parse_safesearch(data["safesearch"].decode())) == 388
     for part in (GUARD / "filters").iterdir():
         assert part.stat().st_size < 90_000, part.name       # contents-API push limit

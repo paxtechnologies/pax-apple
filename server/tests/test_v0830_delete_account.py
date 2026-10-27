@@ -21,6 +21,7 @@ from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
 
 from test_v0826_device_state import PW, FakeClock  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 TABLES = ("accounts", "devices", "removal_requests", "guard_tokens", "blocklist_entries",
           "blocklist_requests", "dns_tokens", "dns_changes", "sync_links", "account_tokens",
@@ -52,7 +53,7 @@ def _env(tmp_path):
 
 
 def _account(e, email):
-    r = e.client.post("/v1/accounts", json={"email": email})
+    r = verified_signup(e.client, email)
     assert r.status_code == 201, r.text
     return r.json()["account_id"], {"Authorization": f"Bearer {r.json()['token']}"}
 
@@ -274,7 +275,7 @@ def test_every_token_stops_working(tmp_path):
         assert e.client.delete("/v1/accounts/me", headers=hdr).status_code == 401
     assert e.client.post("/v1/sync", headers={"X-Pax-Sync-Token": ids["sync"]}, json={}).status_code == 401
     # The address can make a new account afterwards.
-    assert e.client.post("/v1/accounts", json={"email": "a@example.com"}).status_code == 201
+    assert verified_signup(e.client, "a@example.com").status_code == 201
 
 
 def test_confirmation_email_and_no_partner_email(tmp_path):

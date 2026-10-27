@@ -44,7 +44,7 @@ On a Mac with **local escrow** (the v0.8.0 default) pax-guard sends the emails i
 
 | Transport | Settings | Where secrets live |
 |---|---|---|
-| **relay** (default, v0.8.5) | The app's server (Pax's own, `https://api.paxpeace.com/`, unless Settings › Advanced names another) with this Mac's account on it, created the first time with your email; or your own `server/` URL and your account token there. pax-guard calls `POST /v1/notify`; the server mails through its own SMTP (`PAX_SMTP_*`) and only relays (the Mac's key stays on the Mac). | Token in `/Library/PaxGuard/escrow/notify.json` (root 0600, integrity-checked) |
+| **relay** (default, v0.8.5) | The app's server (Pax's own, `https://api.paxpeace.com/`, unless Settings › Advanced names another) with this Mac's account on it, made the first time with your email and the 6-digit code emailed to it (v0.8.32; the code field shows in the same sheet); or your own `server/` URL and your account token there. pax-guard calls `POST /v1/notify`; the server mails through its own SMTP (`PAX_SMTP_*`) and only relays (the Mac's key stays on the Mac). | Token in `/Library/PaxGuard/escrow/notify.json` (root 0600, integrity-checked) |
 | **smtp** | Your own mail account: host, port, STARTTLS or SSL, username, password, From address. | Password only in `notify.json`, never shown again in the app |
 
 iPhones and iPads (and Macs on the server escrow mode) use the Pax server, which emails the partner

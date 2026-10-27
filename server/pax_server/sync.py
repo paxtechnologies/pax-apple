@@ -32,7 +32,8 @@ from typing import Optional
 
 from .crypto import hash_token, token_matches
 from .domains import DomainError, display_domain, normalise_domain
-from .escrow import Conflict, EscrowError, NotFound, RateLimited, Unauthorized
+from .escrow import (CHILD_EMAIL_DOMAIN, ChildLimit, Conflict, EscrowError, NotFound, RateLimited, Unauthorized,
+                     child_placeholder_email, clean_display_name, fmt_duration, holder_email)
 
 SYNC_TOKEN_PREFIX = "pxs_"
 MAX_LINKS = 20
@@ -85,7 +86,7 @@ class ListSync:
             "INSERT INTO sync_links(id, account_id, token_hash, device_name, platform, created_at) "
             "VALUES (?,?,?,?,?,?)", (lid, acct["id"], hash_token(token), device_name[:100], platform, now))
         self.escrow._log(acct["id"], "sync_linked", detail=device_name[:100])
-        return {"link_id": lid, "sync_token": token, "created_at": now, "account_email": acct["email"]}
+        return {"link_id": lid, "sync_token": token, "created_at": now, "account_email": holder_email(acct)}
 
     def links(self, acct) -> list[dict]:
         return [{"link_id": r["id"], "device_name": r["device_name"], "platform": r["platform"],
@@ -181,7 +182,7 @@ class ListSync:
                 "removed": removed, "added": list(added), "rejected": list(rejected),
                 "delay_seconds": self.blocklist.delay(acct),
                 "max_blocked": self.escrow.settings.blocklist_max_entries,
-                "account_email": acct["email"], "link_id": link["id"]}
+                "account_email": holder_email(acct), "link_id": link["id"]}
 
     def request_unblock(self, acct, link, raw: str) -> dict:
         out = self.blocklist.request_unblock(acct, raw)
@@ -259,6 +260,8 @@ class ListSync:
         in signup_codes (hashes only) and no account is made until it comes back.
         Same rules for both: 15 minutes, 5 tries a code, 5 codes an hour an address."""
         email = (email or "").strip().lower()
+        if email.endswith("@" + CHILD_EMAIL_DOMAIN):
+            return                  # v0.8.32: a child placeholder never gets mail or a sign-in
         if self.db.one("SELECT 1 FROM accounts WHERE email=?", (email,)):
             self.signin_start(email)
             return
@@ -266,8 +269,8 @@ class ListSync:
         eh = _signup_email_hash(email)
         with self.db.transaction():
             self.db.execute("DELETE FROM signup_codes WHERE expires_at<?", (now - 86400,))
-            recent = self.db.one("SELECT COUNT(*) FROM signup_codes WHERE email_hash=? AND created_at>?",
-                                 (eh, now - 3600))[0]
+            recent = self.db.one("SELECT COUNT(*) FROM signup_codes WHERE email_hash=? AND created_at>? "
+                                 "AND purpose='signup'", (eh, now - 3600))[0]
             if recent >= CODES_PER_HOUR:
                 raise RateLimited("too many codes; try again in an hour")
             code = f"{secrets.randbelow(1_000_000):06d}"
@@ -277,15 +280,16 @@ class ListSync:
                           f"Your Pax code is {code}. It works for 15 minutes. If you didn't ask for it, "
                           "you can ignore this email: no account is made without the code.")
 
-    def _signup_code(self, email: str, code: str):
-        """The open signup code for `email` when `code` matches it, else None (a
-        wrong guess uses up one of its 5 tries)."""
+    def _signup_code(self, email: str, code: str, purpose: str = "signup"):
+        """The open code of `purpose` ('signup', or 'child' v0.8.32) for `email` when
+        `code` matches it, else None (a wrong guess uses up one of its 5 tries). The two
+        purposes never stand in for each other."""
         eh = _signup_email_hash(email)
-        row = self.db.one("SELECT * FROM signup_codes WHERE email_hash=? AND used_at IS NULL AND expires_at>? "
-                          "ORDER BY created_at DESC LIMIT 1", (eh, self.now()))
+        row = self.db.one("SELECT * FROM signup_codes WHERE email_hash=? AND purpose=? AND used_at IS NULL "
+                          "AND expires_at>? ORDER BY created_at DESC LIMIT 1", (eh, purpose, self.now()))
         if not row or row["attempts"] >= CODE_MAX_ATTEMPTS:
             return None
-        if not hmac.compare_digest(row["code_hash"], _code_hash("signup:" + eh, code)):
+        if not hmac.compare_digest(row["code_hash"], _code_hash(f"{purpose}:" + eh, code)):
             self.db.execute("UPDATE signup_codes SET attempts=attempts+1 WHERE id=?", (row["id"],))
             return None
         return row
@@ -332,6 +336,110 @@ class ListSync:
             return {**self._issue_signin(acct, email, label, "signup_codes", row["id"]), "created": False}, False
         self.escrow._log(account_id, "account_registered", detail="email verified")
         return {"account_id": account_id, "token": token, "created": True}, True
+
+    # ------------------------------- v0.8.32: child accounts, verified by a parent
+    # docs/CHILD_ACCOUNTS.md. A child account is a separate account (kind 'child') whose
+    # mail all goes to the parent's address, proved by a code to it. The parent's own
+    # account (if any) is never looked at or changed by these calls.
+    def child_start(self, email: str) -> None:
+        """POST /v1/accounts/child/start: a 6-digit code to the parent's address for
+        setting up a child's device. Always 202; 5 child codes an hour an address."""
+        email = (email or "").strip().lower()
+        if email.endswith("@" + CHILD_EMAIL_DOMAIN):
+            return
+        now = self.now()
+        eh = _signup_email_hash(email)
+        with self.db.transaction():
+            self.db.execute("DELETE FROM signup_codes WHERE expires_at<?", (now - 86400,))
+            recent = self.db.one("SELECT COUNT(*) FROM signup_codes WHERE email_hash=? AND created_at>? "
+                                 "AND purpose='child'", (eh, now - 3600))[0]
+            if recent >= CODES_PER_HOUR:
+                raise RateLimited("too many codes; try again in an hour")
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            self.db.execute("INSERT INTO signup_codes(id, email_hash, code_hash, created_at, expires_at, purpose) "
+                            "VALUES (?,?,?,?,?,'child')", (_id(), eh, _code_hash("child:" + eh, code), now,
+                                                           now + CODE_TTL))
+        self.escrow._mail(email, "child_code", "Your Pax code to set up your child's device",
+                          f"Your Pax code is {code}. It works for 15 minutes. Use it on your child's iPhone or iPad "
+                          "to set Pax up there. It makes a separate Pax account for that device, which you look "
+                          "after: Pax emails you here about it. Your own Pax account (if you have one) doesn't "
+                          "change. If you didn't ask for it, you can ignore this email: nothing is made without "
+                          "the code.")
+
+    @staticmethod
+    def child_label(child_name: Optional[str], device_name: Optional[str]) -> str:
+        """"Sam's iPhone (child)", "iPhone (child)" or "Child's device (child)"."""
+        name = clean_display_name(child_name or "", 40) or ""
+        dev = clean_display_name(device_name or "", 40) or ""
+        if name:
+            return f"{name}'s {dev or 'device'} (child)"[:60]
+        if dev:
+            return f"{dev} (child)"[:60]
+        return "Child's device (child)"
+
+    def child_verify(self, email: str, code: str, child_name: Optional[str] = None,
+                     device_name: Optional[str] = None) -> dict:
+        """POST /v1/accounts/child/verify: ALWAYS a new child account (201), made only
+        now, with the child wait set in the same transaction. 401 wrong/used/expired
+        code; 429 child_limit when the address already looks after the most."""
+        email = (email or "").strip().lower()
+        code = (code or "").strip()
+        row = self._signup_code(email, code, "child")
+        if not row:
+            raise Unauthorized("that code isn't right or has expired")
+        s = self.escrow.settings
+        have = self.db.one("SELECT COUNT(*) FROM accounts WHERE kind='child' AND parent_email=?", (email,))[0]
+        if have >= s.child_accounts_per_parent:
+            raise ChildLimit(f"this email already looks after {have} child accounts, the most Pax allows. "
+                             "Delete one you no longer use, or use another parent's email.")
+        from .crypto import new_token
+        account_id, token = _id(), new_token()
+        now = self.now()
+        name = clean_display_name(child_name or "", 40) or None
+        tag = self.child_label(child_name, device_name)
+        with self.db.transaction():
+            cur = self.db.execute("UPDATE signup_codes SET used_at=? WHERE id=? AND used_at IS NULL", (now, row["id"]))
+            if cur.rowcount != 1:
+                raise Unauthorized("that code isn't right or has expired")
+            self.db.execute(
+                "INSERT INTO accounts(id, email, token_hash, created_at, wait_seconds, email_verified_at, kind, "
+                "parent_email, label, display_name) VALUES (?,?,?,?,?,?,'child',?,?,?)",
+                (account_id, child_placeholder_email(account_id), hash_token(token), now, s.child_wait_seconds,
+                 now, email, tag, name))
+        self.escrow._log(account_id, "account_registered", detail="child, parent email verified")
+        self.escrow._mail(email, "child_set_up", f"Pax is set up on {tag}",
+                          f"Pax is set up on {tag}. Turning it off waits {fmt_duration(s.child_wait_seconds)}, "
+                          "and Pax emails you here first. To change anything, use Pax on that device.")
+        return {"account_id": account_id, "token": token, "created": True, "kind": "child", "label": tag,
+                "wait_seconds": s.child_wait_seconds}
+
+    def child_signin(self, email: str, code: str, account_id: str, label: str = "") -> dict:
+        """POST /v1/accounts/child/signin: a new token for an existing child account of
+        this parent address (e.g. the child's device lost its saved sign-in). The same
+        401 for a wrong code and for an account that isn't this parent's child."""
+        email = (email or "").strip().lower()
+        code = (code or "").strip()
+        row = self._signup_code(email, code, "child")
+        if not row:
+            raise Unauthorized("that code isn't right or has expired")
+        acct = self.db.one("SELECT * FROM accounts WHERE id=? AND kind='child' AND parent_email=?",
+                           ((account_id or "").strip().lower(), email))
+        if not acct:
+            raise Unauthorized("that code isn't right or has expired")
+        from .crypto import new_token
+        token = new_token()
+        now = self.now()
+        with self.db.transaction():
+            cur = self.db.execute("UPDATE signup_codes SET used_at=? WHERE id=? AND used_at IS NULL", (now, row["id"]))
+            if cur.rowcount != 1:
+                raise Unauthorized("that code isn't right or has expired")
+            self.db.execute("INSERT INTO account_tokens(token_hash, account_id, created_at, label) VALUES (?,?,?,?)",
+                            (hash_token(token), acct["id"], now, label[:100] or None))
+        self.escrow._log(acct["id"], "signed_in", detail=("child " + label[:90]) if label else "child")
+        self.escrow._mail(email, "child_signed_in", f"{acct['label']} signed in to Pax again",
+                          f"{acct['label']} signed in to Pax again with a code sent to this address. Its turn-off "
+                          "wait and everything else stay as they were.")
+        return {"account_id": acct["id"], "token": token, "created": False, "kind": "child", "label": acct["label"]}
 
 
 def view_domain(d: str) -> str:

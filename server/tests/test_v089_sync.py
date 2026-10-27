@@ -16,6 +16,7 @@ from pax_server.config import DAY, HOUR, Settings  # noqa: E402
 from pax_server.crypto import generate_key_b64  # noqa: E402
 from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 T0 = 1_800_000_000
 
@@ -40,7 +41,7 @@ def _env(tmp_path, **kw):
     e.clock, e.mail = FakeClock(), MemoryEmailSender()
     e.settings = Settings(db_path=str(tmp_path / "p.sqlite3"), server_key_b64=generate_key_b64(), **kw)
     e.client = TestClient(create_app(e.settings, clock=e.clock, sender=e.mail))
-    tok = e.client.post("/v1/accounts", json={"email": "me@example.com"}).json()["token"]
+    tok = verified_signup(e.client, "me@example.com").json()["token"]
     e.h = {"Authorization": f"Bearer {tok}"}
     return e
 

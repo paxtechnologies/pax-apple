@@ -2,14 +2,14 @@
  "generated_at": "2026-10-17T12:30:54+00:00",
  "lists": {
   "pax-allow": {
-   "bytes": 177,
-   "entries": 2,
+   "bytes": 210,
+   "entries": 1,
    "file": "pax-allowlist.txt",
    "format": "domains",
    "kind": "allow",
    "max_drop": 1.0,
    "min_entries": 1,
-   "sha256": "d2f522fddaea1a27b8220c36dde09b0b1f3bc38808d4ac595ec821d85efdc386"
+   "sha256": "f93900d9581e7bf74567e7b99d2f06fd5743e616846ded121a131e4b5e04b091"
   },
   "pax-block": {
    "bytes": 8036411,
@@ -46,14 +46,14 @@
    "sha256": "70e28af02e4887ac08367dd0d57c38657a8f1a42856fd5a50f3def6c79072ddb"
   },
   "safesearch": {
-   "bytes": 30600,
-   "entries": 385,
+   "bytes": 30828,
+   "entries": 388,
    "file": "safesearch_rules.csv",
    "format": "csv",
    "kind": "safesearch",
    "max_drop": 0.1,
    "min_entries": 300,
-   "sha256": "9f6a68254f9b9b5db77d2713d3511546ff643bae1d126ddaad1b9bf1e25d44a9"
+   "sha256": "fee2c154e77c2676c8cc3fb86faa3b8627360ab1080267a877e43f941c121816"
   }
  },
  "schema": "pax.lists.v1",

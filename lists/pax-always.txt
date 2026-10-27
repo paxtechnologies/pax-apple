@@ -66,8 +66,11 @@ yandex.org
 yandex.com.ru
 xn--d1acpjx3f.xn--p1ai
 #
-# --- mesh VPNs with exit nodes (Ruben 2026-10-23; tailscale.com is in pax-allowlist on purpose)
+# --- mesh VPNs with exit nodes (Ruben 2026-10-23; Tailscale 2026-10-24, out of pax-allowlist in 0.8.32)
 netbird.io
+tailscale.com
+tailscale.io
+ts.net
 #
 # --- notebooks and cloud shells with open internet (Ruben 2026-10-23)
 colab.research.google.com

@@ -104,6 +104,7 @@ beyondtrust.com
 bomgar.com
 bomgarcloud.com
 citrix.com
+cloud.com
 connectwise.com
 dameware.com
 fixme.it

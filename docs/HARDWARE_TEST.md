@@ -202,8 +202,39 @@ Needs a Mac protected with 0.8.9 (its own key) and an iPhone set up from that Ma
    hours works (0.8.8 failed with PAX-ESCROW-002). Shortening a wait later waits out the current one and
    emails the partner.
 8. A second Mac (protected with its own key): start "Protect an iPhone or iPad" there with the same email.
-   At the wait step Pax says the email already has an account and emails a 6-digit code; entering it joins
-   the same account, and the first Mac's sites appear on the second Mac within about 15 seconds.
+   At the wait step press **Send code**; the 6-digit code that arrives joins the same account (v0.8.32: the
+   same step as a new account, no extra screen), and the first Mac's sites appear on the second Mac within
+   about 15 seconds.
+
+### v0.8.32: every new account checks its email with a code (Mac)
+
+Use a Mac with no Pax account yet (Settings › Advanced shows no account), a fresh address you can read, and
+a second address that already has a Pax account.
+
+1. **Protect this Mac** (server key) → wait step: one email field, the button reads **Send code**, and the line
+   under the field says Pax emails a 6-digit code. Type a fresh address and press Send code: the email "Your
+   Pax code" arrives within a minute; the step now shows "We emailed a 6-digit code to …" and a code field.
+   Nothing else on the screen changed and no new screen opened.
+2. Paste the whole email text into the code field: only the 6 digits stay. Type one digit wrong and press
+   Return: "That code isn't right or has expired. Check the newest email from Pax, or send a new code." in
+   the step (no error card), and nothing is made.
+3. **Resend code** is greyed out with a countdown for 30 seconds, then sends a new code; the old code no
+   longer works, the new one does. Pressing it 5 times in an hour greys it out with "Resend code in … min".
+4. Enter the right code and press Continue: set-up goes on to Lock it in as before. Settings › Advanced (or
+   `GET /v1/accounts/me` with the token) shows the account with `email_verified: true`.
+5. Change the email field after a code was sent: the code field disappears and the button reads Send code
+   again.
+6. Repeat 1–4 for **Protect an iPhone or iPad** with the address that already has an account: the code joins
+   that account (its blocked sites appear; the holder gets "a new device signed in").
+7. A Mac protected **with its own key**, no account yet: Settings › Accountability partner email › Add… →
+   relay through Pax's server, your email in "Your email" → Save sends a code and keeps the sheet open with
+   the code field; Save again with the code saves and closes it. A test partner email arrives.
+8. An already set-up Mac (account token saved): updating to 0.8.32 changes nothing; no email step appears.
+9. Pax 0.8.31 (old DMG) against a 0.8.32 server: the wait step's Continue shows PAX-ESCROW-005 "Pax's server
+   said no to that request"; *Copy details* contains "can't make new accounts any more … paxpeace.com".
+   With an address that already has an account it still gets the old "already has a Pax account" code step.
+   `curl -X POST …/v1/accounts -H 'Content-Type: application/json' -d '{"email":"new@example.com"}'`: 410
+   `app_update_required`, PAX-ESCROW-020.
 
 ### v0.8.13: X and Bluesky pictures and video always off
 

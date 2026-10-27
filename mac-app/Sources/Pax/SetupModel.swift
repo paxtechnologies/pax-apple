@@ -224,10 +224,13 @@ final class SetupModel: ObservableObject {
 
     /// v0.8.9: the waits the server accepts (the picker offers only these).
     @Published var waitLimits: WaitLimits = .standard
-    /// v0.8.9: the email already has a Pax account: a code was sent to it, and
-    /// entering it signs this Mac in to that account (one shared list).
-    @Published var signInCodeSentTo: String?
-    @Published var signInCode = ""
+    /// v0.8.32: the email step. A 6-digit code goes to the address and comes back
+    /// before the account exists; for an address that already has an account the
+    /// same code signs this Mac in to it (one shared list).
+    @Published var emailCode = EmailCodeState()
+
+    /// The code field shows (a code went to the address in the email field).
+    var awaitingCode: Bool { !hasAccount && emailCode.awaitingCode(for: config.email) }
 
     func loadWaitLimits() {
         Task { [weak self] in
@@ -273,7 +276,7 @@ final class SetupModel: ObservableObject {
     }
 
     var consentComplete: Bool { agreed }
-    var emailLooksValid: Bool { config.email.contains("@") && config.email.contains(".") }
+    var emailLooksValid: Bool { EmailCodeState.looksLikeEmail(config.email) }
     var keepDataPlan: KeepDataPlan { KeepDataPlan.forVersion(selected?.firmwareVersion) }
     var keepDataAvailable: Bool {
         keepDataPlan.method != nil && (coordinator.keepData?.helper.isAvailable() ?? false)
@@ -399,27 +402,52 @@ final class SetupModel: ObservableObject {
                     if !emailLooksValid { throw e }   // the email field shows again
                 }
             }
-            // v0.8.9: signing in to an existing account with the emailed code.
-            if !hasAccount, let sentTo = signInCodeSentTo, !signInCode.isEmpty {
-                let account = try await coordinator.escrow.signIn(email: sentTo, code: signInCode,
-                                                                  label: ProcessInfo.processInfo.hostName)
-                coordinator.escrow.token = account.token
-                try? tokenStore.save(account.token)
-                signInCodeSentTo = nil
-                signInCode = ""
+            // v0.8.32: email -> 6-digit code -> account (new, or the one this address has).
+            if !hasAccount {
+                guard emailLooksValid else {
+                    emailCode.problem = EmailCodeCopy.enterEmail
+                    return
+                }
+                if !emailCode.awaitingCode(for: config.email) {
+                    try await sendEmailCode()      // the code field shows; Continue again checks it
+                    return
+                }
+                guard emailCode.codeComplete else {
+                    emailCode.problem = EmailCodeCopy.enterCode
+                    return
+                }
+                do {
+                    let account = try await coordinator.escrow.verifyEmailCode(
+                        email: config.email, code: emailCode.code, label: ProcessInfo.processInfo.hostName)
+                    coordinator.escrow.token = account.token
+                    try? tokenStore.save(account.token)
+                    emailCode.finish()
+                } catch let error where EmailCodeCopy.message(for: error, checking: true) != nil {
+                    emailCode.problem = EmailCodeCopy.message(for: error, checking: true)
+                    return
+                }
             }
-            do {
-                try await coordinator.registerAccount(config)
-            } catch let error where !hasAccount && EscrowClient.isExistingAccount(error) {
-                // Same email as another device: use that account (shared list), with a code.
-                try await coordinator.escrow.startSignIn(email: config.email)
-                signInCodeSentTo = config.email
-                return
-            }
+            try await coordinator.saveAccountSettings(config)
             if let token = coordinator.escrow.token { try? tokenStore.save(token) }
             for site in sites { _ = try? await coordinator.escrow.blockSite(site) }
             then()
         }
+    }
+
+    /// Sends a code to the email field's address (Continue and "Resend code").
+    func sendEmailCode() async throws {
+        let email = config.email
+        do {
+            try await coordinator.escrow.startEmailCode(email: email)
+            emailCode.didSend(to: email, at: Date())
+        } catch let error where EmailCodeCopy.message(for: error, checking: false) != nil {
+            emailCode.problem = EmailCodeCopy.message(for: error, checking: false)
+        }
+    }
+
+    func resendEmailCode() {
+        guard !busy, emailCode.secondsUntilResend(now: Date()) == 0 else { return }
+        run { [self] in try await sendEmailCode() }
     }
 
     // MARK: Lock it in

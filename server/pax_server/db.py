@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS accounts (
     block_remote_desktop   INTEGER NOT NULL DEFAULT 1,  -- v0.5: remote-desktop category
     trial_started_at       INTEGER,                     -- v0.8.18: when this account's trial day began
     display_name           TEXT,                        -- v0.8.31: first name for the trusted person's emails
-    email_verified_at      INTEGER                      -- v0.8.31: when a one-time code to the email last worked
+    email_verified_at      INTEGER,                     -- v0.8.31: when a one-time code to the email last worked
+    kind                   TEXT NOT NULL DEFAULT 'adult', -- v0.8.32: 'adult' | 'child'
+    parent_email           TEXT,                        -- v0.8.32: child only: the parent's proved address
+    label                  TEXT                         -- v0.8.32: child only: "Sam's iPhone (child)"
 );
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -177,6 +180,8 @@ CREATE TABLE IF NOT EXISTS signup_codes (
     used_at     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_signup_email ON signup_codes(email_hash, created_at);
+-- v0.8.32: signup_codes.purpose ('signup' | 'child') and the parent index are added
+-- by the start-up migration (older databases get them as plain column adds).
 
 -- v0.8.15: verified support release. Every nonce ever redeemed, kept for good, so
 -- a code works once whatever any clock says.
@@ -262,6 +267,20 @@ class Database:
             self._conn.execute("ALTER TABLE accounts ADD COLUMN display_name TEXT")
         if "email_verified_at" not in cols:
             self._conn.execute("ALTER TABLE accounts ADD COLUMN email_verified_at INTEGER")
+        # v0.8.32 child accounts: plain column adds again (no table rebuild). A child row's
+        # email is a unique placeholder (child.<id>@accounts.paxpeace.invalid), so
+        # accounts.email stays NOT NULL UNIQUE and every email lookup finds adults only.
+        if "kind" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN kind TEXT NOT NULL DEFAULT 'adult'")
+        if "parent_email" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN parent_email TEXT")
+        if "label" not in cols:
+            self._conn.execute("ALTER TABLE accounts ADD COLUMN label TEXT")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_accounts_parent ON accounts(parent_email) "
+                           "WHERE parent_email IS NOT NULL")
+        scols = {r[1] for r in self._conn.execute("PRAGMA table_info(signup_codes)")}
+        if "purpose" not in scols:
+            self._conn.execute("ALTER TABLE signup_codes ADD COLUMN purpose TEXT NOT NULL DEFAULT 'signup'")
         # v0.8.13 (project decision): pictures and video on X and Bluesky are always
         # blocked. Force every account back on and close any waiting request to turn
         # them off. Runs at every start; a no-op once done.

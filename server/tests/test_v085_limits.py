@@ -13,6 +13,7 @@ from pax_server.crypto import generate_key_b64
 from pax_server.limits import client_ip, is_loopback
 from pax_server.main import create_app
 from pax_server.notify import MemoryEmailSender
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 PARTNER = "friend@example.org"
 
@@ -52,8 +53,9 @@ def env(tmp_path):
 
 
 def signup(env, email, xff=None):
+    """v0.8.32: the only way to make an account (email -> code -> verify)."""
     headers = {"X-Forwarded-For": xff} if xff else {}
-    return env.client.post("/v1/accounts", json={"email": email}, headers=headers)
+    return verified_signup(env.client, email, headers=headers)
 
 
 def account(env, email="me@example.com", partner=None):
@@ -71,8 +73,8 @@ def removal(env, h, dev):
 
 # ------------------------------------------------------------------ version
 def test_version_is_085(env):
-    assert __version__ == "0.8.31"
-    assert env.client.get("/v1/health").json()["version"] == "0.8.31"
+    assert __version__ == "0.8.32"
+    assert env.client.get("/v1/health").json()["version"] == "0.8.32"
 
 
 # ---------------------------------------------------------------- client IP
@@ -118,8 +120,8 @@ def test_signup_limited_per_hour_then_per_day(env):
 
 def test_signup_attempts_count_even_when_refused_as_duplicates(env):
     assert signup(env, "same@example.com").status_code == 201
-    for _ in range(4):
-        assert signup(env, "same@example.com").status_code == 409
+    for _ in range(4):        # v0.8.32: the retired route still counts, and still says sign_in
+        assert env.client.post("/v1/accounts", json={"email": "same@example.com"}).status_code == 409
     assert signup(env, "other@example.com").status_code == 429
 
 
@@ -160,25 +162,31 @@ def test_signup_settings_from_env(monkeypatch):
 
 
 # --------------------------------------------------- welcome is best-effort
-def test_welcome_failure_still_creates_the_account(env):
+def test_no_code_email_means_no_account(env):
+    """v0.8.32: accounts need the emailed code, so a failed code email makes nothing
+    (the answer is still 202, so it never says whether the address exists)."""
     env.mail.down.add("me@example.com")
-    r = signup(env, "me@example.com")
+    r = env.client.post("/v1/accounts/email/start", json={"email": "me@example.com"})
+    assert r.status_code == 202
+    assert env.escrow.db.one("SELECT COUNT(*) FROM accounts")[0] == 0
+    env.mail.down.clear()
+    r = signup(env, "me@example.com")                                   # a resend works
     assert r.status_code == 201, r.text
-    h = {"Authorization": f"Bearer {r.json()['token']}"}
-    assert env.client.get("/v1/accounts/me", headers=h).json()["email"] == "me@example.com"
-    kinds = [e["kind"] for e in env.escrow.db.all("SELECT kind FROM events")]
-    assert "account_registered" in kinds and "welcome_not_sent" in kinds
-    # A retry is a duplicate, not a second account.
-    assert signup(env, "me@example.com").status_code == 409
+    # A second sign-up is a sign-in to the same account, not a second account.
+    assert signup(env, "me@example.com").status_code == 200
+    assert env.escrow.db.one("SELECT COUNT(*) FROM accounts")[0] == 1
 
 
 def test_one_welcome_per_address_per_day(env):
+    # v0.8.32: sign-up sends a code, never a welcome; the per-day rule still holds.
     assert signup(env, "me@example.com").status_code == 201
-    assert env.mail.kinds_to("me@example.com") == ["welcome"]
+    assert "welcome" not in env.mail.kinds_to("me@example.com")
     esc = env.escrow
+    assert esc._mail("me@example.com", "welcome", "Welcome to Pax", "first") is True
+    assert env.mail.kinds_to("me@example.com")[-1] == "welcome"
     assert esc._mail("me@example.com", "welcome", "Welcome to Pax", "again") is False
     assert esc._mail("ME@example.com ", "welcome", "Welcome to Pax", "again") is False
-    assert env.mail.kinds_to("me@example.com") == ["welcome"]
+    assert env.mail.kinds_to("me@example.com").count("welcome") == 1
     env.clock.advance(DAY + 1)
     assert esc._mail("me@example.com", "welcome", "Welcome to Pax", "later") is True
 
@@ -226,11 +234,16 @@ def test_budget_never_exceeded_and_partner_alert_fails_closed(env):
     assert removal(env, h, dev)["status"] == "pending"
 
 
-def test_signups_still_work_when_the_budget_is_spent(env):
+def test_a_spent_budget_stops_new_sign_ups(env):
+    """v0.8.32 (and the iPhone flow since 0.8.31): an account needs its emailed code,
+    and codes are account-holder mail, so once that part of the daily budget is spent
+    no new account can be made until the next day (fail closed: nothing unverified)."""
     _fill(env, env.settings.mail_daily_cap, "partner")
-    r = signup(env, "late@example.com")
-    assert r.status_code == 201
+    r = env.client.post("/v1/accounts/email/start", json={"email": "late@example.com"})
+    assert r.status_code == 202
     assert env.mail.kinds_to("late@example.com") == []
+    assert env.client.post("/v1/accounts", json={"email": "late@example.com"}).status_code == 410
+    assert env.escrow.db.one("SELECT COUNT(*) FROM accounts")[0] == 0
 
 
 # ------------------------------------------------------- partner fail-closed

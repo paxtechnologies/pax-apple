@@ -1,12 +1,14 @@
-# Pax Peace (Apple), v0.8.31
+# Pax Peace (Apple), v0.8.32
 
 **Less scrolling. More living.**
+
+Free, open-source explicit content blocker for Mac, iPhone and iPad.
 
 **Requirements:** a Mac with **macOS 12 Monterey or later**, Intel or Apple silicon (the iPhone
 or iPad is set up from that Mac). Hardware testing on a real Monterey Mac is still pending; see
 [docs/MONTEREY.md](docs/MONTEREY.md).
 
-Pax (Latin for *peace*) is a free, open-source (GPL-3.0) content blocker for restricted content on
+Pax (Latin for *peace*) is a free, open-source (GPL-3.0) **explicit content blocker** for
 **iPhone and iPad**, set up from a Mac, and since v0.4 on **the Mac itself** ([Pax for Mac](#pax-for-mac)). It's built for people who choose this for themselves.
 Turning it off is never impossible. It just takes a **turn-off wait** you picked in advance: if you
 ever decide to switch Pax off, you ask first, then wait that long before it turns off, and you can
@@ -15,7 +17,7 @@ wait applies before a blocked site or app is unblocked.)
 
 *Decentralised. Open source. Free for everyone. Power at the local level.* (Pax Peace: [paxpeace.com](https://paxpeace.com))
 
-Positioning: Pax does **restricted-content filtering** and nothing else. Time limits and focus tools
+Positioning: Pax is an **explicit content blocker** and nothing else. Time limits and focus tools
 are on the [roadmap](ROADMAP.md). Pax is free. We may add an optional donation later, but there are
 no payments in this code.
 
@@ -166,7 +168,8 @@ decrease, which itself waits and tells the partner).
 | `PAX_INTERNAL_KEY` | (empty = off) | shared secret for pax-dns's `/internal/v1/dns/changes` feed |
 
 API (all under `/v1`, Bearer token except the first three): `GET health`, `GET crisis-lines`,
-`POST accounts` (limited per client address, v0.8.5), `GET accounts/me`, `PUT accounts/me/wait {wait_days|wait_hours}`,
+`POST accounts` (v0.8.32: makes no accounts; 410 `app_update_required` / PAX-ESCROW-020 for a new address,
+409 `sign_in` for an existing one; limited per client address), `GET accounts/me`, `PUT accounts/me/wait {wait_days|wait_hours}`,
 `PUT accounts/me/partner {email|null}`, `POST devices`, `GET devices`, `GET devices/{id}`,
 `POST devices/{id}/removal-request`, `POST devices/{id}/removal-request/cancel`,
 `POST devices/{id}/removal-request/confirm {confirm:true}`, `POST devices/{id}/emergency {reason}`.
@@ -192,7 +195,8 @@ tries in an hour. Kept by design: the hashed hardware code (`trial_hardware`, no
 support codes (`support_nonces`, a code works once); `mail_log`/`signup_attempts` hashes go within two days.
 The DNS feed carries the account once with `"deleted": true` so both DNS servers drop it at their next
 poll; that `dns_changes` row (random ID, sequence number, time) is pruned after an hour.
-One-tap accounts (branch, for the iPhone app 1.2; not released yet). Every account has a verified email:
+Verified-email accounts (v0.8.31 for the iPhone app 1.2; v0.8.32 also Pax for Mac, and the only way to make an
+account). Every new account has a verified email:
 `POST accounts/email/start {email}` (no token; the same per-client sign-up limit as `POST accounts`) always
 answers 202 `{sent: true}` and emails a 6-digit code (15 minutes, 5 tries, 5 codes an hour per address), new
 address or not; `POST accounts/email/verify {email, code, label?}` answers 201 `{account_id, token, created:
@@ -226,6 +230,12 @@ known key). `PAX_ROLE=dns` runs a DoH-only server.
 Email goes through a pluggable `EmailSender`: SMTP when `PAX_SMTP_HOST` is set (v0.8.0), otherwise a
 logging stub. Emails never contain the password. Since v0.8.5 every email counts against the daily
 budget above; partner alerts fail closed and account-holder emails are best-effort.
+Child accounts (v0.8.32, docs/CHILD_ACCOUNTS.md): `POST accounts/child/start {email}` (the parent's address; 202
+always), `POST accounts/child/verify {email, code, child_name?, device_name?}` (201 a new, separate child account:
+`kind: "child"`, `label`, 30-day wait; 401 bad code; 429 `child_limit`, PAX-ESCROW-022, 5 per parent address) and
+`POST accounts/child/signin {email, code, account_id}` (200 back in to that child). All of a child account's mail goes
+to the parent (fail closed for anything that loosens Pax); its wait never goes below 30 days (403
+`child_wait_fixed`, PAX-ESCROW-021); no trial day. The parent's own account is untouched.
 
 ### pax-dns (per-user filtering resolver)
 
@@ -565,7 +575,7 @@ the DMG and the update zip. Clean set-up still needs Apple Configurator's `cfgut
 
 ## Pax for Mac
 
-"Protect this Mac" makes restricted sites effectively unreachable on the Mac you run Pax on, with the same
+"Protect this Mac" makes explicit sites effectively unreachable on the Mac you run Pax on, with the same
 unlock model as the iPhone: an escrowed password, your turn-off wait, partner emails, the first-hour
 grace period and the emergency release.
 
@@ -1039,7 +1049,7 @@ There's no separate payload for it.
 
 DNS resolver (default since v0.2): **CleanBrowsing Family Filter**,
 `https://doh.cleanbrowsing.org/doh/family-filter/` (checked on cleanbrowsing.org/filters on
-2026-10-12). It blocks restricted content, proxy/VPN domains and mixed-content sites such as Reddit
+2026-10-12). It blocks explicit content, proxy/VPN domains and mixed-content sites such as Reddit
 (fully blocked), and forces SafeSearch on Google, Bing and YouTube. `--filter core` uses CleanBrowsing's
 narrower filter (its address is kept encoded in `common/pax_restricted.py`), which leaves Reddit and VPN/proxy domains reachable. `--resolver-url`
 uses a self-hosted Pax DNS or any https DoH resolver instead, and `--user-token` uses your own

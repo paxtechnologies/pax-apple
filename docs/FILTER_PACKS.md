@@ -220,7 +220,7 @@ no app release.
   picked it. Every other gate still applies: a name on the known-good or everyday UK list
   still fails the run, so a known-good name has to come off that list first (with a dated
   note there), as perplexity.ai, brave.com, yandex.com, yandex.ru and ya.ru did.
-- The allowlist still wins (tailscale.com stays open), and SafeSearch rewrites change only
+- The allowlist still wins (character.ai stays open), and SafeSearch rewrites change only
   with an app release.
 - Everyday sites that are not a way round Pax (browsers' own sites, package and software
   sites, stores, antivirus vendors) stay off it; people block those for themselves in

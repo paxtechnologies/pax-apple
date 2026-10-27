@@ -20,6 +20,7 @@ from pax_server.crypto import generate_key_b64  # noqa: E402
 from pax_server.doh import DropDnsQueryLogs, hash_token  # noqa: E402
 from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 KEY = "k" * 20 + "test-stats-key-not-real-0123456789abcdef"
 KEY_HASH = hashlib.sha256(KEY.encode()).hexdigest()
@@ -54,7 +55,7 @@ def _env(tmp_path):
 
 
 def _account(e, email):
-    tok = e.client.post("/v1/accounts", json={"email": email}).json()["token"]
+    tok = verified_signup(e.client, email).json()["token"]
     return {"Authorization": f"Bearer {tok}"}
 
 

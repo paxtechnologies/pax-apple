@@ -20,7 +20,7 @@ For each query (v0.8.1 order):
   3. the user's exceptions (freed after the wait) -> upstream, unless the
      restricted-content name rules match (then the exception is ignored)
   4. the user's blocked sites, Pax categories -> blocked (0.0.0.0 / ::)
-  5. Pax allowlist (tailscale.com, character.ai) -> upstream
+  5. Pax allowlist (character.ai) -> upstream
   6. lists an exception may free (pax-bypass, other plug-ins) -> blocked
   7. upstream. v0.8.18: Pax's own filter is the default path. Steps 0-6 decide,
      then an allowed query goes to a fast resolver that filters only malware

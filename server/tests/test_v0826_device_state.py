@@ -18,6 +18,7 @@ from pax_server.crypto import generate_key_b64  # noqa: E402
 from pax_server.doh import hash_token  # noqa: E402
 from pax_server.main import create_app  # noqa: E402
 from pax_server.notify import MemoryEmailSender  # noqa: E402
+from verified_signup import verified_signup  # noqa: E402  (v0.8.32)
 
 PW = "abcde-fghjk-mnpqr-stuvw-xyz23-45678"
 T0 = 1_800_000_000 - (1_800_000_000 % DAY) + 10 * HOUR    # 10:00 UTC
@@ -47,7 +48,7 @@ def _env(tmp_path):
 
 
 def _account(e, email):
-    tok = e.client.post("/v1/accounts", json={"email": email}).json()["token"]
+    tok = verified_signup(e.client, email).json()["token"]
     return {"Authorization": f"Bearer {tok}"}
 
 

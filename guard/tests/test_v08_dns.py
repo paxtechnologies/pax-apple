@@ -158,7 +158,7 @@ def test_blocked_answers_zero_address_and_nodata():
 def test_safesearch_rewrite_cname_plus_addresses():
     up = FakeUpstream("cb", ip=b"\xd8\xef\x26\x78")       # 216.239.38.120
     rules = fl.parse_safesearch((Path(__file__).resolve().parents[2] / "lists" / "safesearch_rules.csv").read_text())
-    assert len(rules) == 385
+    assert len(rules) == 388
     fwd = d.Forwarder([up], fl.FilterSet([], SmallSuffixSet([]), rules))
     for host, target in [("www.google.co.uk", "forcesafesearch.google.com"), ("google.de", "forcesafesearch.google.com"),
                          ("youtube.com", "restrict.youtube.com"), ("m.youtube.com", "restrict.youtube.com"),

@@ -35,7 +35,7 @@ struct ChooseBlocksStep: View {
             StepHeader(eyebrow: "", title: "Choose what to block",
                        subtitle: "Sensible choices are already made. Change anything you like.")
             Card {
-                ToggleRow(title: "Restricted content", detail: "Sites Pax always blocks, in every browser and app.",
+                ToggleRow(title: "Explicit content", detail: "Sites Pax always blocks, in every browser and app.",
                           isOn: .constant(true), locked: true)
                 Divider().overlay(Theme.border)
                 if platform == .mac {
@@ -101,9 +101,9 @@ struct ChooseBlocksStep: View {
             }
             DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
                 Picker("Filter strength", selection: $filter) {
-                    Text("Family (recommended): restricted content, proxies and VPN sites, Reddit; safe search on")
+                    Text("Family (recommended): explicit content, proxies and VPN sites, Reddit; safe search on")
                         .tag(DNSFilter.family)
-                    Text("Core: restricted content only; Reddit and VPN sites stay reachable")
+                    Text("Core: explicit content only; Reddit and VPN sites stay reachable")
                         .tag(DNSFilter.core)
                 }
                 .pickerStyle(.radioGroup)
@@ -133,7 +133,20 @@ struct WaitStep: View {
     private var limits: WaitLimits { localMac ? .standard : model.waitLimits }
 
     private var canContinue: Bool {
-        !model.busy && (localMac || model.hasAccount || model.emailLooksValid)
+        guard !model.busy else { return false }
+        if localMac || model.hasAccount { return true }
+        // v0.8.32: first "Send code", then Continue once the 6 digits are in.
+        return model.emailLooksValid && (!model.awaitingCode || model.emailCode.codeComplete)
+    }
+
+    /// v0.8.32: before the code is sent the button sends it; after that it checks it.
+    private var continueTitle: String {
+        !localMac && !model.hasAccount && !model.awaitingCode ? EmailCodeCopy.sendButton : "Continue"
+    }
+
+    private func continueTapped() {
+        model.config.partnerEmail = partner.isEmpty ? nil : partner
+        onContinue()
     }
 
     var body: some View {
@@ -173,15 +186,19 @@ struct WaitStep: View {
                     Text("Your email").font(Theme.body(15, weight: .medium)).foregroundStyle(Theme.primaryText)
                     TextField("you@example.com", text: $model.config.email)
                         .textFieldStyle(.roundedBorder).font(Theme.body(14))
-                    Text("Pax writes only when someone asks to change or turn off Pax. Nothing else.")
-                        .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
-                    if let sentTo = model.signInCodeSentTo {
-                        Text("\(sentTo) already has a Pax account. We emailed it a code: enter it to use the "
-                             + "same account, so your devices share one list.")
-                            .font(Theme.body(12.5)).foregroundStyle(Theme.primaryText)
+                        .onSubmit { if canContinue { continueTapped() } }
+                    // v0.8.32: every new account checks its email with a code (same step, no new screen).
+                    if model.awaitingCode {
+                        EmailCodeEntry(state: $model.emailCode, busy: model.busy,
+                                       resend: { model.resendEmailCode() },
+                                       submit: { if canContinue { continueTapped() } })
+                    } else {
+                        Text(EmailCodeCopy.why)
+                            .font(Theme.body(12.5)).foregroundStyle(Theme.mutedText)
                             .fixedSize(horizontal: false, vertical: true)
-                        TextField("6-digit code", text: $model.signInCode)
-                            .textFieldStyle(.roundedBorder).font(Theme.body(14)).frame(maxWidth: 200)
+                    }
+                    if let problem = model.emailCode.problem {
+                        EmailCodeProblem(text: problem)
                     }
                     Divider().overlay(Theme.border)
                 }
@@ -211,10 +228,7 @@ struct WaitStep: View {
                           details: { model.supportDetails(failure) })
             }
             HStack(spacing: 14) {
-                Button("Continue") {
-                    model.config.partnerEmail = partner.isEmpty ? nil : partner
-                    onContinue()
-                }
+                Button(continueTitle) { continueTapped() }
                 .buttonStyle(PrimaryButtonStyle(accent: true, large: true))
                 .disabled(!canContinue)
                 if model.busy { ProgressView().controlSize(.small) }
@@ -228,6 +242,53 @@ struct WaitStep: View {
                 model.loadWaitLimits()
             }
         }
+    }
+}
+
+/// v0.8.32: the code field under an email address (set-up and Settings). Paste the code
+/// or the whole email: only the 6 digits are kept. "Resend code" waits a little between
+/// sends and respects the server's 5 codes an hour.
+struct EmailCodeEntry: View {
+    @Binding var state: EmailCodeState
+    var busy: Bool
+    let resend: () -> Void
+    let submit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(EmailCodeCopy.sent(to: state.sentTo ?? ""))
+                .font(Theme.body(12.5)).foregroundStyle(Theme.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                TextField("6-digit code", text: $state.code)
+                    .textFieldStyle(.roundedBorder)
+                    .font(Theme.body(16).monospacedDigit())
+                    .frame(maxWidth: 160)
+                    .onChange(of: state.code) { typed in
+                        let digits = EmailCodeState.digits(from: typed)
+                        if digits != typed { state.code = digits }
+                        if !digits.isEmpty { state.problem = nil }
+                    }
+                    .onSubmit { if state.codeComplete { submit() } }
+                TimelineView(.periodic(from: Date(), by: 1)) { context in
+                    Button(EmailCodeCopy.resendTitle(seconds: state.secondsUntilResend(now: context.date)),
+                           action: resend)
+                        .buttonStyle(.link)
+                        .font(Theme.body(12.5))
+                        .disabled(busy || state.secondsUntilResend(now: context.date) > 0)
+                }
+            }
+        }
+    }
+}
+
+/// One calm line for a wrong or expired code, too many codes, or a bad address.
+struct EmailCodeProblem: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(Theme.body(12.5)).foregroundStyle(Theme.warning)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

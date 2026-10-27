@@ -29,6 +29,11 @@ class Settings:
     default_wait_seconds: int = 72 * HOUR
     min_wait_seconds: int = 24 * HOUR
     max_wait_seconds: int = 365 * DAY
+    # v0.8.32 child accounts (docs/CHILD_ACCOUNTS.md): the turn-off wait a child
+    # account is made with, and the shortest it can ever be set to; and how many
+    # child accounts one parent address can look after.
+    child_wait_seconds: int = 30 * DAY
+    child_accounts_per_parent: int = 5
 
     # First N seconds after a device is registered: removal needs no wait.
     # A grace-period request lapses when this hour ends (v0.8.5), even if unconfirmed.
@@ -161,6 +166,8 @@ class Settings:
             default_wait_seconds=_env_int("PAX_DEFAULT_WAIT_SECONDS", d.default_wait_seconds),
             min_wait_seconds=_env_int("PAX_MIN_WAIT_SECONDS", d.min_wait_seconds),
             max_wait_seconds=_env_int("PAX_MAX_WAIT_SECONDS", d.max_wait_seconds),
+            child_wait_seconds=_env_int("PAX_CHILD_WAIT_SECONDS", d.child_wait_seconds),
+            child_accounts_per_parent=_env_int("PAX_CHILD_ACCOUNTS_PER_EMAIL", d.child_accounts_per_parent),
             grace_seconds=_env_int("PAX_GRACE_SECONDS", d.grace_seconds),
             trial_seconds=_env_int("PAX_TRIAL_SECONDS", d.trial_seconds),
             reveal_window_seconds=_env_int("PAX_REVEAL_WINDOW_SECONDS", d.reveal_window_seconds),
