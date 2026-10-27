@@ -188,6 +188,9 @@ for mod in domain_matcher filter_lists dns_forwarder local_escrow local_blocklis
            pax_update pax_signing ed25519 tamper recovery_guard support_code; do
   cp -X "$REPO/guard/$mod.py" "$APP/Contents/Resources/guard/"
 done
+# v0.8.33 Pax-approved installs: the module and its deny list (remote desktop, rented
+# Macs, mesh VPNs, proxies), read next to it.
+cp -X "$REPO/guard/app_installs.py" "$REPO/guard/app-install-deny.txt" "$APP/Contents/Resources/guard/"
 # v0.8.1: the restricted-content rules, shared with the server and the profile.
 cp -X "$REPO/common/pax_restricted.py" "$APP/Contents/Resources/guard/"
 mkdir -p "$APP/Contents/Resources/guard/filters"

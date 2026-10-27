@@ -105,6 +105,66 @@ CODES: list[PaxCode] = [
             "Choose an app from your Applications folder, then try again.",
             "apps.add/apps.unblock (v0.8.7): not an .app in /Applications or ~/Applications, no bundle "
             "ID in its Info.plist, not on the list, or the list is full (200 apps)."),
+    # v0.8.33 Pax-approved installs and updates (guard/app_installs.py; docs/APP_INSTALLS.md).
+    PaxCode("PAX-MAC-018", "Pax couldn't open that file.",
+            "Choose an app or a disk image (.dmg) from your Downloads, Desktop or a mounted disk.",
+            "installs.start refused the request: not an absolute, simple path; goes through a link; not in "
+            "the asking account's home or /Volumes; not owned by that account or readable by everyone; not "
+            ".app/.dmg/.pkg; no app in the image; an app name that can't be used; or a uid that isn't a local "
+            "account (501+ with a home in /Users)."),
+    PaxCode("PAX-MAC-019", "That app isn't signed by its developer.",
+            "Pax only installs apps signed with an Apple Developer ID. Ask the developer for a signed download.",
+            "codesign --verify --deep --strict failed on the staged copy, or codesign -dv shows no Team ID, ad "
+            "hoc, a leaf that isn't 'Developer ID Application: … (TEAM)', a chain not ending in Developer ID "
+            "Certification Authority / Apple Root CA, or an Identifier other than CFBundleIdentifier."),
+    PaxCode("PAX-MAC-020", "Apple hasn't checked this app.",
+            "Pax only installs apps Apple has checked (notarised). Ask the developer for a notarised download.",
+            "spctl --assess --type execute -vv on the staged copy didn't say 'accepted' with "
+            "'source=Notarized Developer ID' (or spctl --assess --type install refused an Apple package)."),
+    PaxCode("PAX-MAC-021", "Pax doesn't install this kind of app.",
+            "Remote desktop, VPN, proxy and similar apps can get round Pax, so they wait like turning Pax off.",
+            "app_installs.blocked_reason: the user's Blocked apps, guard_config BYPASS_APPS / "
+            "UNMANAGEABLE_BROWSERS / REMOTE_AI_APPS / VM_APPS (bundle ID, then name), guard/app-install-deny.txt "
+            "(bundle, prefix, Team ID, name), or a browser (CFBundleURLSchemes http/https) other than Chrome, "
+            "Edge, Brave, Chromium and Firefox."),
+    PaxCode("PAX-MAC-022", "This update is from a different developer.",
+            "Pax only replaces an app with one from the same developer. Download it from the developer's own site.",
+            "The installed /Applications copy with the same bundle ID has a different (or no) TeamIdentifier "
+            "than the staged copy."),
+    PaxCode("PAX-MAC-023", "Pax doesn't change this app.",
+            "Pax updates itself, and Apple's apps update through the App Store or Software Update.",
+            "The bundle ID starts with com.apple., org.paxpeace. or org.paxmobile.; it's signed by Apple "
+            "(Software Signing) or with Pax's Team ID; the name is Pax.app; or the target isn't directly in "
+            "/Applications."),
+    PaxCode("PAX-MAC-024", "Installer packages wait like turning Pax off.",
+            "Look for a .dmg or app download instead. Packages run their own scripts, so Pax only installs Apple's.",
+            "A .pkg/.mpkg whose pkgutil --check-signature isn't 'signed Apple Software' with a Software Update "
+            "-> Apple Root CA chain, or a bundle-style (folder) package."),
+    PaxCode("PAX-MAC-025", "There's more than one app in this disk image.",
+            "Choose the one you want to install.",
+            "installs.start on a .dmg with several .app folders (or several packages and no app) and no "
+            "`choice`; the answer lists them in `options`."),
+    PaxCode("PAX-MAC-026", "Quit the app first.",
+            "Close the app you're updating, then try again.",
+            "A running process's executable is inside the installed copy that would be replaced."),
+    PaxCode("PAX-MAC-027", "That's an older version than the one you have.",
+            "Download the latest version from the developer's site.",
+            "CFBundleShortVersionString (then CFBundleVersion) of the staged copy is lower than the installed one."),
+    PaxCode("PAX-MAC-028", "Pax couldn't install that app. Nothing changed.",
+            "Try again. If it keeps happening, copy the details and send them to us.",
+            "Copying, hdiutil attach, chown/chmod, the rename into /Applications or an unexpected error failed; "
+            "the staging folder is removed and an update's previous copy is put back (fail closed). Also: the "
+            "deny list couldn't be read, or an update-only request for an app that isn't installed."),
+    PaxCode("PAX-MAC-029", "Pax is already installing something.",
+            "Wait for it to finish, then try again.",
+            "One install (or Apple update) at a time; or more than 6 install requests a minute."),
+    PaxCode("PAX-MAC-030", "Another app already has that name.",
+            "Rename the app you're installing, or remove the other one first.",
+            "A different app (other bundle ID) is already at /Applications/<name>.app."),
+    PaxCode("PAX-MAC-031", "This app is packaged in a way Pax can't check.",
+            "Ask the developer for a standard download.",
+            "app_installs.check_tree on the staged copy: a link pointing outside the bundle (absolute, or "
+            "resolving outside), a setuid/setgid file, a device/pipe/socket, more than 300,000 files or over 20 GB."),
     # ---------------------------------------------------------------- IOS
     PaxCode("PAX-IOS-001", "Pax needs Apple Configurator for this.",
             "Install Apple Configurator from the Mac App Store, then choose Apple Configurator > "
@@ -401,6 +461,19 @@ CODES: list[PaxCode] = [
     PaxCode("PAX-UPDATE-008", "Update servers asked Pax to slow down.",
             "Nothing to do: Pax waits and tries again.",
             "pax_update/filter_lists: HTTP 429 or 5xx; exponential back-off (1 h to 24 h, Retry-After honoured)."),
+    # v0.8.33: Apple software updates through pax-guard (guard/app_installs.py).
+    PaxCode("PAX-UPDATE-009", "Pax couldn't check for Apple software updates.",
+            "Check you're online, then try again.",
+            "softwareupdate --list (run by pax-guard as root) exited non-zero."),
+    PaxCode("PAX-UPDATE-010", "That Apple update didn't install.",
+            "Check for updates again and retry. If it keeps happening, copy the details and send them to us.",
+            "softwareupdate --install <label> --agree-to-license failed, or the label wasn't in the last list."),
+    PaxCode("PAX-UPDATE-011", "macOS wants an administrator for this update.",
+            "Smaller Apple updates usually install without one. This one can wait, or be installed after the "
+            "turn-off wait.",
+            "softwareupdate --install output mentions a volume owner, authentication or a password (Apple "
+            "silicon asks a volume owner to approve macOS updates). Pax doesn't use the held administrator "
+            "password for this."),
     # ---------------------------------------------------------------- NET
     PaxCode("PAX-NET-001", "Pax can't reach its server.",
             "Check your internet connection and try again.",

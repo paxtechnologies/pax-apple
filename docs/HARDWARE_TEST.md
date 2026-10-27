@@ -121,6 +121,44 @@ accounts (rmsvc)".
 7. Test mode still works as before: `defaults write org.paxmobile.pax pax.testing.allowExtraAdmins -bool
    true` leaves rmsvc an admin, with the test-mode warning.
 
+### v0.8.33: install and update apps as the Standard user (docs/APP_INSTALLS.md)
+
+On a protected Mac, logged in as the everyday (Standard) account. Watch `sudo tail -f /var/log/pax-guard.log`
+from another admin session if you have one, else read `/Library/PaxGuard/state/installs.json` after the
+turn-off wait.
+
+1. **New app**: download a notarised .dmg (Firefox, VS Code, Rectangle). Settings › Updates › Install or
+   update an app › drop the .dmg. "Copying… / Opening the disk image… / Checking the app… / Installing…",
+   then "<App> <version> is installed in Applications." No password prompt. `ls -le@ /Applications/<App>.app`:
+   owner root, group admin, not group/other-writable, no `com.apple.quarantine`. The app opens normally.
+   The disk image isn't left mounted (`hdiutil info`), `/Library/PaxGuard/installs` is empty.
+2. **Drop an .app** (from a mounted image in /Volumes, and from Downloads): same result.
+3. **Update**: install an older notarised version of an app (e.g. from the developer's archive), then drop the
+   newer one: "<App> is updated to <version>." The folder name is kept. With the app open: "Quit the app
+   first." (PAX-MAC-026). Dropping the older one again: PAX-MAC-027.
+4. **Different developer**: an app with the same bundle ID signed by another team (build one with your own
+   Developer ID): PAX-MAC-022, the installed copy untouched.
+5. **Refusals**: AnyDesk or TeamViewer .dmg → "Pax doesn't install remote-desktop tools: …" (PAX-MAC-021);
+   Tailscale, Opera, a VPN app → PAX-MAC-021; an unsigned or ad-hoc app (e.g. one you built with `swift
+   build`) → PAX-MAC-019; a Developer ID but un-notarised app → PAX-MAC-020; a Developer ID .pkg
+   (Zoom, Office) → PAX-MAC-024; Pax.app or an Apple app → PAX-MAC-023. Nothing appears in /Applications.
+6. **Apple package**: an Apple-signed .pkg (e.g. a Command Line Tools or ProVideo Formats .pkg from
+   developer.apple.com, `pkgutil --check-signature` shows "signed Apple Software") installs.
+7. **Two apps in one image** (any suite .dmg): Pax asks which; choosing one installs only that one.
+8. **Licence .dmg** (one that shows an agreement when double-clicked): installs without hanging.
+9. **Updates the apps downloaded**: in a Sparkle app (e.g. one with "Check for Updates…") and an Electron
+   app (Slack, Discord) let the app download its update and cancel its administrator prompt. Open the
+   sheet: does "Updates ready to install" list it? Install → updated. Note which apps leave an unpacked copy.
+10. **Apple software updates**: Check for updates lists what `softwareupdate --list` shows. Install a Safari
+   or security update: installs, no restart. A macOS point update on Apple silicon: note whether it installs
+   or shows PAX-UPDATE-011 ("macOS wants an administrator"); either way the Mac doesn't restart by itself.
+11. **Abuse**: from Terminal as the Standard user, `python3 /Library/PaxGuard/bin/pax_guard.py ask
+   '{"cmd":"installs.start","path":"/System/Applications/Chess.app"}'`, a path with `..`, a symlink to an app,
+   `/Volumes/Macintosh HD/...`: all PAX-MAC-018. Swap the .app in Downloads for another app while "Copying…"
+   shows: the app that was copied is what's checked and installed.
+12. Restart pax-guard mid-install (`sudo launchctl kickstart -k system/org.paxpeace.pax-guard` from an admin):
+   no image left mounted, staging empty after it comes back, nothing half-installed in /Applications.
+
 ## iPhone / iPad
 
 0. (v0.8.6) Use a Mac that has **never had the old helper**: no `~/Library/Application Support/Pax/venv`,

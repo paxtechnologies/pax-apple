@@ -616,6 +616,20 @@ still keeps it, Pax takes away its admin rights and says so; setting Pax up agai
 with administrator privileges`), with the script on stdin so your password isn't in any process's
 arguments. The paxadmin password is never written to disk or logged.
 
+**Installing and updating apps as a Standard user (v0.8.33).** Once you're Standard, macOS asks for an
+administrator to put an app in Applications or to update one there, and the only administrator is
+behind the turn-off wait. So pax-guard does it for you, for apps it can check: **Settings › Updates ›
+Install or update an app** (drop an app or a .dmg, or choose one; updates the apps already downloaded
+themselves are listed there too). Updates to an app you already have install at once when they have
+the same bundle ID and Apple Developer Team ID, pass `codesign --verify --deep --strict` and are
+notarised (`spctl`). New apps need the same signature checks and mustn't be a kind of app that gets
+round Pax (VPNs, proxies, Tor, remote desktop, rented Macs, mesh VPNs, browsers Pax can't apply its
+rules to, virtual machines, your own Blocked apps). `.pkg` installers wait like turning Pax off, except
+Apple's own; Apple's software updates can be installed from the same screen, and Pax never restarts the
+Mac for you. Pax itself, Apple's apps and anything outside Applications are never touched. Everything
+is checked as root on a root-only copy, and anything unexpected refuses. Details:
+[docs/APP_INSTALLS.md](docs/APP_INSTALLS.md).
+
 **Profile** (`make_profile.py --self-lock`, System scope, no removal password: once you're Standard,
 removing a System profile needs an administrator, and Apple's schema says a manually installed profile
 with `PayloadRemovalDisallowed` and no removal password "requires admin auth"):
@@ -724,6 +738,9 @@ Restart, log in as paxadmin, and run the emergency script above. Without FileVau
 * **Private browsing is allowed** (your choice). It's still filtered by DNS, hosts and the locks.
 * **Safari and its extensions aren't managed** (needs a supervised Mac). Safari is still covered by
   DNS, hosts, Private Relay off and pax-guard.
+* **Apps that ask for an administrator after they're installed** (a privileged helper, a system
+  extension, a driver) still can't get one before the turn-off wait: Pax installs the app into
+  Applications, not the parts macOS guards with an administrator password (v0.8.33).
 * **Another user account**: you can't create one as a Standard user. The Guest account, if you turn
   it on, gets the same system-wide DNS, hosts and pf (but not paxadmin's rights).
 * **Phone hotspot / other networks**: still filtered (the DNS profile and hosts are system-wide). A

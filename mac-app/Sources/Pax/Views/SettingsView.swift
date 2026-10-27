@@ -356,6 +356,10 @@ private struct UpdateSettings: View {
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(mac.busy || mac.deviceID == nil)
             }
+            if mac.deviceID != nil {                           // v0.8.33 Pax-approved installs and updates
+                Divider().overlay(Theme.border).padding(.vertical, 4)
+                AppInstallRow()
+            }
             DetailsDisclosure(title: AppSettingsLayout.about) {
                 DetailText("Pax installs updates by itself, signed and checked, so a fix reaches you quickly.")
                 AboutDetails()
