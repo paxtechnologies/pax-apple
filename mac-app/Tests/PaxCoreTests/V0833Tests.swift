@@ -83,4 +83,104 @@ final class V0833Tests: XCTestCase {
         XCTAssertTrue(AppInstallText.rules.joined().contains("turning Pax off"))
         XCTAssertEqual(AppInstallText.rowTitle, "Install or update an app")
     }
+
+    // MARK: v0.8.33 simple doors (Ruben, 28 Oct 2026): Home card, one notification, Open With / drop
+
+    private func upd(_ name: String, _ id: String, _ v: String, path: String? = nil) -> GuardClient.DownloadedUpdate {
+        GuardClient.DownloadedUpdate(path: path ?? "/Users/a/Library/Caches/\(id)/\(name).app", name: name,
+                                     bundle_id: id, version: v, installed_version: "1.0")
+    }
+
+    func testScanBecomesCardsAndNotifiesOncePerAppAndVersion() {
+        let a = upd("Writer", "com.example.Writer", "3.2")
+        let b = upd("Notes Plus", "com.example.notes", "5.0")
+        let first = AppUpdatePrompts.process([a, b], remembered: [])
+        XCTAssertEqual(first.cards, [a, b])
+        XCTAssertEqual(first.notify, [a, b])
+        XCTAssertEqual(first.remembered, ["com.example.writer|3.2", "com.example.notes|5.0"])
+        // Same scan again (launch, every 30 min): cards stay, no new notification.
+        let again = AppUpdatePrompts.process([a, b], remembered: first.remembered)
+        XCTAssertEqual(again.cards, [a, b])
+        XCTAssertTrue(again.notify.isEmpty)
+        XCTAssertEqual(again.remembered, first.remembered)
+        // Installed: gone from the scan, so gone from Home; it comes back only as a newer version.
+        let later = AppUpdatePrompts.process([upd("Writer", "COM.EXAMPLE.WRITER", "3.3")], remembered: again.remembered)
+        XCTAssertEqual(later.cards.map(\.version), ["3.3"])
+        XCTAssertEqual(later.notify.map(\.version), ["3.3"])
+        let back = AppUpdatePrompts.process([a], remembered: later.remembered)
+        XCTAssertTrue(back.notify.isEmpty, "3.2 was already notified once")
+        // One card per app, at most three, and nothing nameless.
+        let many = (1...6).map { upd("App\($0)", "com.x.app\($0)", "2.0") } + [upd("Dup", "com.x.app1", "9.0"),
+                                                                           upd("", "com.x.blank", "1.0")]
+        let out = AppUpdatePrompts.process(many, remembered: [])
+        XCTAssertEqual(out.cards.count, AppUpdatePrompts.maxCards)
+        XCTAssertEqual(out.notify.count, 6)
+        XCTAssertFalse(out.notify.contains { $0.name == "Dup" || $0.name.isEmpty })
+        // Remembered pairs are bounded.
+        let old = (0..<AppUpdatePrompts.rememberLimit).map { "com.old.\($0)|1" }
+        let trimmed = AppUpdatePrompts.process([a], remembered: old)
+        XCTAssertEqual(trimmed.remembered.count, AppUpdatePrompts.rememberLimit)
+        XCTAssertEqual(trimmed.remembered.last, "com.example.writer|3.2")
+        XCTAssertEqual(trimmed.notify, [a])
+    }
+
+    func testCardNotificationAndSheetWording() {
+        let a = upd("Writer", "com.example.Writer", "3.2")
+        XCTAssertEqual(AppUpdatePrompts.cardTitle(a), "App update ready: Writer 3.2")
+        XCTAssertEqual(AppUpdatePrompts.cardButton, "Update")
+        XCTAssertEqual(AppUpdatePrompts.notificationBody(a), "Writer has an update ready. Pax can install it for you.")
+        let r = AppUpdatePrompts.request(for: a)
+        XCTAssertEqual(r.title, "Update Writer?")
+        XCTAssertEqual(r.button, "Update")
+        XCTAssertTrue(r.updateOnly)
+        let n = AppInstallRequest(path: "/Users/a/Downloads/Tool.dmg", name: "Tool", isUpdate: false)
+        XCTAssertEqual(n.title, "Install Tool?")
+        XCTAssertEqual(n.button, "Install")
+        XCTAssertFalse(n.updateOnly)
+        for s in [AppUpdatePrompts.cardTitle(a), AppUpdatePrompts.notificationBody(a), r.title, n.title] {
+            XCTAssertFalse(s.lowercased().contains("password"), s)
+            XCTAssertFalse(s.lowercased().contains("admin"), s)
+        }
+    }
+
+    func testScanTiming() {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertTrue(AppUpdatePrompts.shouldScan(last: nil, now: t0, reason: .launch))
+        XCTAssertFalse(AppUpdatePrompts.shouldScan(last: t0, now: t0.addingTimeInterval(10), reason: .appear))
+        XCTAssertTrue(AppUpdatePrompts.shouldScan(last: t0, now: t0.addingTimeInterval(61), reason: .appear))
+        XCTAssertFalse(AppUpdatePrompts.shouldScan(last: t0, now: t0.addingTimeInterval(600), reason: .periodic))
+        XCTAssertTrue(AppUpdatePrompts.shouldScan(last: t0, now: t0.addingTimeInterval(30 * 60), reason: .periodic))
+        XCTAssertTrue(AppUpdatePrompts.shouldScan(last: t0, now: t0.addingTimeInterval(-5), reason: .periodic))
+    }
+
+    func testNotificationClickOnlyOpensAnUpdateStillInTheScan() {
+        let a = upd("Writer", "com.example.Writer", "3.2")
+        XCTAssertEqual(AppUpdatePrompts.requestForClick(path: a.path, current: [a]), AppUpdatePrompts.request(for: a))
+        XCTAssertNil(AppUpdatePrompts.requestForClick(path: "/etc/evil.app", current: [a]))
+        XCTAssertNil(AppUpdatePrompts.requestForClick(path: nil, current: [a]))
+        XCTAssertNil(AppUpdatePrompts.requestForClick(path: a.path, current: []))
+    }
+
+    func testOpenWithAndDropsGoStraightToTheConfirmation() {
+        let dmg = URL(fileURLWithPath: "/Users/a/Downloads/Writer-3.2.1-universal.dmg")
+        let app = URL(fileURLWithPath: "/Volumes/Writer/Writer.app")
+        let zip = URL(fileURLWithPath: "/Users/a/Downloads/Writer.zip")
+        XCTAssertEqual(AppOpenRouting.route([dmg], protected: true),
+                       .confirm(AppInstallRequest(path: dmg.path, name: "Writer", isUpdate: false)))
+        XCTAssertEqual(AppOpenRouting.route([zip, app], protected: true, isInstalled: { $0 == "Writer" }),
+                       .confirm(AppInstallRequest(path: app.path, name: "Writer", isUpdate: true)))
+        if case .confirm(let r) = AppOpenRouting.route([app], protected: true, isInstalled: { _ in true }) {
+            XCTAssertEqual(r.title, "Update Writer?")
+            XCTAssertFalse(r.updateOnly)
+        } else { XCTFail("expected the confirmation") }
+        XCTAssertEqual(AppOpenRouting.route([zip], protected: true), .ignore)
+        XCTAssertEqual(AppOpenRouting.route([], protected: true), .ignore)
+        XCTAssertEqual(AppOpenRouting.route([URL(string: "https://example.com/Writer.dmg")!], protected: true), .ignore)
+        XCTAssertEqual(AppOpenRouting.route([dmg], protected: false), .reveal(dmg))
+        XCTAssertEqual(AppOpenRouting.displayName(URL(fileURLWithPath: "/d/Big App 2 v4.1.dmg")), "Big App 2")
+        XCTAssertEqual(AppOpenRouting.displayName(URL(fileURLWithPath: "/d/Notes_Plus_5.0_macOS.dmg")), "Notes Plus")
+        XCTAssertEqual(AppOpenRouting.displayName(URL(fileURLWithPath: "/d/3.2.dmg")), "3.2")
+        XCTAssertEqual(AppOpenRouting.displayName(URL(fileURLWithPath: "/d/My-App 2.app")), "My-App 2")
+    }
 }
+

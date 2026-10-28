@@ -10,9 +10,25 @@ is only that a checked app can live in Applications and be kept up to date.
 Where: **Settings › Updates › Install or update an app** (shown once this Mac is protected). Drop an
 app or a disk image on the box, or press **Choose…**.
 
+Simpler ways in (Ruben, 28 Oct 2026), all ending on the same one-button sheet ("Update <App>?" /
+"Install <App>?") and the same pax-guard checks:
+- **Home card + one notification.** Pax runs the "Updates ready to install" scan when it opens, when it
+  becomes active (at most once a minute) and every 30 minutes while open. Each update an app already
+  downloaded shows on Home as "App update ready: <App> <version>" with one **Update** button (at most
+  three cards), and one macOS notification "<App> has an update ready. Pax can install it for you." is
+  posted once per app and version (remembered in `pax.installs.notified`, last 200 pairs; never
+  repeated). Clicking it opens Pax on that install; only a path still in the latest scan opens the sheet.
+  Installing from the card is update-only (`update_only`), like the Settings list.
+- **Open With › Pax** on a .dmg or an .app, a drop on Pax's Dock icon, or a drop anywhere on Pax's
+  window. Pax.app declares `com.apple.disk-image-udif` and `com.apple.application-bundle` as a Viewer
+  with `LSHandlerRank` Alternate, so it is never the default for these files. On a Mac Pax doesn't
+  protect, the file is just shown in Finder.
+Rules and wording: `mac-app/Sources/PaxCore/AppUpdatePrompts.swift` (tested in V0833Tests); app side
+`mac-app/Sources/Pax/AppUpdatesModel.swift`.
+
 Code: `guard/app_installs.py` (pax-guard side), `guard/app-install-deny.txt` (the extra deny list),
 `mac-app/Sources/PaxCore/AppInstalls.swift` + `mac-app/Sources/Pax/Views/AppInstallViews.swift` (app
-side), tests in `guard/tests/test_v0833_installs.py` and `mac-app/Tests/PaxCoreTests/V0833Tests.swift`.
+side; Home card, notification and Open With in `AppUpdatePrompts.swift` + `AppUpdatesModel.swift`), tests in `guard/tests/test_v0833_installs.py` and `mac-app/Tests/PaxCoreTests/V0833Tests.swift`.
 
 ## What pax-guard installs
 

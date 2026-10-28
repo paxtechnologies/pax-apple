@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import SwiftUI
+import UniformTypeIdentifiers
 import AppKit
 import Combine
 import PaxCore
@@ -11,6 +12,7 @@ struct SetupFlowView: View {
     @EnvironmentObject var model: SetupModel
     @EnvironmentObject var mac: MacProtectModel
     @EnvironmentObject var blocklist: BlocklistModel
+    @EnvironmentObject var updates: AppUpdatesModel
 
     static let sidebarMinWindowWidth: CGFloat = 900
 
@@ -56,6 +58,20 @@ struct SetupFlowView: View {
         .task { await model.refreshPhones(quiet: true) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await model.refreshPhones(quiet: true) }
+            updates.scan(.appear)       // v0.8.33: at most once a minute
+        }
+        // v0.8.33: an app or disk image dropped on the window, opened with Pax, a Home card
+        // or a notification click: one-button confirmation, then pax-guard checks it.
+        .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
+            guard let p = providers.first else { return false }
+            _ = p.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                Task { @MainActor in AppUpdatesModel.shared.open([url]) }
+            }
+            return true
+        }
+        .sheet(item: $updates.pending) { r in
+            AppInstallConfirmSheet(request: r).environmentObject(updates)
         }
     }
 

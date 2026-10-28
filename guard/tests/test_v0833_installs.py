@@ -720,3 +720,22 @@ def test_shipped_with_the_app_and_the_guard():
     assert "app_installs.py app-install-deny.txt" in inst
     src = (repo / "guard" / "pax_guard.py").read_text()
     assert '"app_installs"' in src and "app_installs.load_deny()" in src
+
+
+def test_pax_opens_disk_images_and_apps_only_as_an_alternate_viewer():
+    """v0.8.33 (Ruben 28 Oct 2026): "Open With > Pax" for .dmg and .app. Pax is never the
+    default handler (Viewer, LSHandlerRank Alternate) and claims nothing else."""
+    import re
+    s = (HERE.parents[1] / "mac-app" / "scripts" / "build-dmg.sh").read_text()
+    m = re.search(r"cat > \"\$APP/Contents/Info.plist\" <<PLIST\n(.*?)\nPLIST\n", s, re.S)
+    assert m, "Info.plist heredoc not found"
+    body = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S).replace("${", "{")
+    pl = plistlib.loads(body.encode())
+    types = pl["CFBundleDocumentTypes"]
+    assert sorted(t for d in types for t in d["LSItemContentTypes"]) == [
+        "com.apple.application-bundle", "com.apple.disk-image-udif"]
+    for d in types:
+        assert d["CFBundleTypeRole"] == "Viewer"
+        assert d["LSHandlerRank"] == "Alternate"
+    assert "Owner" not in s and "LSHandlerRank</key><string>Default" not in s
+    assert "CFBundleURLTypes" not in pl and "UTExportedTypeDeclarations" not in pl

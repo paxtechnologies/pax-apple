@@ -165,6 +165,23 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHumanReadableCopyright</key><string>Pax Peace (paxpeace.com). GPL-3.0-only.</string>
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <!-- v0.8.33: "Open With > Pax" for a disk image or an app (installs through pax-guard's
+       checks). Viewer + Alternate only: Pax is never the default for these files. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Disk Image</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.apple.disk-image-udif</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Application</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.apple.application-bundle</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

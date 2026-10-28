@@ -259,3 +259,112 @@ struct AppInstallSheet: View {
         }
     }
 }
+
+// MARK: v0.8.33 one-button confirmation (Home card, notification, Open With, drops)
+
+/// "Update Writer?" / "Install Writer?" with one primary button. pax-guard does every check;
+/// a refusal or failure shows the usual calm error card.
+struct AppInstallConfirmSheet: View {
+    let request: AppInstallRequest
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var updates: AppUpdatesModel
+    private let client = GuardClient()
+    @State private var job: GuardClient.InstallJob?
+    @State private var failure: PaxError?
+    @State private var started = false
+
+    private var working: Bool { job?.isWorking == true }
+    private var finished: Bool { job != nil && !working }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(request.title).font(Theme.heading(22)).foregroundStyle(Theme.primaryText)
+            result
+            HStack {
+                Spacer()
+                if finished || failure != nil {
+                    Button(AppInstallText.close) { dismiss() }.buttonStyle(PrimaryButtonStyle())
+                } else {
+                    Button("Cancel") { dismiss() }.buttonStyle(SecondaryButtonStyle()).disabled(working)
+                    Button(request.button) { start(choice: nil) }
+                        .buttonStyle(PrimaryButtonStyle(accent: true)).disabled(started)
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(24)
+        .frame(width: 460)
+    }
+
+    @ViewBuilder private var result: some View {
+        if let failure {
+            ErrorCard(error: failure, retry: nil, details: { Support.details(failure, log: []) })
+        } else if let job {
+            if job.isWorking {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text(AppInstallText.step(job.step)).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                }
+            } else if job.succeeded {
+                NoteRow(icon: "checkmark.circle", text: AppInstallText.done(job))
+            } else if job.code == "PAX-MAC-025", let options = job.options, !options.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(AppInstallText.chooseOne).font(Theme.body(13, weight: .medium))
+                        .foregroundStyle(Theme.primaryText)
+                    ForEach(options, id: \.self) { name in
+                        Button(name) { start(choice: name) }.buttonStyle(.link)
+                    }
+                }
+            } else {
+                let p = AppInstallText.problem(job)
+                VStack(alignment: .leading, spacing: 6) {
+                    if job.code == "PAX-MAC-021" {
+                        Text(p.message).font(Theme.body(13)).foregroundStyle(Theme.primaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    ErrorCard(error: PaxError(p.code, technical: job.error ?? ""), retry: nil,
+                              details: { Support.details(PaxError(p.code, technical: job.error ?? ""), log: []) })
+                }
+            }
+        }
+    }
+
+    private func start(choice: String?) {
+        failure = nil
+        started = true
+        Task {
+            do {
+                job = try await client.startInstall(path: request.path, choice: choice,
+                                                    updateOnly: request.updateOnly)
+                while job?.isWorking == true {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if let j = try? await client.installStatus() { job = j }
+                }
+            } catch {
+                failure = PaxErrorClassifier.classify(error)
+            }
+            updates.finished()
+        }
+    }
+}
+
+/// Home: "App update ready: Writer 3.2" with one Update button (at most three).
+struct AppUpdateReadyCards: View {
+    @EnvironmentObject var updates: AppUpdatesModel
+
+    var body: some View {
+        ForEach(updates.cards) { u in
+            Card {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "arrow.down.circle").font(.system(size: 18)).foregroundStyle(Theme.mutedText)
+                    Text(AppUpdatePrompts.cardTitle(u)).font(Theme.body(14, weight: .medium))
+                        .foregroundStyle(Theme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button(AppUpdatePrompts.cardButton) { updates.update(u) }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            }
+        }
+    }
+}

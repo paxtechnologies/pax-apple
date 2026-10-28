@@ -8,6 +8,7 @@ import PaxCore
 
 @main
 struct PaxApp: App {
+    @NSApplicationDelegateAdaptor(PaxAppDelegate.self) private var appDelegate
     @StateObject private var model: SetupModel
     @StateObject private var blocklist: BlocklistModel
     @StateObject private var mac: MacProtectModel
@@ -28,6 +29,8 @@ struct PaxApp: App {
             return escrow
         })
         _mac = StateObject(wrappedValue: mac)
+        // v0.8.33: Open With › Pax, Dock drops, "App update ready" cards and notifications.
+        AppUpdatesModel.shared.attach(isProtected: { [weak mac] in mac?.deviceID != nil })
     }
 
     static let mainWindowID = "main"
@@ -38,6 +41,7 @@ struct PaxApp: App {
                 .environmentObject(model)
                 .environmentObject(blocklist)
                 .environmentObject(mac)
+                .environmentObject(AppUpdatesModel.shared)
                 .frame(minWidth: 760, minHeight: 640)
                 .background(SkyBackground())   // v0.8.16: the soft sky wash
         }

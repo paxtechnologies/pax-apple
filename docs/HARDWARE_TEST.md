@@ -158,6 +158,15 @@ turn-off wait.
    shows: the app that was copied is what's checked and installed.
 12. Restart pax-guard mid-install (`sudo launchctl kickstart -k system/org.paxpeace.pax-guard` from an admin):
    no image left mounted, staging empty after it comes back, nothing half-installed in /Applications.
+13. **Home card + notification**: with a Sparkle/Electron update downloaded (step 9), open Pax: Home shows
+   "App update ready: <App> <version>" with **Update**, and one notification "<App> has an update ready.
+   Pax can install it for you." (allow notifications when macOS asks). Click it with Pax quit: Pax opens on
+   "Update <App>?". Quit and reopen Pax, wait 30 minutes: no second notification for the same version.
+   After updating, the card goes.
+14. **Open With / Dock / window**: right-click a .dmg in Downloads › Open With: Pax is listed but the .dmg
+   still opens in DiskImageMounter by double-click (Pax isn't the default). Open With › Pax, a drop on the
+   Dock icon, and a drop on Pax's window each show "Install <App>?" (or "Update <App>?" when it's in
+   Applications) once, with one button, and no extra Pax window opens. Repeat with Pax quit first.
 
 ## iPhone / iPad
 

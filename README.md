@@ -620,7 +620,9 @@ arguments. The paxadmin password is never written to disk or logged.
 administrator to put an app in Applications or to update one there, and the only administrator is
 behind the turn-off wait. So pax-guard does it for you, for apps it can check: **Settings › Updates ›
 Install or update an app** (drop an app or a .dmg, or choose one; updates the apps already downloaded
-themselves are listed there too). Updates to an app you already have install at once when they have
+themselves are listed there too). Simpler still: an update an app already downloaded shows on Home as
+"App update ready" with one **Update** button (and one notification), and you can open a .dmg or an app
+with Pax (Open With, or drop it on Pax's Dock icon or window). Updates to an app you already have install at once when they have
 the same bundle ID and Apple Developer Team ID, pass `codesign --verify --deep --strict` and are
 notarised (`spctl`). New apps need the same signature checks and mustn't be a kind of app that gets
 round Pax (VPNs, proxies, Tor, remote desktop, rented Macs, mesh VPNs, browsers Pax can't apply its
