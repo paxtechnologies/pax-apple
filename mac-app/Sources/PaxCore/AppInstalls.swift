@@ -119,7 +119,8 @@ public enum AppInstallText {
         "New apps need to be signed by their developer and checked by Apple.",
         "Remote desktop, VPN, proxy and similar apps aren't installed here. They can get round Pax, "
             + "so they wait like turning Pax off.",
-        "Installer packages (.pkg) wait too, except Apple's own.",
+        // v0.8.34: plus notarised packages from a short list of well-known developers that pass the checks.
+        "Installer packages (.pkg) wait too, except Apple's and a few well-known developers' that pass Pax's checks.",
     ]
     public static let chooseOne = "Which one would you like to install?"
 

@@ -41,7 +41,7 @@ for tool in swift codesign hdiutil plutil ditto; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found. Install the Command Line Tools: xcode-select --install"
 done
 
-VERSION="${PAX_VERSION:-0.8.33}"
+VERSION="${PAX_VERSION:-0.8.34}"
 BUNDLE_DEVICE_HELPER="${BUNDLE_DEVICE_HELPER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
@@ -181,6 +181,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
       <key>LSHandlerRank</key><string>Alternate</string>
       <key>LSItemContentTypes</key><array><string>com.apple.application-bundle</string></array>
     </dict>
+    <!-- v0.8.34: installer packages too (pax-guard installs only Apple's and trusted-team,
+         notarised, checked ones; the rest still wait). Still Viewer + Alternate. -->
+    <dict>
+      <key>CFBundleTypeName</key><string>Installer Package</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.apple.installer-package-archive</string></array>
+    </dict>
   </array>
 </dict>
 </plist>
@@ -208,6 +216,8 @@ done
 # v0.8.33 Pax-approved installs: the module and its deny list (remote desktop, rented
 # Macs, mesh VPNs, proxies), read next to it.
 cp -X "$REPO/guard/app_installs.py" "$REPO/guard/app-install-deny.txt" "$APP/Contents/Resources/guard/"
+# v0.8.34: developers whose notarised installer packages skip the wait (content checks still apply).
+cp -X "$REPO/guard/pkg-trusted-teams.txt" "$APP/Contents/Resources/guard/"
 # v0.8.1: the restricted-content rules, shared with the server and the profile.
 cp -X "$REPO/common/pax_restricted.py" "$APP/Contents/Resources/guard/"
 mkdir -p "$APP/Contents/Resources/guard/filters"

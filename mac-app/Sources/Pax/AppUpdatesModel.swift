@@ -18,6 +18,8 @@ final class AppUpdatesModel: ObservableObject {
     @Published private(set) var cards: [GuardClient.DownloadedUpdate] = []
     /// The confirmation sheet, when set.
     @Published var pending: AppInstallRequest?
+    /// v0.8.34: Settings › Updates › "Install or update an app" should open (the admin-dialog helper).
+    @Published var installerRequested = false
 
     private let client = GuardClient()
     private let defaults = UserDefaults.standard
@@ -124,9 +126,24 @@ final class AppUpdatesModel: ObservableObject {
     }
 
     /// After a job finishes: the card for that app goes once the scan no longer finds it.
-    func finished() {
+    func finished(_ path: String? = nil) {
         lastScan = nil
         scan(.appear)
+        InstallHelpersModel.shared.jobFinished(path: path)      // v0.8.34
+    }
+
+    /// v0.8.34: a mounted disk image or the admin-dialog helper: Pax comes forward on the sheet
+    /// (never over one that's already open).
+    func present(_ r: AppInstallRequest) {
+        guard attached, isProtected() else { return }
+        bringToFront()
+        if pending == nil { pending = r }
+    }
+
+    /// v0.8.34: Settings › Updates › "Install or update an app" (the row opens its sheet).
+    func openInstaller() {
+        bringToFront()
+        installerRequested = true
     }
 
     private func bringToFront() {
@@ -147,7 +164,26 @@ final class PaxAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        openedFiles = true
         Task { @MainActor in AppUpdatesModel.shared.open(urls) }
+    }
+
+    // v0.8.34: started at login by pax-guard's LaunchAgent (`--pax-login`): stay hidden in the
+    // background, so the window doesn't pop open at each login. Pax still comes forward when
+    // something needs it (an install prompt or notification activates it; so does the Dock icon).
+    private var openedFiles = false
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard LoginLaunch.startHidden(arguments: ProcessInfo.processInfo.arguments,
+                                      openedFiles: openedFiles) else { return }
+        NSApp.hide(nil)
+        // SwiftUI can put its window up just after launch: hide again on the next turn, unless
+        // something has already brought Pax forward.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !self.openedFiles, !NSApp.isActive else { return }
+            NSApp.hide(nil)
+        }
     }
 }
 

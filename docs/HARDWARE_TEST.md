@@ -168,6 +168,61 @@ turn-off wait.
    Dock icon, and a drop on Pax's window each show "Install <App>?" (or "Update <App>?" when it's in
    Applications) once, with one button, and no extra Pax window opens. Repeat with Pax quit first.
 
+### v0.8.34: pointing at Pax for installs, trusted packages, open at login (released in 0.8.34)
+
+On a protected Mac, signed in as the Standard user, Pax open (docs/APP_INSTALLS.md "v0.8.34"):
+1. **Disk image prompt**: download a notarised app's .dmg (e.g. Firefox) and open it. Pax comes forward
+   with "Install Firefox?" once. Cancel; eject and re-open the same .dmg: no second prompt. Install from the
+   sheet: installed. A newer version's .dmg of an installed app shows "Update <App>?"; the same version
+   shows nothing.
+2. Quit Pax, mount a .dmg, open Pax: the prompt shows once at launch. A .dmg with two apps: the sheet asks
+   which one. Pax's own Pax.dmg, a USB stick with an app on it, a network share and a Time Machine disk:
+   no prompt. Log in as an administrator (or an unprotected Mac): no prompt.
+3. **Panel beside the admin dialog**: drag an app from a mounted .dmg to Applications in Finder. When
+   "Finder wants to copy … Enter an administrator's name and password" appears, a small Pax panel shows
+   beside it (not over it): "Installing or updating an app?" / "Pax can do it for you." [Not now] [Open Pax].
+   The dialog keeps focus (you can still type in it); the panel never touches it. Cancel the dialog: the
+   panel goes. Within 2 minutes, try again: no panel. After 2 minutes: the panel shows again.
+4. **Open Pax** from the panel: with the .dmg still mounted → "Install <App>?"; with nothing waiting →
+   Settings › Updates with the "Install or update an app" sheet open. **Not now** just closes it.
+5. Trigger an admin dialog from System Settings (e.g. unlock a pane) or Keychain Access: no panel. A
+   third-party updater's admin prompt (an app that updates itself and asks for an administrator): panel.
+6. **Permission check**: System Settings › Privacy & Security › Screen & System Audio Recording: Pax is not
+   listed and was never asked for. Run step 3 on macOS 12, 14, 15 and 26 and note whether the panel shows
+   (on 26 it relies on the owner pid when owner names are hidden).
+7. **Trusted packages**: Microsoft Edge or Office .pkg, Google Chrome .pkg (enterprise), Adobe Acrobat
+   Reader .pkg, Zoom .pkg: Open With › Pax (or drop on Pax) → "Install <App>?" → installs with no wait, no
+   notification about a change. For each note: installed or which PAX-MAC-032 reason (a check that trips on
+   a legitimate package needs a decision, not a loosened rule). Check `pkgutil --expand-full` works on
+   macOS 12.
+8. A Developer ID package from another developer (e.g. a VPN client or any unlisted vendor) → PAX-MAC-024
+   "Installer packages wait like turning Pax off". Microsoft's Windows App / Remote Desktop .pkg and Google's
+   Chrome Remote Desktop host .pkg → refused (remote desktop). Microsoft Defender .pkg → refused (system /
+   network extensions).
+9. **Fail closed** (test Mac only, from an admin account, with a trusted person set): simulate a package
+   breaking protection, e.g. while a trusted .pkg installs, as admin edit `/etc/hosts` to drop the Pax block.
+   Expect PAX-MAC-033 on the sheet, the Pax block back in `/etc/hosts`, a notification, an email to the
+   trusted person, `install:pkg_check_failed` in the tamper log, and every later third-party .pkg →
+   PAX-MAC-024 (fast path off; `/Library/PaxGuard/state/pkg-fastpath.json` has `"off": true`).
+10. **Open at login** (docs/APP_INSTALLS.md "Pax opens at login"): after setting up (or updating to 0.8.34),
+   `ls -l /Library/LaunchAgents/org.paxpeace.pax-login.plist` → `-rw-r--r-- root wheel`, `plutil -p` shows
+   `/usr/bin/open -g -j -F -a /Applications/Pax.app --args --pax-login`, RunAtLoad, no KeepAlive. No Pax
+   window appeared when it was written. macOS 13+: note the "Background Items Added" notice wording (should
+   say Pax).
+11. Log out and in (and restart): Pax is running (`pgrep -fl Pax.app`) with **no window shown** and focus
+   left where it was; clicking the Dock icon shows the window. Repeat on macOS 12, 14, 15 and 26. With
+   "Reopen windows when logging back in" ticked, note whether a window comes back (macOS's own restore).
+12. With Pax running hidden, mount a .dmg with an app: "Install <App>?" comes forward. Quit Pax (⌘Q): it
+   stays quit (no relaunch) until the next login.
+13. **Tamper**: as admin `sudo rm /Library/LaunchAgents/org.paxpeace.pax-login.plist` → back within ~30 s,
+   Settings › Advanced › Security notices: "Pax's open-at-login item was removed or switched off, and Pax put
+   it back". As the Standard user `launchctl disable gui/$(id -u)/org.paxpeace.pax-login` → enabled again
+   within ~1 min (`launchctl print-disabled gui/$(id -u)`). System Settings › General › Login Items › Allow in
+   the Background: note whether a Standard user can switch Pax off without an administrator (if yes, record
+   it; pax-guard can't see that switch).
+14. Second account (fast user switching) and the Guest account: Pax starts hidden there too. An unprotected
+   Mac (Pax installed, not set up): no agent file. Remove Pax: the file is gone.
+
 ## iPhone / iPad
 
 0. (v0.8.6) Use a Mac that has **never had the old helper**: no `~/Library/Application Support/Pax/venv`,

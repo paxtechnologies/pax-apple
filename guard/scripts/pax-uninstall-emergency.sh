@@ -95,6 +95,8 @@ if [[ "$python_done" != 1 ]]; then
 fi
 /usr/bin/dscacheutil -flushcache; /usr/bin/killall -HUP mDNSResponder 2>/dev/null || true
 rm -f "$PLIST"
+# v0.8.34: Pax no longer opens at login (the LaunchAgent pax-guard kept).
+rm -f "/Library/LaunchAgents/org.paxpeace.pax-login.plist"
 say "pax-guard stopped and removed"
 
 # 3. Remove the Pax profile(s).

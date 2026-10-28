@@ -1,0 +1,34 @@
+# Pax-approved installs (v0.8.34): developers whose installer packages (.pkg) pax-guard may
+# install straight away, without the turn-off wait (Ruben, 28 Oct 2026: "make installing
+# normal software simple for Standard users").
+#
+# A package from a team below is installed ONLY when ALL of these hold (guard/app_installs.py):
+#   * pkgutil --check-signature: "Developer ID Installer: <name> (<TEAM>)" -> Developer ID
+#     Certification Authority -> Apple Root CA, notarised (Apple notary service / stapled ticket);
+#   * spctl --assess --type install: accepted, source=Notarized Developer ID, same Team ID;
+#   * its expanded contents install nothing on Pax's paths, no kernel/system/network extension,
+#     VPN or proxy component, configuration profile, or anything on app-install-deny.txt, the
+#     user's Blocked apps or pax-guard's own bypass lists;
+#   * afterwards Pax's full self-check passes; if it doesn't, Pax puts its protection back,
+#     writes the tamper log, tells the trusted person and turns this fast path off.
+# Any other package (another team, unsigned, not notarised) still waits like turning Pax off.
+#
+# Format: "team <10-character Team ID> <organisation>". Anything else is an error, and then no
+# package is installed without the wait (fail closed). Only Team IDs confirmed from the vendor's
+# own documentation or a real signed package are listed:
+#   UBF8T346G9  Microsoft: learn.microsoft.com Defender for Endpoint docs ("Microsoft Team ID
+#               UBF8T346G9"); real package chain "Developer ID Installer: Microsoft Corporation
+#               (UBF8T346G9)" (github.com/PowerShell/PowerShell/issues/18353).
+#   EQHXZ8M8AV  Google: Chromium source, keychain_data_helper_mac.mm ("teamid:EQHXZ8M8AV (taken
+#               from the signing certificate)"); santa.dev rules docs (EQHXZ8M8AV:com.google.Chrome).
+#   JQ525L2MZD  Adobe: real package "Developer ID Installer: Adobe Inc. (JQ525L2MZD)", notarised
+#               (github.com/autopkg/recipes/issues/416, AcroRdrDC .pkg).
+#   BJ4HAAB9B3  Zoom: support.zoom.com KB0066575 ("Team ID: BJ4HAAB9B3").
+# Note: a trusted team doesn't excuse what a package contains. Microsoft's Remote Desktop /
+# Windows App and Defender, or Google's Chrome Remote Desktop host, are still refused by the
+# content checks (deny list, system/network extensions).
+
+team UBF8T346G9 Microsoft Corporation
+team EQHXZ8M8AV Google LLC
+team JQ525L2MZD Adobe Inc.
+team BJ4HAAB9B3 Zoom Video Communications, Inc.

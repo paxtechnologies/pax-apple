@@ -81,8 +81,9 @@ for mod in domain_matcher filter_lists dns_forwarder local_escrow local_blocklis
   [[ -f "$SRC/$mod.py" ]] || die "PAX-GUARD-001: missing $mod.py"
   install -o root -g wheel -m 0644 "$SRC/$mod.py" "$DEST/bin/"
 done
-# v0.8.33 Pax-approved installs: the module and what it refuses (read next to itself).
-for f in app_installs.py app-install-deny.txt; do
+# v0.8.33 Pax-approved installs: the module and what it refuses (read next to itself);
+# v0.8.34: the short list of developers whose notarised packages skip the wait.
+for f in app_installs.py app-install-deny.txt pkg-trusted-teams.txt; do
   [[ -f "$SRC/$f" ]] || die "PAX-GUARD-001: missing $f"
   install -o root -g wheel -m 0644 "$SRC/$f" "$DEST/bin/"
 done
