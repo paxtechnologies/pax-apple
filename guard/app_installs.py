@@ -560,6 +560,19 @@ def copy_regular_file(src: str, dst: str, limit: int = MAX_IMAGE_BYTES) -> int:
     return n
 
 
+def is_pax_itself(app_path: str, sig: dict | None = None) -> bool:
+    """v0.8.35: is this bundle Pax? Its name (Pax.app), its Info.plist bundle ID or its signing
+    identifier (org.paxpeace. / org.paxmobile.). Pax's Team ID alone doesn't make an app Pax:
+    the same developer team also signs other apps (e.g. Swoop)."""
+    if os.path.basename(os.path.normpath(app_path)).lower() == "pax.app":
+        return True
+    bid = str(read_plist(app_path).get("CFBundleIdentifier") or "").lower()
+    if bid.startswith(PAX_BUNDLE_PREFIXES):
+        return True
+    ident = str((sig or {}).get("identifier") or "").lower()
+    return ident.startswith(PAX_BUNDLE_PREFIXES)
+
+
 def read_plist(app: str) -> dict:
     try:
         with open(os.path.join(app, "Contents", "Info.plist"), "rb") as fh:
@@ -875,7 +888,10 @@ class AppInstaller:
         sig = parse_codesign_details(out if code == 0 else "")
         if is_apple_signed(sig):
             raise InstallError(UNTOUCHABLE, "Apple's own apps update through the App Store or Software Update")
-        if sig["team_id"] == PAX_TEAM_ID:
+        # v0.8.35 (Ruben, 28 Oct 2026): only Pax itself is untouchable (Pax bundle IDs, checked above,
+        # and the name Pax.app). Other apps from Pax's developer team (e.g. Swoop, com.swoopkey.swoop)
+        # go through every normal check below like any other notarised Developer ID app.
+        if sig["identifier"].lower().startswith(PAX_BUNDLE_PREFIXES) or folder.lower() == "pax.app":
             raise InstallError(UNTOUCHABLE, "Pax updates itself through its own signed updates")
         why = developer_id_problem(sig)
         if why:
@@ -976,7 +992,9 @@ class AppInstaller:
             cur = parse_codesign_details(out if code == 0 else "")
             if is_apple_signed(cur) or cur["identifier"].lower().startswith("com.apple."):
                 raise InstallError(UNTOUCHABLE, "Apple's own apps update through the App Store or Software Update")
-            if cur["team_id"] == PAX_TEAM_ID:
+            # v0.8.35: the installed copy is Pax itself (bundle ID, signing identifier or name); other
+            # apps from Pax's team update under the same-team rule below like anyone else's.
+            if is_pax_itself(existing, cur):
                 raise InstallError(UNTOUCHABLE, "Pax updates itself through its own signed updates")
             if cur["team_id"] != app.team_id:
                 raise InstallError(OTHER_DEVELOPER,

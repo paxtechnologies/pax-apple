@@ -44,6 +44,10 @@ final class InstallHelpersModel {
 
     private var observers: [NSObjectProtocol] = []
 
+    // v0.8.35: why pax-guard started Pax (nil: opened normally), and when.
+    private let launchReason = InstallCheckLaunch.reason(ProcessInfo.processInfo.arguments)
+    private let launchedAt = Date()
+
     func attach(isProtected: @escaping () -> Bool, showSettings: @escaping () -> Void) {
         guard !attached else { return }
         attached = true
@@ -199,7 +203,10 @@ final class InstallHelpersModel {
         let now = Date()
         guard AdminPromptHelper.shouldShow(dialog: dialog, now: now, lastShown: lastShown,
                                            shownWindows: shownWindows, protected: true, isAdmin: isAdmin,
-                                           previousApp: previousApp) else { return }
+                                           previousApp: previousApp,
+                                           assumeInstallWhenUnknown: InstallCheckLaunch.assumeInstallContext(
+                                               reason: launchReason, launchedAt: launchedAt, now: now))
+        else { return }
         lastShown = now
         shownWindows.insert(dialog.number)
         if shownWindows.count > 50 { shownWindows = [dialog.number] }
@@ -273,6 +280,11 @@ final class InstallHelpersModel {
         p.contentView = NSHostingView(rootView: AdminHelperPanelView(
             open: { InstallHelpersModel.shared.openPax() },
             notNow: { InstallHelpersModel.shared.closePanel() }))
+        if NSApp.isHidden {
+            // Started hidden at login: show only the panel, not Pax's window.
+            PaxActivation.orderOutMainWindows()
+            NSApp.unhideWithoutActivation()
+        }
         p.orderFrontRegardless()                       // never takes focus from the dialog
         panel = p
         panelDialog = dialog.number

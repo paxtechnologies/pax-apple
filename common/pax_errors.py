@@ -135,10 +135,12 @@ CODES: list[PaxCode] = [
             "The installed /Applications copy with the same bundle ID has a different (or no) TeamIdentifier "
             "than the staged copy."),
     PaxCode("PAX-MAC-023", "Pax doesn't change this app.",
-            "Pax updates itself, and Apple's apps update through the App Store or Software Update.",
-            "The bundle ID starts with com.apple., org.paxpeace. or org.paxmobile.; it's signed by Apple "
-            "(Software Signing) or with Pax's Team ID; the name is Pax.app; or the target isn't directly in "
-            "/Applications."),
+            "Apple's apps update through Software Update. If this is Pax itself, Pax puts it back in Applications for you.",
+            "The bundle ID or signing identifier starts with com.apple., org.paxpeace. or org.paxmobile.; it's "
+            "signed by Apple (Software Signing); the name is Pax.app; the installed copy is Pax itself; or the "
+            "target isn't directly in /Applications. v0.8.35: Pax's Team ID alone no longer counts (other apps "
+            "from the same developer, e.g. Swoop, take the normal checks), and pax-guard restores a missing or "
+            "broken /Applications/Pax.app from its signed update channel (PAX-GUARD-018)."),
     PaxCode("PAX-MAC-024", "Installer packages wait like turning Pax off.",
             "Look for a .dmg or app download instead. Pax only installs packages from Apple and a few known developers.",
             "A .pkg/.mpkg whose pkgutil --check-signature isn't 'signed Apple Software' with a Software Update "
@@ -285,6 +287,23 @@ CODES: list[PaxCode] = [
             "open -g -j -F Pax.app --args --pax-login, RunAtLoad, Aqua sessions, no KeepAlive). Missing, "
             "changed, wrong owner/mode, or `launchctl disable gui/<uid>/org.paxpeace.pax-login` is put back "
             "and logged to the tamper log as changed:login_agent (log only)."),
+    PaxCode("PAX-GUARD-017", "Pax's install helper was removed or switched off, and Pax put it back.",
+            "Nothing to do. Pax opens by itself when you install or update an app.",
+            "v0.8.35 pax-guard keeps /Library/LaunchAgents/org.paxpeace.pax-installs.plist (root:wheel 0644; "
+            "StartOnMount, Aqua sessions; /bin/sh script: administrators and a running Pax are left alone, "
+            "otherwise open -g -j Pax.app --args --pax-install-check when a mounted volume has an app at its "
+            "top level). Missing, changed, wrong owner/mode or `launchctl disable` is put back and logged as "
+            "changed:installs_agent; an agent missing from the console session is bootstrapped. Also logged "
+            "when Pax couldn't be opened for an install (macOS authorisation dialog / Sparkle / ShipIt seen "
+            "while Pax wasn't running; launchctl asuser <uid> open -g -j Pax.app, at most every 30 s)."),
+    PaxCode("PAX-GUARD-018", "Pax was removed from Applications, and Pax put it back.",
+            "Nothing to do. If another app (for example a cleaner) removes Pax again, Pax puts it back again.",
+            "v0.8.35 pax-guard: /Applications/Pax.app missing, a link, not Pax's bundle ID, or (Developer ID "
+            "installs) failing codesign --verify --deep --strict / Pax's Team ID. Restored from the signed "
+            "pax-update.json (Ed25519, SHA-256 and size pinned; version >= pax-guard's, never a downgrade; "
+            "bundle ID, codesign, Team ID Z94GSK7JA8 and Gatekeeper 'Notarized Developer ID' checked) and "
+            "swapped in atomically; a newer release goes through the normal update. Logged as changed:pax_app; "
+            "failures back off from 5 minutes to an hour."),
     # ---------------------------------------------------------------- DNS
     PaxCode("PAX-DNS-001", "That filter address doesn't look right.",
             "Leave the filter setting on its default, or check the address under Advanced.",

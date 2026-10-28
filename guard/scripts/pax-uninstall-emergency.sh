@@ -97,6 +97,8 @@ fi
 rm -f "$PLIST"
 # v0.8.34: Pax no longer opens at login (the LaunchAgent pax-guard kept).
 rm -f "/Library/LaunchAgents/org.paxpeace.pax-login.plist"
+# v0.8.35: nor for installs (the StartOnMount LaunchAgent pax-guard kept).
+rm -f "/Library/LaunchAgents/org.paxpeace.pax-installs.plist"
 say "pax-guard stopped and removed"
 
 # 3. Remove the Pax profile(s).

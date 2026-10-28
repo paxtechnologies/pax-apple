@@ -291,3 +291,65 @@ Pax is running, so on a Mac Pax protects it now starts at every login, quietly.
   Needs a real Mac: HARDWARE_TEST.md "v0.8.34" steps 10–14 (hidden start on macOS 12–26, the macOS 13+
   "Background Items Added" notice, whether a Standard user can switch it off in Login Items without an
   administrator, fast user switching).
+
+## Pax opens for installs, even when it isn't running (v0.8.35)
+
+Status: built on branch `mac-autolaunch-installs` (28 Oct 2026). Before this, the disk-image prompt and the
+admin-dialog panel only worked while Pax was running. On a Mac Pax protects, for a **Standard** account only:
+
+* **(a) A disk is mounted.** pax-guard keeps a second root-owned LaunchAgent,
+  `/Library/LaunchAgents/org.paxpeace.pax-installs.plist` (`root:wheel 0644`, `StartOnMount` true, Aqua
+  sessions, no RunAtLoad/KeepAlive). launchd runs it in the user's session on every mount; its `/bin/sh`
+  script does nothing for administrators (gid 80) or when Pax is already running (a running Pax sees the
+  mount itself, and `open` on a running app would bring its window up), and starts Pax with `open -g -j -a
+  /Applications/Pax.app --args --pax-install-check` only when some `/Volumes/*/` has an app at its top level.
+  Pax then checks the mounted volumes and shows "Install <App>?" only when one has an app to install or
+  update (same rules and dedupe as 0.8.34); otherwise it stays out of sight: no window, no Dock icon
+  (`NSApplication` accessory policy until something is shown; `PaxCore/InstallCheckLaunch.swift`).
+  pax-guard keeps the file like the login agent (missing/changed/permissions → rewritten, tamper log
+  `changed:installs_agent`, `PAX-GUARD-017`), undoes `launchctl disable` every minute, and loads it into the
+  console session when it isn't there (first install, `launchctl bootout`), so mounts are noticed without
+  logging out.
+* **(b) macOS asks for an administrator.** pax-guard's install watch (every 2 s, `ps -axo pid,uid,comm`)
+  notices a new macOS authorisation-dialog process (`SecurityAgent`) or an app's own updater in the console
+  user's session (Sparkle `Autoupdate` / `Updater`, Squirrel `ShipIt`). If Pax isn't running for that user and
+  the user isn't an administrator (`dseditgroup checkmember`; unknown counts as administrator), it runs
+  `launchctl asuser <uid> /usr/bin/open -g -j -a /Applications/Pax.app --args --pax-install-check
+  --pax-install-reason=auth|update`, at most once every 30 s and once per process (a dialog that's still up
+  after you quit Pax doesn't bring it back). Processes already there at a new login or pax-guard start are
+  the baseline. The existing floating panel then appears beside the dialog; because Pax wasn't running to see
+  which app was in front, an `auth` launch treats an unknown front app as an install for one minute (a known
+  non-install app such as System Settings still gets no panel). This covers Finder's drag to Applications:
+  the panel's Open Pax goes to the mounted disk's "Install <App>?" sheet, or the Install or update an app
+  sheet when there's no disk.
+* **(c) An update is already downloaded.** Every ~10 minutes pax-guard runs the same scan as
+  `installs.updates` on the console user's `~/Library/Caches` (Sparkle / ShipIt) and starts Pax hidden for
+  an app+version it hasn't opened Pax for yet, so the "App update ready" card and notification appear.
+* Nothing is loosened: pax-guard only ever starts Pax, which only offers installs pax-guard then checks.
+  A trusted `.pkg` can't write Pax's LaunchAgents, and a post-install check that had to put the new agent
+  back fails closed (`PAX-MAC-033`). Remove Pax and the emergency uninstaller delete the agent.
+* Limits: a root daemon can't see windows, so (b) keys on the SecurityAgent process appearing, not on the
+  dialog; if macOS reuses one SecurityAgent process for a second dialog while Pax isn't running, that second
+  dialog doesn't start Pax. Apple's Installer.app (.pkg) dialogs aren't treated as installs by the panel
+  (0.8.34 rule). StartOnMount throttling and the exact SecurityAgent process name/owner need checking on
+  each macOS (HARDWARE_TEST v0.8.35 16–23).
+* Tests: `guard/tests/test_v0835_autolaunch.py`, `mac-app/Tests/PaxCoreTests/V0835Tests.swift`.
+
+## Same-team apps and Pax.app self-heal (v0.8.35)
+
+* `PAX-MAC-023` ("Pax doesn't change this app") now protects only Pax itself: a Pax bundle ID or signing
+  identifier (`org.paxpeace.` / `org.paxmobile.`), the name `Pax.app`, or an installed copy that is Pax.
+  Pax's Team ID alone no longer makes an app untouchable: other apps from the same developer (Swoop,
+  `com.swoopkey.swoop`) go through every normal check (codesign strict, Developer ID, notarisation,
+  deny list and Blocked apps, same-team update rule) and install or update like anyone else's.
+  Tests: `guard/tests/test_v0835_same_team_installs.py`.
+* pax-guard checks `/Applications/Pax.app` every minute (exists, not a link, Pax's bundle ID) and fully every
+  15 minutes (`codesign --verify --deep --strict`, Developer ID from Team Z94GSK7JA8; on Developer ID installs
+  only). Missing or broken → restored from the signed update channel: the same `pax-update.json` (Ed25519,
+  SHA-256 and size pinned), version never older than pax-guard; the app inside must have that version, Pax's
+  bundle ID, pass codesign, be signed by Pax's team and pass Gatekeeper ("Notarized Developer ID"), then it's
+  swapped in atomically (`renamex_np` RENAME_SWAP; a missing app is a single rename). A newer release goes
+  through the normal update instead. Tamper log `changed:pax_app`, notification, `PAX-GUARD-018`; failures
+  back off 5 min → 1 h. Skipped while an update or install is running and once the password is released.
+  The updater also now pins Pax's Team ID when the installed app can't be read (before, a missing Pax.app
+  meant no Team ID comparison). Tests: `guard/tests/test_v0835_pax_app_heal.py`.

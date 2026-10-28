@@ -34,6 +34,8 @@ public enum SecurityNotices {
         case "changed:guard_files": return "Pax's own background files on this Mac changed"
         case "changed:runtime": return "Some of Pax's own files on this Mac changed, and Pax repaired what it could"
         case "changed:login_agent": return "Pax's open-at-login item was removed or switched off, and Pax put it back"
+        case "changed:installs_agent": return "Pax's install helper was removed or switched off, and Pax put it back"
+        case "changed:pax_app": return "Pax was removed from Applications, and Pax put it back"
         case "accounts:made_standard": return "Pax made an account on this Mac a standard account again"
         case "admin:made_standard_again": return "An account was made an administrator, so Pax made it a standard account again"
         case "clock_backwards": return "This Mac's clock was set back"
