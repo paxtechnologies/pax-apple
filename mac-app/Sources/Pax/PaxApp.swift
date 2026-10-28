@@ -31,6 +31,10 @@ struct PaxApp: App {
         _mac = StateObject(wrappedValue: mac)
         // v0.8.33: Open With › Pax, Dock drops, "App update ready" cards and notifications.
         AppUpdatesModel.shared.attach(isProtected: { [weak mac] in mac?.deviceID != nil })
+        // v0.8.34: a mounted disk image with an app → "Install <App>?"; macOS's administrator
+        // dialog → a small "Pax can do it for you" panel beside it.
+        InstallHelpersModel.shared.attach(isProtected: { [weak mac] in mac?.deviceID != nil },
+                                          showSettings: { [weak model] in model?.screen = .settings })
     }
 
     static let mainWindowID = "main"

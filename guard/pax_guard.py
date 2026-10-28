@@ -1226,12 +1226,20 @@ class Guard:
                 self.installer().cleanup_stale()      # v0.8.33: a job cut short by a restart
             except Exception as exc:  # noqa: BLE001
                 log(f"install staging cleanup: {type(exc).__name__}")
+            # v0.8.34: a trusted package was installing when pax-guard stopped: fail closed.
+            threading.Thread(target=self._resume_pkg_check, name="pax-pkg-resume", daemon=True).start()
             self._update_rate = guard_ipc.RateLimit(2)
             self._reveal_rate = guard_ipc.RateLimit(10)
             try:
                 guard_ipc.IPCServer(self.handle_request, log=log).start()
             except OSError as exc:
                 log(f"PAX-GUARD-012 the app socket couldn't start ({exc})")
+
+    def _resume_pkg_check(self) -> None:
+        try:
+            PkgIntegrity(self).resume_after_restart()
+        except Exception as exc:  # noqa: BLE001
+            log(f"PAX-MAC-033 resume check error: {type(exc).__name__}: {exc}")
 
     def _dns_fallback_changed(self, entering: bool, reason: str) -> None:
         """v0.8.18: Pax's filter failed (or passed again) its self-test."""
@@ -1606,7 +1614,8 @@ class Guard:
             self._installer = ai.AppInstaller(
                 self.sys.run, self.sys.processes, staging=staging,
                 state_file=self.state_dir / "installs.json", log=log, clock=self.sys.now,
-                blocked_entries=lambda: self._blocked_entries() if self.cfg.local_escrow else [])
+                blocked_entries=lambda: self._blocked_entries() if self.cfg.local_escrow else [],
+                pkg_hooks=PkgIntegrity(self))          # v0.8.34 trusted-team packages
         return self._installer
 
     def install_home(self, uid) -> str | None:
@@ -1983,6 +1992,210 @@ class Guard:
         return done
 
 
+class PkgIntegrity:
+    """v0.8.34 (Ruben, 28 Oct 2026): around a trusted-team .pkg (app_installs._install_trusted_pkg).
+
+    snapshot() before the installer runs, check(before) after it: pax-guard still loaded by
+    launchd, its own files unchanged, the tamper snapshot unchanged (admins, paxadmin, volume
+    owners, FileVault, MDM, startup security...), the Pax profile still installed, no new
+    configuration profile or system extension, then a full enforcement cycle (hosts, pf, DNS
+    settings, quarantined apps, VPNs) that must find nothing to put back, the DNS canary and
+    pax-guard's runtime. Any problem -> failed(): protection is re-applied, the tamper log
+    written, the user and the trusted person told, and the fast path turned off for good
+    (state/pkg-fastpath.json; only setting Pax up again clears it)."""
+
+    STATE = "pkg-fastpath.json"
+    INFLIGHT = "pkg-inflight.json"     # written before the installer runs, removed by the check
+
+    def __init__(self, guard: "Guard"):
+        self.g = guard
+
+    # ----------------------------------------------------------- helpers
+    def _digest(self, args: list[str]) -> str | None:
+        code, out = self.g.sys.run(args, timeout=60)
+        if code != 0:
+            return None
+        lines = sorted(l.strip() for l in out.splitlines() if l.strip())
+        return hashlib.sha256("\n".join(lines).encode()).hexdigest()[:16]
+
+    def _profiles(self) -> str | None:
+        code, out = self.g.sys.run(["/usr/bin/profiles", "list", "-all"], timeout=60)
+        if code != 0:
+            return None
+        ids = sorted(l.split("profileIdentifier:", 1)[1].strip() for l in out.splitlines()
+                     if "profileIdentifier:" in l)
+        return hashlib.sha256("\n".join(ids).encode()).hexdigest()[:16]
+
+    def _system_extensions(self) -> str | None:
+        code, out = self.g.sys.run(["/usr/bin/systemextensionsctl", "list"], timeout=60)
+        if code != 0:
+            return None
+        rows = sorted(l.strip() for l in out.splitlines() if "[activated" in l)
+        return hashlib.sha256("\n".join(rows).encode()).hexdigest()[:16]
+
+    def _files_digest(self) -> str:
+        h = hashlib.sha256()
+        here = Path(__file__).resolve().parent
+        for f in self.g.guard_files() + [str(here / "app_installs.py"), str(here / "app-install-deny.txt"),
+                                         str(here / "pkg-trusted-teams.txt")]:
+            h.update(f.encode() + b"\0" + (self.g.sys.read(f) or "").encode())
+        return h.hexdigest()[:16]
+
+    def _tamper_snapshot(self) -> dict:
+        import tamper as tp
+        state = {"load": self.g._load_json, "save": self.g._save_json}
+        watch = tp.TamperWatch(self.g.sys, self.g.tamper_log, state, self.g.cfg, escrow=None,
+                               apple_silicon=None, guard_files=[], logger=log)
+        skip_mdm = bool(self.g.cfg.mdm_managed or self.g.cfg.testing_allow_extra_admins)
+        return watch.snapshot(validate=False, skip_mdm=skip_mdm)
+
+    def _loaded(self) -> bool:
+        code, _ = self.g.sys.run(["/bin/launchctl", "print", f"system/{LABEL}"], timeout=30)
+        return code == 0
+
+    # ----------------------------------------------------------- the hooks
+    def fastpath_allowed(self) -> bool:
+        st = self.g._load_json(self.STATE, {})
+        return not (isinstance(st, dict) and st.get("off"))
+
+    def snapshot(self) -> dict:
+        # Settle first, so "after" only differs by what the package did.
+        self.g.cycle()
+        before = {"files": self._files_digest(), "tamper": self._tamper_snapshot(),
+                  "profile": self.g.profile_installed(), "profiles": self._profiles(),
+                  "sysext": self._system_extensions(), "loaded": self._loaded()}
+        # If pax-guard doesn't live to run the check (a package script stopped it), the next
+        # start finds this and fails closed (resume_after_restart).
+        self.g._save_json(self.INFLIGHT, {"at": self.g.sys.now()})
+        return before
+
+    def _clear_inflight(self) -> None:
+        try:
+            self.g._save_json(self.INFLIGHT, {})
+        except Exception:  # noqa: BLE001
+            pass
+
+    def resume_after_restart(self) -> bool:
+        """At start: a package was installing when pax-guard stopped. Fail closed."""
+        if not self.g._load_json(self.INFLIGHT, None):
+            return False
+        self.failed({"name": "a package"}, ["pax-guard stopped while a package was installing"])
+        return True
+
+    def check(self, before: dict) -> list[str]:
+        problems: list[str] = []
+
+        def guarded(name, fn):
+            try:
+                fn()
+            except Exception as exc:  # noqa: BLE001 - a check that can't run is a failed check
+                problems.append(f"{name} couldn't be checked ({type(exc).__name__})")
+
+        def launchd():
+            if not self._loaded():
+                problems.append("pax-guard isn't loaded by launchd")
+
+        def files():
+            if self._files_digest() != before.get("files"):
+                problems.append("pax-guard's own files changed")
+
+        def tamper():
+            now = self._tamper_snapshot()
+            for k, v in (before.get("tamper") or {}).items():
+                if k in now and now[k] != v:
+                    problems.append(f"{k} changed")
+                elif k not in now:
+                    problems.append(f"{k} couldn't be read")
+
+        def profile():
+            now = self.g.profile_installed()
+            if before.get("profile") is True and now is not True:
+                problems.append("the Pax profile is missing")
+
+        def profiles():
+            if self._profiles() != before.get("profiles"):
+                problems.append("configuration profiles changed")
+
+        def sysext():
+            if self._system_extensions() != before.get("sysext"):
+                problems.append("a system extension changed")
+
+        def enforce():
+            r = self.g.cycle()
+            if r.get("released"):
+                return
+            for key, what in (("hosts_changed", "the hosts block"), ("pf_changed", "the firewall rules")):
+                if r.get(key):
+                    problems.append(f"{what} had to be put back")
+            for key, what in (("dns_settings", "DNS settings"), ("apps", "a blocked app"),
+                              ("user_apps", "a blocked app"), ("vpn_stopped", "a VPN")):
+                if r.get(key):
+                    problems.append(f"{what} had to be stopped or put back")
+            if r.get("profile_installed") is False and before.get("profile") is True:
+                problems.append("the Pax profile is missing")
+
+        def canary():
+            f = self.g.forwarder
+            if f is None or self.g.cfg.dns_mode != "local":
+                return
+            res = f.canary() or {}
+            if not res.get("ok"):
+                problems.append("the DNS filter failed its self-test")
+
+        def runtime():
+            r = self.g.check_runtime()
+            if r and r.get("problems"):
+                problems.append("pax-guard's runtime changed")
+
+        for name, fn in (("launchd", launchd), ("files", files), ("tamper", tamper), ("profile", profile),
+                         ("profiles", profiles), ("system extensions", sysext), ("enforcement", enforce),
+                         ("DNS canary", canary), ("runtime", runtime)):
+            guarded(name, fn)
+        if not before.get("loaded"):
+            problems.append("pax-guard wasn't loaded before the install")
+        self._clear_inflight()
+        return sorted(set(problems))
+
+    def failed(self, info: dict, problems: list[str]) -> None:
+        """Fail closed through the tamper path. Every step runs even if one before it fails."""
+        # The name comes from the package: keep it to plain characters (it goes into an
+        # AppleScript notification and an email).
+        name = re.sub(r"[^A-Za-z0-9 ._()+-]", "", str(info.get("name") or info.get("source") or ""))[:80].strip() \
+            or "a package"
+        steps = []
+        self._clear_inflight()
+        try:
+            self.g._save_json(self.STATE, {"off": True, "at": self.g.sys.now(), "package": name,
+                                           "team": info.get("team_id"), "problems": problems[:10]})
+        except Exception as exc:  # noqa: BLE001
+            steps.append(f"state: {type(exc).__name__}")
+        try:
+            self.g.tamper_log.append("install:pkg_check_failed", {"package": name, "team": info.get("team_id"),
+                                                                 "problems": problems[:10]})
+        except Exception as exc:  # noqa: BLE001
+            steps.append(f"tamper log: {type(exc).__name__}")
+        for fn in (self.g.cycle, self.g.enforce_standard_accounts):
+            try:
+                fn()
+            except Exception as exc:  # noqa: BLE001
+                steps.append(f"{getattr(fn, '__name__', 'step')}: {type(exc).__name__}")
+        log(f"PAX-MAC-033 after installing {name} (team {info.get('team_id')}): {'; '.join(problems)[:300]}"
+            + (f" [{'; '.join(steps)}]" if steps else ""))
+        try:
+            self.g.notify(f"Pax noticed a change to its protection after installing {name} and put it back. "
+                          "Your trusted person has been told.")
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if self.g.cfg.local_escrow and self.g.escrow.exists():
+                body = (f"Pax installed {name} on this Mac and then found a change to its own protection "
+                        f"({'; '.join(problems)[:300]}). Pax put its protection back and will no longer install "
+                        "installer packages without the turn-off wait on this Mac.")
+                self.g.escrow.partner.notify("pkg_check_failed", "Pax: a change after an app install", body, body)
+        except Exception as exc:  # noqa: BLE001
+            log(f"PAX-MAC-033 partner email not sent: {type(exc).__name__}")
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     cmd = argv[0] if argv else "run"
@@ -2055,7 +2268,7 @@ def selftest() -> int:
         problems.append(f"ed25519: {exc}")
     try:
         import app_installs
-        app_installs.load_deny()                 # v0.8.33: the install rules must parse
+        app_installs.load_trusted_teams(deny=app_installs.load_deny())   # v0.8.33/34: install rules parse
     except Exception as exc:  # noqa: BLE001
         problems.append(f"app-install-deny.txt: {type(exc).__name__}: {exc}")
     if CONFIG_PATH.exists():

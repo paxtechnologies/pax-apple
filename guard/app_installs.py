@@ -13,7 +13,11 @@ apps it can check, and refuses the rest. docs/APP_INSTALLS.md has the full rules
     (guard_config's bypass lists, app-install-deny.txt, the user's Blocked apps, or a
     web browser Pax can't apply its rules to).
   * .pkg installers: refused (their scripts run as root and could remove Pax), except
-    packages signed by Apple itself (pkgutil: "signed Apple Software", Apple Root CA).
+    packages signed by Apple itself (pkgutil: "signed Apple Software", Apple Root CA) and,
+    since v0.8.34 (Ruben, 28 Oct 2026), notarised Developer ID Installer packages from a
+    team on pkg-trusted-teams.txt whose expanded contents pass the checks below; after one
+    of those, pax-guard's full self-check runs and any failure fails closed (tamper log,
+    protection re-applied, trusted person told, the fast path turned off).
   * Never touched: Pax, Apple's own apps, /System, anything outside /Applications, an
     app with a different Team ID, unsigned / ad-hoc / unnotarised apps.
 
@@ -52,6 +56,7 @@ from pathlib import Path
 APPLICATIONS = "/Applications"
 STAGING = "/Library/PaxGuard/installs"
 DENY_FILE = Path(__file__).resolve().parent / "app-install-deny.txt"
+TRUSTED_TEAMS_FILE = Path(__file__).resolve().parent / "pkg-trusted-teams.txt"   # v0.8.34
 HISTORY_MAX = 200
 MAX_IMAGE_BYTES = 20 * 1024 ** 3          # a .dmg or .pkg
 MAX_TREE_BYTES = 20 * 1024 ** 3           # an app's files
@@ -89,6 +94,8 @@ UNSAFE = "PAX-MAC-031"            # symlinks out of the bundle, setuid, devices,
 SU_CHECK = "PAX-UPDATE-009"       # softwareupdate --list failed
 SU_INSTALL = "PAX-UPDATE-010"     # softwareupdate --install failed
 SU_ADMIN = "PAX-UPDATE-011"       # macOS wanted an administrator (Apple silicon owner auth)
+PKG_CONTENTS = "PAX-MAC-032"      # v0.8.34: a trusted-team package would install something Pax refuses
+PKG_CHECK = "PAX-MAC-033"         # v0.8.34: Pax's self-check failed after a package: protection put back
 
 
 class InstallError(Exception):
@@ -233,7 +240,158 @@ def parse_pkg_signature(out: str) -> dict:
     apple = (status == "signed Apple Software" and len(chain) >= 2 and chain[-1] == "Apple Root CA"
              and chain[0] in ("Software Update", "Apple Software")
              and all(c in APPLE_PKG_CERTS for c in chain))
-    return {"status": status, "chain": chain, "apple": apple}
+    # v0.8.34: a Developer ID Installer package: leaf "Developer ID Installer: Name (TEAM)" ->
+    # "Developer ID Certification Authority" -> "Apple Root CA", and notarised.
+    team = ""
+    developer_id = False
+    if chain:
+        m = re.match(r"^Developer ID Installer: .+ \(([A-Z0-9]{10})\)$", chain[0])
+        if m and len(chain) == 3 and chain[1] == "Developer ID Certification Authority" \
+                and chain[2] == "Apple Root CA" and status.startswith("signed by a developer certificate issued by Apple"):
+            team, developer_id = m.group(1), True
+    notarized = False
+    for line in (out or "").splitlines():
+        s = line.strip()
+        if s.startswith("Notarization:"):
+            notarized = s.split(":", 1)[1].strip() == "trusted by the Apple notary service"
+    return {"status": status, "chain": chain, "apple": apple, "team": team, "developer_id": developer_id,
+            "notarized": notarized}
+
+
+# ------------------------------------------------------------------ v0.8.34 trusted .pkg installs
+_TEAM_LINE_RE = re.compile(r"^team ([A-Z0-9]{10})(?: (\S.*))?$")
+
+
+def parse_trusted_teams(text: str) -> dict:
+    """pkg-trusted-teams.txt -> {team id: organisation}. Any line it doesn't understand is an
+    error (the caller then installs no package without the wait). Pax's own team and any team
+    on the deny list can never be trusted."""
+    teams: dict = {}
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = _TEAM_LINE_RE.match(line)
+        if not m:
+            raise ValueError(f"pkg-trusted-teams.txt line {n} isn't a rule")
+        if m.group(1) == PAX_TEAM_ID:
+            raise ValueError("pkg-trusted-teams.txt can't list Pax's own team")
+        teams[m.group(1)] = (m.group(2) or "").strip()
+    if not teams:
+        raise ValueError("pkg-trusted-teams.txt is empty")
+    return teams
+
+
+def load_trusted_teams(path: Path = TRUSTED_TEAMS_FILE, deny: list | None = None) -> dict:
+    teams = parse_trusted_teams(Path(path).read_text())
+    for c in deny or []:
+        both = set(teams) & c.teams
+        if both:
+            raise ValueError(f"pkg-trusted-teams.txt lists a denied team ({sorted(both)[0]})")
+    return teams
+
+
+# Where a trusted package may never put anything (equal to, or inside). Pax's own files, the
+# system, network/DNS/profile settings, extensions, other accounts' homes, other disks.
+PKG_FORBIDDEN = (
+    "/System", "/bin", "/sbin", "/usr/bin", "/usr/sbin", "/usr/lib", "/usr/libexec", "/usr/share",
+    "/etc", "/private/etc", "/var", "/private/var", "/cores", "/dev", "/Volumes", "/Users", "/Network",
+    "/Library/PaxGuard", "/Applications/Pax.app", "/Library/Extensions", "/Library/StagedExtensions",
+    "/Library/SystemExtensions", "/Library/Managed Preferences", "/Library/Profiles", "/Library/Security",
+    "/Library/DirectoryServices", "/Library/Preferences/SystemConfiguration", "/Library/Keychains",
+    "/Library/Filesystems", "/Library/Apple", "/Library/Updates", "/Library/OSAnalytics",
+    "/Library/Application Support/com.apple.TCC", "/Library/Application Support/Pax",
+    "/Library/Preferences/com.apple.alf.plist", "/Library/Preferences/com.apple.security.plist",
+    "/Library/Preferences/com.apple.loginwindow.plist",
+)
+# Pax's launchd jobs and anything named for Pax (string prefix, any case).
+PKG_FORBIDDEN_NAME_PREFIXES = (
+    "/library/launchdaemons/org.paxpeace.", "/library/launchdaemons/org.paxmobile.",
+    "/library/launchagents/org.paxpeace.", "/library/launchagents/org.paxmobile.",
+)
+# Kinds of file a trusted package may not contain at all.
+PKG_FORBIDDEN_SUFFIXES = {
+    ".kext": "a kernel extension",
+    ".systemextension": "a system extension",
+    ".mobileconfig": "a configuration profile",
+    ".dext": "a driver extension",
+}
+PKG_MAX_ENTRIES = 300_000
+PKG_MAX_SCRIPT_BYTES = 8 * 1024 ** 2
+PKG_MAX_XML_BYTES = 2 * 1024 ** 2
+# Words in a package's scripts (or Distribution) that only something reaching for Pax's
+# protection would use: Pax itself, hosts/pf/DNS/proxy settings, profiles, extensions, admin
+# rights, Gatekeeper/SIP/FileVault/firmware. Matched case-insensitively.
+PKG_SCRIPT_WORDS = (
+    "paxguard", "pax-guard", "paxpeace", "paxmobile", "/etc/hosts", "/private/etc/hosts", "pfctl",
+    "/etc/pf.", "/etc/resolver", "networksetup -setdns", "networksetup -setwebproxy",
+    "networksetup -setsecurewebproxy", "networksetup -setsocksfirewallproxy", "networksetup -setautoproxy",
+    "networksetup -setproxy", "networksetup -setv6", "scutil --nc", "scutil --proxy", "profiles install",
+    "profiles -i", "profiles remove", "profiles -r", "profiles -d", "/usr/bin/profiles", "systemextensionsctl",
+    "kextload", "kextutil", "kmutil load", "dseditgroup", "/groups/admin", "sysadminctl", "paxadmin",
+    "dscl . -passwd", "spctl --master-disable", "spctl --global-disable", "spctl --disable",
+    "spctl --add", "csrutil", "fdesetup", "bputil", "firmwarepasswd", "nvram ", "/etc/sudoers",
+    "authorizationdb write",
+)
+
+
+def _norm_target(install_location: str, rel: str) -> str:
+    rel = rel[2:] if rel.startswith("./") else ("" if rel == "." else rel)
+    return os.path.normpath(os.path.join(install_location, rel)) if rel else os.path.normpath(install_location)
+
+
+def pkg_target_problem(target: str) -> str | None:
+    """None when a trusted package may put something at this absolute path."""
+    t = os.path.normpath(target)
+    if not t.startswith("/") or "\x00" in t:
+        return f"it installs to an unusual place ({t[:120]})"
+    for f in PKG_FORBIDDEN:
+        if t == f or t.startswith(f + "/"):
+            return f"it installs into {f}"
+    low = t.lower()
+    if low == "/applications/pax.app" or low.startswith("/applications/pax.app/"):
+        return "it installs over Pax"
+    for p in PKG_FORBIDDEN_NAME_PREFIXES:
+        if low.startswith(p):
+            return "it installs over Pax"
+    for part in low.split("/"):
+        for suffix, what in PKG_FORBIDDEN_SUFFIXES.items():
+            if part.endswith(suffix):
+                return f"it installs {what}"
+        if part.startswith(("org.paxpeace.", "org.paxmobile.")):
+            return "it installs something named for Pax"
+    if "/contents/library/systemextensions/" in low + "/":
+        return "it installs a system extension"
+    return None
+
+
+def script_problem(data: bytes) -> str | None:
+    """None when a package script (text, or a binary's printable strings) uses none of the
+    PKG_SCRIPT_WORDS."""
+    if b"\x00" in data:              # a compiled helper: its printable strings, like strings(1)
+        text = " ".join(m.decode("ascii", "ignore") for m in re.findall(rb"[\x20-\x7e]{4,}", data))
+    else:
+        text = data.decode("utf-8", "replace")
+    low = " ".join(text.lower().split())
+    for word in PKG_SCRIPT_WORDS:
+        if word in low:
+            return f"its install scripts touch {word.strip()}"
+    return None
+
+
+def read_small_xml(path: str, limit: int = PKG_MAX_XML_BYTES):
+    """A package's PackageInfo/Distribution (untrusted XML): size-limited, no DTD or entities."""
+    import xml.etree.ElementTree as ET
+    with open(path, "rb") as fh:
+        data = fh.read(limit + 1)
+    if len(data) > limit:
+        raise InstallError(PKG_CONTENTS, "its package description is too large to check")
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise InstallError(PKG_CONTENTS, "its package description uses features Pax doesn't read")
+    try:
+        return ET.fromstring(data), data
+    except ET.ParseError:
+        raise InstallError(PKG_CONTENTS, "its package description couldn't be read") from None
 
 
 def parse_softwareupdate_list(out: str) -> list[dict]:
@@ -443,7 +601,8 @@ class AppInstaller:
 
     def __init__(self, run, processes, *, applications: str = APPLICATIONS, staging: str = STAGING,
                  state_file: Path | None = None, log=print, clock=time.time,
-                 blocked_entries=lambda: [], deny_file: Path = DENY_FILE, require_root_owner: bool = True):
+                 blocked_entries=lambda: [], deny_file: Path = DENY_FILE, require_root_owner: bool = True,
+                 trusted_teams_file: Path = TRUSTED_TEAMS_FILE, pkg_hooks=None):
         self.run = run
         self.processes = processes
         self.applications = applications
@@ -454,6 +613,11 @@ class AppInstaller:
         self.blocked_entries = blocked_entries
         self.deny_file = deny_file
         self.require_root_owner = require_root_owner
+        # v0.8.34: trusted-team packages. pkg_hooks (pax_guard.PkgIntegrity) gives
+        # fastpath_allowed() / snapshot() / check(before) / failed(info, problems); without it
+        # no third-party package is installed (fail closed).
+        self.trusted_teams_file = trusted_teams_file
+        self.pkg_hooks = pkg_hooks
         self.lock = threading.Lock()
         self.job: dict | None = None
         self._job_n = 0
@@ -858,6 +1022,8 @@ class AppInstaller:
         job["step"] = "checking"
         code, out = self.run(["/usr/sbin/pkgutil", "--check-signature", pkg], timeout=300)
         sig = parse_pkg_signature(out)
+        if code == 0 and not sig["apple"] and sig["developer_id"]:
+            return self._install_trusted_pkg(job, pkg, sig)
         if code != 0 or not sig["apple"]:
             raise InstallError(PACKAGE, "installer packages run their own scripts as administrator, "
                                         f"so they wait like turning Pax off ({sig['status'][:80] or 'unsigned'})")
@@ -872,6 +1038,244 @@ class AppInstaller:
         self.record({"result": "installed", "name": job.get("source"), "bundle_id": "pkg", "team_id": "Apple",
                      "source": job.get("source")})
         return {"result": "installed"}
+
+    # ---------------------------------------------------------- v0.8.34 trusted-team packages
+    def _wait_like_turning_off(self, why: str) -> InstallError:
+        return InstallError(PACKAGE, "installer packages run their own scripts as administrator, "
+                                     f"so they wait like turning Pax off ({why})")
+
+    def _install_trusted_pkg(self, job: dict, pkg: str, sig: dict) -> dict:
+        """A Developer ID Installer package. Installed without the wait only when the team is on
+        pkg-trusted-teams.txt, it's notarised, its contents pass inspect_pkg, and pax-guard's
+        hooks are there; afterwards the full self-check runs (fail closed)."""
+        team = sig["team"]
+        hooks = self.pkg_hooks
+        if hooks is None:
+            raise self._wait_like_turning_off("Pax can't check this Mac after a package here")
+        try:
+            allowed = bool(hooks.fastpath_allowed())
+        except Exception:  # noqa: BLE001 - can't tell: no fast path
+            allowed = False
+        if not allowed:
+            raise self._wait_like_turning_off("turned off after an earlier package changed this Mac")
+        try:
+            deny = load_deny(self.deny_file)
+            teams = load_trusted_teams(self.trusted_teams_file, deny)
+        except (OSError, ValueError) as exc:
+            self.log(f"{PACKAGE} trusted package list unreadable ({exc}); waiting like turning Pax off")
+            raise self._wait_like_turning_off("the list of trusted developers couldn't be read") from None
+        if team == PAX_TEAM_ID or team not in teams:
+            raise self._wait_like_turning_off(f"Team ID {team} isn't on Pax's short list of trusted developers")
+        job["team_id"] = team
+        if not sig["notarized"]:
+            code, out = self.run(["/usr/bin/xcrun", "stapler", "validate", pkg], timeout=120)
+            if code != 0 or "worked" not in out:
+                raise InstallError(NOT_NOTARISED, "Apple's notary service hasn't checked this package")
+        code, out = self.run(["/usr/sbin/spctl", "--assess", "--type", "install", "-vv", pkg], timeout=300)
+        sp = parse_spctl(out)
+        if code != 0 or not sp["accepted"] or sp["source"] != "Notarized Developer ID":
+            raise InstallError(NOT_NOTARISED, f"Gatekeeper said: {(sp['source'] or out.strip())[-120:]}")
+        if sp["origin_team"] != team:
+            raise InstallError(NOT_SIGNED, "Gatekeeper and the signature disagree on the developer")
+        info = self.inspect_pkg(pkg, team, deny)
+        job["name"] = info["name"] or job.get("source")
+        try:
+            before = hooks.snapshot()
+        except Exception as exc:  # noqa: BLE001 - can't take the "before" picture: don't install
+            raise InstallError(FAILED, f"Pax couldn't check this Mac before installing ({type(exc).__name__})") from None
+        job["step"] = "installing"
+        code, out = self.run(["/usr/sbin/installer", "-pkg", pkg, "-target", "/"], timeout=3600)
+        # The check runs whatever the installer said: a package that stopped half way may still
+        # have run its scripts.
+        try:
+            problems = list(hooks.check(before) or [])
+        except Exception as exc:  # noqa: BLE001 - a check that can't run counts as failed
+            problems = [f"the check couldn't run ({type(exc).__name__})"]
+        entry = {"name": job["name"], "bundle_id": "pkg", "team_id": team, "source": job.get("source"),
+                 "apps": info["apps"][:20]}
+        if problems:
+            try:
+                hooks.failed(entry, problems)
+            finally:
+                self.record({"result": "refused", "code": PKG_CHECK, **entry, "detail": "; ".join(problems)[:200]})
+            raise InstallError(PKG_CHECK, "Pax noticed a change to its protection after this package and put "
+                                          "it back")
+        if code != 0:
+            raise InstallError(FAILED, f"the installer stopped: {out.strip()[-160:]}")
+        self.record({"result": "installed", **entry})
+        return {"result": "installed"}
+
+    def inspect_pkg(self, pkg: str, team: str, deny: list) -> dict:
+        """Expand a staged package (pkgutil --expand-full) inside the staging folder and refuse
+        it (PKG_CONTENTS) if anything it would install or run reaches for Pax. -> {"name", "apps"}."""
+        stage = os.path.dirname(pkg)
+        root = os.path.join(stage, "expanded")
+        code, out = self.run(["/usr/sbin/pkgutil", "--expand-full", pkg, root], timeout=1800)
+        if code != 0 or not os.path.isdir(root) or os.path.islink(root):
+            raise InstallError(PKG_CONTENTS, f"Pax couldn't open the package to check it: {out.strip()[-120:]}")
+        code, listing = self.run(["/usr/sbin/pkgutil", "--payload-files", pkg], timeout=600)
+        if code != 0:
+            raise InstallError(PKG_CONTENTS, "Pax couldn't list what the package installs")
+        for line in listing.splitlines()[:PKG_MAX_ENTRIES]:
+            rel = line.strip()
+            if not rel:
+                continue
+            low = rel.lower()
+            for part in low.split("/"):
+                for suffix, what in PKG_FORBIDDEN_SUFFIXES.items():
+                    if part.endswith(suffix):
+                        raise InstallError(PKG_CONTENTS, f"Pax doesn't install packages with {what}")
+        name = ""
+        dist = os.path.join(root, "Distribution")
+        if os.path.isfile(dist) and not os.path.islink(dist):
+            tree, data = read_small_xml(dist)
+            if b"allow-external-scripts" in data:
+                raise InstallError(PKG_CONTENTS, "its installer runs outside scripts")
+            why = script_problem(data)
+            if why:
+                raise InstallError(PKG_CONTENTS, why)
+            t = tree.find("title")
+            name = (t.text or "").strip()[:MAX_NAME] if t is not None and t.text else ""
+        comps = []
+        if os.path.isfile(os.path.join(root, "PackageInfo")):
+            comps.append(root)
+        for e in sorted(os.scandir(root), key=lambda e: e.name):
+            if e.is_dir(follow_symlinks=False) and os.path.isfile(os.path.join(e.path, "PackageInfo")):
+                comps.append(e.path)
+        if not comps:
+            raise InstallError(PKG_CONTENTS, "the package has no parts Pax can read")
+        apps: list = []
+        count = 0
+        for comp in comps:
+            tree, _ = read_small_xml(os.path.join(comp, "PackageInfo"))
+            ident = (tree.get("identifier") or "").lower()
+            if ident.startswith(PAX_BUNDLE_PREFIXES) or ident.startswith("com.apple."):
+                raise InstallError(PKG_CONTENTS, "the package claims to be Pax or Apple")
+            for c in deny:
+                if any(ident.startswith(p) for p in c.prefixes) or ident in c.bundles:
+                    raise InstallError(PKG_CONTENTS, f"Pax doesn't install {c.label}", category=c.label)
+            loc = tree.get("install-location") or "/"
+            if not loc.startswith("/") or ".." in loc.split("/") or "\x00" in loc:
+                raise InstallError(PKG_CONTENTS, "the package installs to an unusual place")
+            loc = os.path.normpath(loc)
+            if tree.get("relocatable", "false").lower() == "true" and loc != "/Applications":
+                raise InstallError(PKG_CONTENTS, "the package can move itself to other places")
+            for b in tree.iter("bundle"):
+                bid = (b.get("id") or "").lower()
+                if bid.startswith(PAX_BUNDLE_PREFIXES):
+                    raise InstallError(PKG_CONTENTS, "the package installs over Pax")
+            scripts = os.path.join(comp, "Scripts")
+            if os.path.lexists(scripts):
+                if os.path.islink(scripts) or not os.path.isdir(scripts):
+                    raise InstallError(PKG_CONTENTS, "Pax couldn't open the package's scripts to check them")
+                for dirpath, dirnames, filenames in os.walk(scripts):
+                    for f in filenames:
+                        fp = os.path.join(dirpath, f)
+                        st = os.lstat(fp)
+                        count += 1
+                        if count > PKG_MAX_ENTRIES:
+                            raise InstallError(UNSAFE, "the package is too big to check")
+                        if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+                            continue
+                        with open(fp, "rb") as fh:
+                            data = fh.read(PKG_MAX_SCRIPT_BYTES)
+                        why = script_problem(data)
+                        if why:
+                            raise InstallError(PKG_CONTENTS, why)
+            payload = os.path.join(comp, "Payload")
+            if not os.path.lexists(payload):
+                continue
+            if os.path.islink(payload) or not os.path.isdir(payload):
+                raise InstallError(PKG_CONTENTS, "Pax couldn't open the package's files to check them")
+            count = self._inspect_payload(payload, loc, team, deny, apps, count)
+        return {"name": name or (apps[0]["name"] if apps else ""), "apps": [a["name"] for a in apps]}
+
+    def _inspect_payload(self, payload: str, loc: str, team: str, deny: list, apps: list, count: int) -> int:
+        stack = [payload]
+        while stack:
+            d = stack.pop()
+            try:
+                entries = list(os.scandir(d))
+            except OSError:
+                raise InstallError(PKG_CONTENTS, "Pax couldn't read the package's files") from None
+            for e in entries:
+                count += 1
+                if count > PKG_MAX_ENTRIES:
+                    raise InstallError(UNSAFE, "the package is too big to check")
+                rel = os.path.relpath(e.path, payload)
+                target = _norm_target(loc, rel)
+                why = pkg_target_problem(target)
+                if why:
+                    raise InstallError(PKG_CONTENTS, f"Pax doesn't install this package: {why}")
+                st = os.lstat(e.path)
+                if stat.S_ISLNK(st.st_mode):
+                    dest = os.readlink(e.path)
+                    real = os.path.normpath(dest if dest.startswith("/") else
+                                            os.path.join(os.path.dirname(target), dest))
+                    why = pkg_target_problem(real)
+                    if why and not real.startswith(("/System/Library/", "/usr/lib/")):
+                        raise InstallError(PKG_CONTENTS, f"Pax doesn't install this package: a link {why[3:]}")
+                    continue
+                if st.st_mode & (stat.S_ISUID | stat.S_ISGID):
+                    raise InstallError(UNSAFE, "the package has a file that runs with someone else's rights")
+                if stat.S_ISDIR(st.st_mode):
+                    low = e.name.lower()
+                    if low.endswith(".appex"):
+                        ext = read_plist(e.path).get("NSExtension")
+                        point = str((ext if isinstance(ext, dict) else {}).get("NSExtensionPointIdentifier") or "")
+                        if point.startswith("com.apple.networkextension"):
+                            raise InstallError(PKG_CONTENTS, "Pax doesn't install network extensions (VPN or proxy)")
+                    if low.endswith(".app"):
+                        inside = any(p.lower().endswith(".app") for p in rel.split("/")[:-1])
+                        self._check_payload_app(e.path, target, team, deny, top=not inside)
+                        pl = read_plist(e.path)
+                        apps.append({"name": str(pl.get("CFBundleDisplayName") or pl.get("CFBundleName")
+                                                 or e.name[:-4])[:MAX_NAME], "path": target})
+                    stack.append(e.path)
+                elif not stat.S_ISREG(st.st_mode):
+                    raise InstallError(UNSAFE, "the package has a special file")
+        return count
+
+    def _check_payload_app(self, path: str, target: str, team: str, deny: list, top: bool) -> None:
+        """An app inside a trusted package: refused like a new app would be (deny list, the
+        user's Blocked apps, bypass lists); a top-level one must also be from the package's
+        own team, not want network/system extensions, and not replace another team's app."""
+        pl = read_plist(path)
+        bid = str(pl.get("CFBundleIdentifier") or "")
+        lbid = bid.lower()
+        if lbid.startswith(PAX_BUNDLE_PREFIXES):
+            raise InstallError(PKG_CONTENTS, "the package installs over Pax")
+        folder = os.path.basename(path)
+        app_team = ""
+        if top:
+            code, out = self.run(["/usr/bin/codesign", "-dv", "--verbose=4", path], timeout=120)
+            sig = parse_codesign_details(out if code == 0 else "")
+            app_team = sig["team_id"]
+            if app_team != team:
+                raise InstallError(PKG_CONTENTS, f"it installs {folder[:-4]}, which is from another developer")
+            code, ent = self.run(["/usr/bin/codesign", "-d", "--entitlements", "-", "--xml", path], timeout=120)
+            low = (ent or "").lower()
+            for key, what in (("com.apple.developer.networking.networkextension", "network extensions (VPN or proxy)"),
+                              ("com.apple.developer.system-extension.install", "system extensions"),
+                              ("com.apple.developer.endpoint-security.client", "security extensions")):
+                if key in low:
+                    raise InstallError(PKG_CONTENTS, f"Pax doesn't install apps that add {what}")
+        staged = StagedApp(path=path, folder=folder, bundle_id=bid or folder, name=str(
+            pl.get("CFBundleDisplayName") or pl.get("CFBundleName") or folder[:-4])[:MAX_NAME],
+            version=str(pl.get("CFBundleShortVersionString") or ""), build=str(pl.get("CFBundleVersion") or ""),
+            executable=str(pl.get("CFBundleExecutable") or ""), team_id=app_team,
+            signing_id=bid, schemes=url_schemes(pl) if top else set())
+        why = self.blocked_reason(staged)
+        if why:
+            raise InstallError(BLOCKED, f"Pax doesn't install {why}", category=why)
+        if top and target.startswith(self.applications_root() + "/") and os.path.lexists(target):
+            code, out = self.run(["/usr/bin/codesign", "-dv", "--verbose=4", target], timeout=120)
+            cur = parse_codesign_details(out if code == 0 else "")
+            if cur["team_id"] and cur["team_id"] != team:
+                raise InstallError(OTHER_DEVELOPER, f"the installed {folder[:-4]} is from another developer")
+
+    def applications_root(self) -> str:
+        return APPLICATIONS
 
     # ---------------------------------------------------------- 1(b) downloaded updates
     def downloaded_updates(self, home: str | None) -> list[dict]:

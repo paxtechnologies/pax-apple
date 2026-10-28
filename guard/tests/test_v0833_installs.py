@@ -732,8 +732,9 @@ def test_pax_opens_disk_images_and_apps_only_as_an_alternate_viewer():
     body = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S).replace("${", "{")
     pl = plistlib.loads(body.encode())
     types = pl["CFBundleDocumentTypes"]
+    # v0.8.34 adds installer packages (trusted-team .pkg installs), still Alternate only.
     assert sorted(t for d in types for t in d["LSItemContentTypes"]) == [
-        "com.apple.application-bundle", "com.apple.disk-image-udif"]
+        "com.apple.application-bundle", "com.apple.disk-image-udif", "com.apple.installer-package-archive"]
     for d in types:
         assert d["CFBundleTypeRole"] == "Viewer"
         assert d["LSHandlerRank"] == "Alternate"

@@ -137,9 +137,11 @@ CODES: list[PaxCode] = [
             "(Software Signing) or with Pax's Team ID; the name is Pax.app; or the target isn't directly in "
             "/Applications."),
     PaxCode("PAX-MAC-024", "Installer packages wait like turning Pax off.",
-            "Look for a .dmg or app download instead. Packages run their own scripts, so Pax only installs Apple's.",
+            "Look for a .dmg or app download instead. Pax only installs packages from Apple and a few known developers.",
             "A .pkg/.mpkg whose pkgutil --check-signature isn't 'signed Apple Software' with a Software Update "
-            "-> Apple Root CA chain, or a bundle-style (folder) package."),
+            "-> Apple Root CA chain, or a bundle-style (folder) package. v0.8.34: a notarised Developer ID "
+            "Installer package whose Team ID isn't in guard/pkg-trusted-teams.txt (or that list can't be read, or "
+            "the fast path was turned off after a failed self-check, PAX-MAC-033)."),
     PaxCode("PAX-MAC-025", "There's more than one app in this disk image.",
             "Choose the one you want to install.",
             "installs.start on a .dmg with several .app folders (or several packages and no app) and no "
@@ -165,6 +167,19 @@ CODES: list[PaxCode] = [
             "Ask the developer for a standard download.",
             "app_installs.check_tree on the staged copy: a link pointing outside the bundle (absolute, or "
             "resolving outside), a setuid/setgid file, a device/pipe/socket, more than 300,000 files or over 20 GB."),
+    PaxCode("PAX-MAC-032", "This installer would change something Pax protects.",
+            "Look for a .dmg or app download of it instead.",
+            "v0.8.34 trusted-team .pkg: pkgutil --expand-full/--payload-files showed a file on Pax's or the "
+            "system's paths (PKG_FORBIDDEN), a kernel/system/driver extension, a .mobileconfig, a network "
+            "extension (appex point or entitlement), an app from another team or on the deny/Blocked lists, a "
+            "link into a protected place, or a script/Distribution using PKG_SCRIPT_WORDS (pfctl, /etc/hosts, "
+            "profiles, dseditgroup, Pax's names...). Nothing was installed."),
+    PaxCode("PAX-MAC-033", "Pax noticed a change after installing and put its protection back.",
+            "Your trusted person has been told. Installer packages now wait like turning Pax off on this Mac.",
+            "v0.8.34: after a trusted-team .pkg, PkgIntegrity.check found a problem (pax-guard not loaded, its "
+            "files changed, tamper snapshot changed, profile missing, profiles or system extensions changed, "
+            "the enforcement cycle had to put hosts/pf/DNS/apps/VPN back, DNS canary or runtime failed). "
+            "Protection re-applied, tamper log install:pkg_check_failed, partner email, state/pkg-fastpath.json off."),
     # ---------------------------------------------------------------- IOS
     PaxCode("PAX-IOS-001", "Pax needs Apple Configurator for this.",
             "Install Apple Configurator from the Mac App Store, then choose Apple Configurator > "

@@ -10,6 +10,7 @@ import PaxCore
 /// The row inside the Updates card.
 struct AppInstallRow: View {
     @EnvironmentObject var mac: MacProtectModel
+    @EnvironmentObject var updates: AppUpdatesModel
     @State private var open = false
 
     var body: some View {
@@ -25,6 +26,14 @@ struct AppInstallRow: View {
                 .disabled(mac.deviceID == nil)
         }
         .sheet(isPresented: $open) { AppInstallSheet() }
+        // v0.8.34: "Open Pax" from the panel beside macOS's administrator dialog lands here.
+        .onReceive(updates.$installerRequested) { requested in
+            guard requested else { return }
+            DispatchQueue.main.async {
+                updates.installerRequested = false
+                if mac.deviceID != nil && updates.pending == nil { open = true }
+            }
+        }
     }
 }
 
@@ -343,7 +352,7 @@ struct AppInstallConfirmSheet: View {
             } catch {
                 failure = PaxErrorClassifier.classify(error)
             }
-            updates.finished()
+            updates.finished(request.path)
         }
     }
 }

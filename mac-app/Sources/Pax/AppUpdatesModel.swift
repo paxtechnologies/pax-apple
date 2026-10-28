@@ -18,6 +18,8 @@ final class AppUpdatesModel: ObservableObject {
     @Published private(set) var cards: [GuardClient.DownloadedUpdate] = []
     /// The confirmation sheet, when set.
     @Published var pending: AppInstallRequest?
+    /// v0.8.34: Settings › Updates › "Install or update an app" should open (the admin-dialog helper).
+    @Published var installerRequested = false
 
     private let client = GuardClient()
     private let defaults = UserDefaults.standard
@@ -124,9 +126,24 @@ final class AppUpdatesModel: ObservableObject {
     }
 
     /// After a job finishes: the card for that app goes once the scan no longer finds it.
-    func finished() {
+    func finished(_ path: String? = nil) {
         lastScan = nil
         scan(.appear)
+        InstallHelpersModel.shared.jobFinished(path: path)      // v0.8.34
+    }
+
+    /// v0.8.34: a mounted disk image or the admin-dialog helper: Pax comes forward on the sheet
+    /// (never over one that's already open).
+    func present(_ r: AppInstallRequest) {
+        guard attached, isProtected() else { return }
+        bringToFront()
+        if pending == nil { pending = r }
+    }
+
+    /// v0.8.34: Settings › Updates › "Install or update an app" (the row opens its sheet).
+    func openInstaller() {
+        bringToFront()
+        installerRequested = true
     }
 
     private func bringToFront() {
