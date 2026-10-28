@@ -222,6 +222,12 @@ On a protected Mac, signed in as the Standard user, Pax open (docs/APP_INSTALLS.
    it; pax-guard can't see that switch).
 14. Second account (fast user switching) and the Guest account: Pax starts hidden there too. An unprotected
    Mac (Pax installed, not set up): no agent file. Remove Pax: the file is gone.
+15. **Reconnect after the app is deleted** (v0.8.34, GuardReconnect): on a protected Mac (key on this Mac),
+   delete Pax.app and its preferences (`~/Library/Preferences/org.paxmobile.pax.plist`, e.g. with a cleaner
+   app such as CleanMyMac), log out and in, reinstall Pax.app: Pax reopens on Home, protected, with the
+   turn-off wait available — no set-up screen, no PAX-MAC-002. Same with the key on the Pax server: the
+   set-up page says "Pax is still protecting this Mac. Open the Pax account you set it up with, or contact
+   hello@paxpeace.com." and never offers set-up.
 
 ## iPhone / iPad
 

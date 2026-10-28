@@ -14,6 +14,11 @@ struct ProtectMacView: View {
 
     var body: some View {
         PageColumn {
+            // v0.8.34: pax-guard still protects this Mac (key on the Pax server) after the app's
+            // preferences were wiped: say so calmly instead of offering set-up.
+            if let notice = mac.stillProtectedNotice, mac.deviceID == nil {
+                Card { NoteRow(icon: "checkmark.shield", text: notice) }
+            }
             if mac.phase == .intro || mac.phase == .checked {
                 StepProgress(titles: titles, current: mac.step)
             }
