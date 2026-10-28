@@ -73,7 +73,7 @@ jobs:
         with: { node-version: "22" }
       - run: cd extension && npm install --no-audit --no-fund && npm test
   mac-app:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # 28 Oct 2026: arm64 macos-15 runners had no capacity; tests the x86_64 slice
     steps:
       - uses: actions/checkout@v4
       - run: find . -name "*.sh" -exec chmod +x {} +

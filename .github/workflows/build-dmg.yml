@@ -45,7 +45,7 @@ env:
 jobs:
   dmg:
     name: Pax.app + DMG (universal)
-    runs-on: macos-15
+    runs-on: macos-15-intel   # 28 Oct 2026: arm64 macos-15 runners had no capacity; Intel runner (universal build kept)
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
@@ -188,8 +188,12 @@ jobs:
             echo "$a $1: $out"
             grep -q '"ok": true' <<<"$out" || { echo "bundled helper '$1' failed on $a"; exit 1; }
           }
-          run_helper arm64 selftest --expect-pymobiledevice3 "$PIN" --expect-arch arm64
-          run_helper arm64 list
+          if arch -arm64 /usr/bin/true 2>/dev/null; then
+            run_helper arm64 selftest --expect-pymobiledevice3 "$PIN" --expect-arch arm64
+            run_helper arm64 list
+          else
+            echo "::warning::Intel runner: the arm64 helper was checked for presence and signature only"
+          fi
           if arch -x86_64 /usr/bin/true 2>/dev/null; then
             run_helper x86_64 selftest --expect-pymobiledevice3 "$PIN" --expect-arch x86_64
             run_helper x86_64 list
@@ -267,6 +271,9 @@ jobs:
             for a in arm64 x86_64; do
               if [[ "$a" == x86_64 ]] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
                 echo "::warning::Rosetta unavailable: pax-guard's runtime not run on x86_64"; continue
+              fi
+              if [[ "$a" == arm64 ]] && ! arch -arm64 /usr/bin/true 2>/dev/null; then
+                echo "::warning::Intel runner: pax-guard's runtime not run on arm64"; continue
               fi
               r="$(arch "-$a" "$RT" -I -B "$BASE/bin/pax_guard.py" selftest | tail -n 1)"
               echo "$a selftest on the runtime copy: $r"
