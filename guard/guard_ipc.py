@@ -23,6 +23,11 @@ can reach it; nothing on it can weaken Pax faster than the wait allows:
                             / {adblock: bool}               (v0.8.7, local escrow)
                             / {family_layer: bool}          (v0.8.18, local escrow:
                               on at once; off waits like a removal)
+  installs.start {path, choice?, update_only?} / installs.status / installs.updates /
+  system_updates.check / system_updates.status / system_updates.install {label}
+                            (v0.8.33 Pax-approved installs and updates: signed,
+                              notarised, not-blocked apps only, checked as root on a
+                              staged copy; app_installs.py, docs/APP_INSTALLS.md)
   X and Bluesky media are always blocked (v0.8.13): settings.set refuses
   x_media / bluesky_media false with PAX-DNS-016
   paxmax.get / paxmax.on (instant) / paxmax.off (partner first, then a fixed

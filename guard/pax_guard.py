@@ -20,6 +20,10 @@ and soon after a network change, it:
      programs every 2 s by bundle ID and code signature, kills a match and moves
      its app into the root-only quarantine, wherever it was copied and whatever
      it was renamed to
+  7. (v0.8.33) installs and updates ordinary apps for the Standard account when
+     they pass its checks (app_installs.py): same bundle ID and Team ID for an
+     update, Developer ID signed and notarised, not a blocked kind of app; .pkg
+     installers only when Apple signed them; Apple's own software updates on request
 v0.5 adds the "bypass" (always on) and "remote desktop" (server-controlled,
 on by default) categories to the hosts block, HaGeZi's DoH/VPN/Tor/Proxy bypass
 list, and remote-desktop ports to pf while that category is on.
@@ -83,7 +87,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.32"
+VERSION = "0.8.33"
 
 
 # v0.8.23: a short backup-filter episode (pax-guard restarting after an update starts on
@@ -379,6 +383,9 @@ class Guard:
         # v0.8.7 Blocked apps: app path -> (read at, AppIdentity); one enforcer at a time.
         self._ident_cache: dict = {}
         self._apps_lock = threading.RLock()
+        # v0.8.33 Pax-approved installs and updates (app_installs.py); made on first use.
+        self._installer = None
+        self._install_rate = None
 
     # ---------------------------------------------------------------- state
     def _state_file(self, name: str) -> Path:
@@ -1215,6 +1222,10 @@ class Guard:
             threading.Thread(target=self.list_sync.loop, name="pax-list-sync", daemon=True).start()
         if ipc:
             import guard_ipc
+            try:
+                self.installer().cleanup_stale()      # v0.8.33: a job cut short by a restart
+            except Exception as exc:  # noqa: BLE001
+                log(f"install staging cleanup: {type(exc).__name__}")
             self._update_rate = guard_ipc.RateLimit(2)
             self._reveal_rate = guard_ipc.RateLimit(10)
             try:
@@ -1514,6 +1525,8 @@ class Guard:
                     return {"ok": True, "released": out}
             if cmd.startswith("paxmax."):
                 return self.handle_pax_max(cmd, req, uid)
+            if cmd.startswith(("installs.", "system_updates.")):
+                return self.handle_installs(cmd, req, uid)
             if cmd.startswith("apps."):
                 if not self.cfg.local_escrow:
                     return {"ok": False, "code": "PAX-ESCROW-009",
@@ -1571,10 +1584,80 @@ class Guard:
             return {"ok": False, "code": "PAX-GUARD-012", "error": f"unknown request {cmd!r}"}
         except Exception as exc:  # noqa: BLE001
             import partner as pt
-            if not isinstance(exc, (le.EscrowError, lb.BlocklistError, pt.NotifyError)):
+            import app_installs as ai
+            if not isinstance(exc, (le.EscrowError, lb.BlocklistError, pt.NotifyError, ai.InstallError)):
                 raise
             return {"ok": False, "code": exc.code, "error": exc.message,
                     **({k: v for k, v in getattr(exc, "extra", {}).items()})}
+
+    # ------------------------------------- v0.8.33 Pax-approved installs and updates
+    def installer(self):
+        """app_installs.AppInstaller, staging in /Library/PaxGuard/installs (root 0700), or, if
+        /Applications is on another volume, in a root-only folder inside /Applications, so the
+        final step is always a rename on one volume."""
+        if self._installer is None:
+            import app_installs as ai
+            staging = str(self.base_dir / "installs")
+            try:
+                if os.stat(str(self.base_dir)).st_dev != os.stat(ai.APPLICATIONS).st_dev:
+                    staging = os.path.join(ai.APPLICATIONS, ".pax-installing")
+            except OSError:
+                pass
+            self._installer = ai.AppInstaller(
+                self.sys.run, self.sys.processes, staging=staging,
+                state_file=self.state_dir / "installs.json", log=log, clock=self.sys.now,
+                blocked_entries=lambda: self._blocked_entries() if self.cfg.local_escrow else [])
+        return self._installer
+
+    def install_home(self, uid) -> str | None:
+        """The home folder of the local account asking (uid 501+ with a home in /Users), or
+        the protected account's for root. Anyone else can't install."""
+        import pwd
+        if uid is None:
+            return None
+        try:
+            if int(uid) == 0:
+                return self.sys.home_of(self.cfg.user)
+            pw = pwd.getpwuid(int(uid))
+        except (KeyError, ValueError, TypeError):
+            return None
+        if pw.pw_uid < 501 or not pw.pw_dir.startswith("/Users/") or not self.sys.exists(pw.pw_dir):
+            return None
+        return pw.pw_dir
+
+    def handle_installs(self, cmd: str, req: dict, uid) -> dict:
+        """installs.start {path, choice?, update_only?} / installs.status / installs.updates /
+        system_updates.check / system_updates.status / system_updates.install {label}.
+        Nothing here loosens Pax: every app is checked as root on a staged copy (see
+        app_installs.py), and what isn't allowed still needs the turn-off wait."""
+        import app_installs as ai
+        inst = self.installer()
+        if cmd == "installs.status":
+            return {"ok": True, **inst.status()}
+        if cmd == "system_updates.status":
+            return {"ok": True, "system_updates": dict(inst.su)}
+        home = self.install_home(uid)
+        if home is None:
+            log(f"{ai.BAD_FILE} {cmd} refused for uid {uid}")
+            raise ai.InstallError(ai.BAD_FILE, "only an account on this Mac can install apps")
+        if self._install_rate is None:
+            import guard_ipc
+            self._install_rate = guard_ipc.RateLimit(6)
+        if cmd == "installs.updates":
+            return {"ok": True, "updates": inst.downloaded_updates(home)}
+        if not self._install_rate.allow():
+            raise ai.InstallError(ai.BUSY, "too many requests; wait a minute")
+        if cmd == "installs.start":
+            choice = req.get("choice")
+            job = inst.start(req.get("path"), roots=[home, "/Volumes"], uid=int(uid),
+                             allowed_uids={int(uid)}, choice=choice if choice not in ("", None) else None,
+                             update_only=req.get("update_only") is True)
+            return {"ok": True, "job": job}
+        if cmd == "system_updates.check":
+            return {"ok": True, "system_updates": inst.su_check()}
+        if cmd == "system_updates.install":
+            return {"ok": True, "system_updates": inst.su_install(req.get("label"))}
+        return {"ok": False, "code": "PAX-GUARD-012", "error": f"unknown request {cmd!r}"}
 
     def _support_rate(self):
         """v0.8.15: at most 3 support codes a minute (a code is 146 letters; this only
@@ -1947,7 +2030,7 @@ def selftest() -> int:
     problems = []
     for mod in ("guard_config", "ed25519", "pax_signing", "domain_matcher", "filter_lists", "dns_forwarder",
                 "local_escrow", "local_blocklist", "list_sync", "guard_ipc", "pax_update", "tamper", "recovery_guard",
-                "pax_restricted", "guard_runtime", "support_code",
+                "pax_restricted", "guard_runtime", "support_code", "app_installs",
                 # v0.8.6: the standard-library pieces pax-guard needs from whichever Python runs it
                 "ssl", "smtplib", "plistlib", "http.client", "socketserver", "email.message", "urllib.request"):
         try:
@@ -1970,6 +2053,11 @@ def selftest() -> int:
             problems.append("ed25519 self-check failed")
     except Exception as exc:  # noqa: BLE001
         problems.append(f"ed25519: {exc}")
+    try:
+        import app_installs
+        app_installs.load_deny()                 # v0.8.33: the install rules must parse
+    except Exception as exc:  # noqa: BLE001
+        problems.append(f"app-install-deny.txt: {type(exc).__name__}: {exc}")
     if CONFIG_PATH.exists():
         try:
             GuardConfig.load()

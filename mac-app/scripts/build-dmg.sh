@@ -41,7 +41,7 @@ for tool in swift codesign hdiutil plutil ditto; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool not found. Install the Command Line Tools: xcode-select --install"
 done
 
-VERSION="${PAX_VERSION:-0.8.32}"
+VERSION="${PAX_VERSION:-0.8.33}"
 BUNDLE_DEVICE_HELPER="${BUNDLE_DEVICE_HELPER:-1}"
 UNIVERSAL="${UNIVERSAL:-0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
@@ -165,6 +165,23 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHumanReadableCopyright</key><string>Pax Peace (paxpeace.com). GPL-3.0-only.</string>
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+  <!-- v0.8.33: "Open With > Pax" for a disk image or an app (installs through pax-guard's
+       checks). Viewer + Alternate only: Pax is never the default for these files. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Disk Image</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.apple.disk-image-udif</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Application</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array><string>com.apple.application-bundle</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST
@@ -188,6 +205,9 @@ for mod in domain_matcher filter_lists dns_forwarder local_escrow local_blocklis
            pax_update pax_signing ed25519 tamper recovery_guard support_code; do
   cp -X "$REPO/guard/$mod.py" "$APP/Contents/Resources/guard/"
 done
+# v0.8.33 Pax-approved installs: the module and its deny list (remote desktop, rented
+# Macs, mesh VPNs, proxies), read next to it.
+cp -X "$REPO/guard/app_installs.py" "$REPO/guard/app-install-deny.txt" "$APP/Contents/Resources/guard/"
 # v0.8.1: the restricted-content rules, shared with the server and the profile.
 cp -X "$REPO/common/pax_restricted.py" "$APP/Contents/Resources/guard/"
 mkdir -p "$APP/Contents/Resources/guard/filters"

@@ -42,6 +42,7 @@ struct HomeView: View {
             MacRemovedCard()
         } else if mac.deviceID != nil {
             MacStatusCard()
+            AppUpdateReadyCards()       // v0.8.33: "App update ready: <App> <version>" · Update
             if let failure = mac.failure {
                 ErrorCard(error: failure, retry: { mac.refresh() }, details: { mac.supportDetails(failure) })
             }

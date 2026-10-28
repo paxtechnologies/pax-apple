@@ -1,0 +1,141 @@
+# Pax-approved installs (v0.8.33): apps pax-guard will NOT install or update for the
+# everyday (Standard) account, on top of the lists pax-guard already keeps in
+# guard_config.py (VPNs, Tor, proxies, unmanageable browsers, remote AI browsers and
+# virtual machines: BYPASS_APPS, UNMANAGEABLE_BROWSERS, REMOTE_AI_APPS, VM_APPS) and the
+# user's own Blocked apps. Those lists are reused as they are; this file only adds the
+# kinds of app they don't cover: remote-desktop tools, rented-Mac / cloud-computer
+# clients, mesh VPNs and a few proxy clients.
+#
+# Format (one rule per line; anything else is an error and pax-guard then refuses every
+# install, fail closed):
+#   [<category id>] <what the user reads after "Pax doesn't install ">
+#   bundle <bundle ID>          exact match, case-insensitive
+#   bundle <prefix>.*           every bundle ID starting with "<prefix>."
+#   team <Team ID>              every app signed by that Apple Developer Team ID
+#   name <App Name>             the app's folder or display name, case-insensitive
+# Only Team IDs confirmed from a public source are listed (Tailscale: W5364U7YZB, from
+# appcatalog.cloud and Tailscale's own system-extension entitlements). Everything else
+# is matched by bundle ID prefix and name. An app found here can still be installed
+# after the turn-off wait, with the Mac's administrator, like before 0.8.33.
+
+[remote_desktop] remote-desktop tools: they reach a computer outside Pax
+bundle com.teamviewer.*
+name TeamViewer
+name TeamViewer QuickSupport
+name TeamViewer Host
+bundle com.philandro.anydesk
+bundle com.philandro.*
+name AnyDesk
+bundle tv.parsec.www
+bundle tv.parsec.*
+name Parsec
+bundle com.carriez.rustdesk
+bundle com.carriez.*
+name RustDesk
+bundle com.splashtop.*
+name Splashtop Business
+name Splashtop Personal
+name Splashtop Streamer
+name Splashtop SOS
+bundle com.p5sys.*
+name Jump Desktop
+name Jump Desktop Connect
+bundle com.realvnc.*
+name VNC Viewer
+name VNC Server
+name RealVNC Viewer
+name RealVNC Server
+bundle com.nomachine.*
+name NoMachine
+bundle com.screenconnect.*
+bundle com.connectwise.*
+name ScreenConnect
+name ConnectWise Control
+bundle com.logmein.*
+bundle com.gotomypc.*
+name LogMeIn
+name LogMeIn Client
+name GoTo Resolve
+name GoToMyPC
+bundle com.google.chromeremotedesktop.*
+name Chrome Remote Desktop Host
+name Chrome Remote Desktop Host Uninstaller
+bundle com.microsoft.rdc.*
+name Microsoft Remote Desktop
+name Windows App
+bundle com.edovia.screens.*
+name Screens 5
+name Screens for Mac
+name Moonlight
+name Sunshine
+bundle com.oray.*
+name Sunlogin
+name SunloginClient
+name ToDesk
+name Remote Desktop Manager
+name Royal TSX
+name Remotix
+name AirDroid Cast
+name Ammyy Admin
+name Supremo
+name Zoho Assist
+
+[rented_mac] rented Mac and cloud computer apps: a computer outside Pax
+bundle com.zuler.*
+name DeskIn
+name Shadow PC
+name Shadow
+bundle com.amazon.workspaces
+name Amazon WorkSpaces
+name WorkSpaces
+bundle com.citrix.receiver.*
+name Citrix Workspace
+name Citrix Viewer
+name VMware Horizon Client
+name Omnissa Horizon Client
+name MacinCloud
+name Rent a Mac
+
+[mesh_vpn] private network apps (Tailscale, ZeroTier, NetBird): they can route around Pax
+team W5364U7YZB
+bundle io.tailscale.*
+name Tailscale
+bundle com.zerotier.*
+name ZeroTier
+name ZeroTier One
+bundle io.netbird.*
+name NetBird
+name NetBird UI
+bundle com.twingate.*
+name Twingate
+bundle com.nordsec.meshnet.*
+name Hamachi
+name LogMeIn Hamachi
+name Headscale
+
+[proxy] proxy apps: they carry traffic around Pax's filter
+name ClashX
+name ClashX Pro
+name ClashX Meta
+name Clash Verge
+name Clash Verge Rev
+name Clash for Windows
+name Mihomo Party
+name FlClash
+name V2RayU
+name V2rayN
+name V2RayX
+name Qv2ray
+name Hiddify
+name sing-box
+name SFM
+name FoXray
+name Stash
+name Surge
+name Quantumult X
+name ShadowsocksX-NG
+name ShadowsocksX
+name Trojan-Qt5
+name NekoRay
+name Karing
+name Proxifier

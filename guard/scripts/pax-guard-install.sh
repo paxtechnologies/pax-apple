@@ -81,6 +81,11 @@ for mod in domain_matcher filter_lists dns_forwarder local_escrow local_blocklis
   [[ -f "$SRC/$mod.py" ]] || die "PAX-GUARD-001: missing $mod.py"
   install -o root -g wheel -m 0644 "$SRC/$mod.py" "$DEST/bin/"
 done
+# v0.8.33 Pax-approved installs: the module and what it refuses (read next to itself).
+for f in app_installs.py app-install-deny.txt; do
+  [[ -f "$SRC/$f" ]] || die "PAX-GUARD-001: missing $f"
+  install -o root -g wheel -m 0644 "$SRC/$f" "$DEST/bin/"
+done
 # v0.8.1: the restricted-content rules (common/pax_restricted.py in the repo).
 RESTRICTED="$SRC/pax_restricted.py"
 [[ -f "$RESTRICTED" ]] || RESTRICTED="$SRC/../common/pax_restricted.py"   # running from the repo
