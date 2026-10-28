@@ -83,7 +83,38 @@ final class MacProtectModel: ObservableObject {
 
     init(setup: SetupModel) {
         self.setup = setup
-        if deviceID != nil { phase = .protected }
+        if deviceID != nil { phase = .protected } else { Task { [weak self] in _ = await self?.reconnectToGuard() } }
+    }
+
+    /// v0.8.34: pax-guard is protecting this Mac but the app's preferences are gone (e.g. Pax.app
+    /// deleted by a cleaner app and reinstalled): set when the key is on the Pax server.
+    @Published var stillProtectedNotice: String?
+
+    /// v0.8.34: ask pax-guard before offering set-up. Local key held by pax-guard -> reconnect
+    /// (deviceID "local", Home, turn-off wait). Server key -> a calm notice, never set-up.
+    /// Returns false when set-up must not be offered.
+    @discardableResult
+    func reconnectToGuard() async -> Bool {
+        guard deviceID == nil else { return true }
+        let st = try? await guardClient.status()
+        var held = false
+        if st?.escrow_mode == "local" { held = (try? await guardClient.device()) != nil }
+        let decision = GuardReconnect.decide(savedDeviceID: deviceID, guardEscrowMode: st?.escrow_mode,
+                                             localEscrowHeld: held)
+        switch decision {
+        case .none:
+            stillProtectedNotice = nil
+        case .reconnectLocal:
+            stillProtectedNotice = nil
+            defaults.set("local", forKey: MacEscrowMode.defaultsKey)
+            deviceID = GuardReconnect.localDeviceID
+            log.append("✓ Reconnected to Pax's protection on this Mac")
+            phase = .protected
+            await refreshStatus()
+        case .protectedByServer:
+            stillProtectedNotice = GuardReconnect.serverMessage
+        }
+        return GuardReconnect.offersSetUp(decision)
     }
 
     var deviceID: String? {
@@ -211,6 +242,7 @@ final class MacProtectModel: ObservableObject {
 
     func runPreflight() {
         perform { [self] in
+            guard await reconnectToGuard() else { return }
             preflight = try await lockdown().preflight(password: password, demoteOtherAdmins: demoteOtherAdmins)
             if let p = preflight, !p.ok { throw MacLockdownError.preflightFailed(p.problems) }
             if preflight?.ok == true { phase = .checked }
@@ -222,6 +254,8 @@ final class MacProtectModel: ObservableObject {
     /// as test mode). The backup confirmation is asked before the button.
     func checkAndProtect() {
         perform(retry: { [weak self] in self?.checkAndProtect() }) { [self] in
+            // v0.8.34: never offer set-up (or PAX-MAC-002) on a Mac pax-guard already protects.
+            guard await reconnectToGuard() else { return }
             log.append("… Checking this Mac")
             let p = try await lockdown().preflight(password: password, demoteOtherAdmins: demoteOtherAdmins)
             preflight = p

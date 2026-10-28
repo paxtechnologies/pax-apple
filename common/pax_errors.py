@@ -43,8 +43,11 @@ CODES: list[PaxCode] = [
             "Type the password you use to log in to this Mac, then try again.",
             "dscl -authonly failed for the current user in preflight (or MacLockdownError.wrongPassword)."),
     PaxCode("PAX-MAC-002", "This account can't make changes to the Mac.",
-            "Log in with the Mac's main (administrator) account and open Pax again.",
-            "The current user is not in the admin group, so Pax cannot create paxadmin."),
+            "Log in as the Mac's administrator and open Pax again. "
+            "If Pax was already protecting this Mac, it reconnects by itself.",
+            "The current user is not in the admin group, so Pax cannot create paxadmin. v0.8.34: set-up asks "
+            "pax-guard first; a Mac it already protects reconnects (local key) or says Pax is still protecting it "
+            "(key on the Pax server) instead of offering set-up (GuardReconnect)."),
     PaxCode("PAX-MAC-003", "Another account on this Mac can undo Pax.",
             "Leave \"Also make these standard accounts\" on and try again. Pax undid every step.",
             "v0.8.10: other admin accounts are made standard at set-up with the user's OK (dseditgroup -d, "
