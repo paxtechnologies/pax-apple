@@ -24,6 +24,8 @@ and soon after a network change, it:
      they pass its checks (app_installs.py): same bundle ID and Team ID for an
      update, Developer ID signed and notarised, not a blocked kind of app; .pkg
      installers only when Apple signed them; Apple's own software updates on request
+  8. (v0.8.34) keeps /Library/LaunchAgents/org.paxpeace.pax-login.plist (root-owned) so Pax opens,
+     hidden, at every login; put back if removed, changed or disabled (tamper log)
 v0.5 adds the "bypass" (always on) and "remote desktop" (server-controlled,
 on by default) categories to the hosts block, HaGeZi's DoH/VPN/Tor/Proxy bypass
 list, and remote-desktop ports to pf while that category is on.
@@ -87,7 +89,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.33"
+VERSION = "0.8.34"
 
 
 # v0.8.23: a short backup-filter episode (pax-guard restarting after an update starts on
@@ -122,6 +124,15 @@ LOG_PATH = Path("/var/log/pax-guard.log")
 LABEL = "org.paxpeace.pax-guard"
 PLIST_PATH = Path(f"/Library/LaunchDaemons/{LABEL}.plist")
 INTERVAL = 30
+# v0.8.34 (Ruben, 28 Oct 2026): Pax opens at login on a Mac it protects, quietly. pax-guard keeps a
+# root-owned LaunchAgent that starts Pax.app hidden in the background for every login session
+# (LimitLoadToSessionType Aqua), and puts it back if it's removed or changed. No KeepAlive: quitting
+# Pax isn't fought. Unprotected Macs have no pax-guard, so no agent.
+LOGIN_AGENT_LABEL = "org.paxpeace.pax-login"
+LOGIN_AGENT_PATH = Path(f"/Library/LaunchAgents/{LOGIN_AGENT_LABEL}.plist")
+LOGIN_AGENT_ARG = "--pax-login"          # Pax.app stays hidden when it sees this (LoginLaunch.swift)
+PAX_APP = "/Applications/Pax.app"
+PAX_BUNDLE_ID = "org.paxmobile.pax"      # TODO(v0.8) with the app's org.paxpeace.pax move
 SHORT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")   # v0.8.10, as MacLockdown.isSafeShortName
 RUNTIME_CHECK_INTERVAL = 600     # v0.8.6: re-hash /Library/PaxGuard/runtime
 APP_DIRS = ["/Applications", "/Applications/Utilities"]
@@ -1188,7 +1199,87 @@ class Guard:
             "vpn_stopped": self.enforce_vpn(),
             "profile_installed": self.check_profile(),
         }
+        try:
+            result["login_agent"] = self.ensure_login_agent()      # v0.8.34 open at login
+        except Exception as exc:  # noqa: BLE001 - never stop the loop
+            log(f"PAX-GUARD-016 open-at-login check error: {type(exc).__name__}: {exc}")
+            result["login_agent"] = "error"
         return result
+
+    # ------------------------------------------------ v0.8.34 open at login
+    login_agent_path = LOGIN_AGENT_PATH      # tests point this at a temp file
+
+    @staticmethod
+    def login_agent_plist() -> str:
+        """The LaunchAgent pax-guard keeps: `open -g -j -F` starts Pax hidden, in the background, without
+        restoring old windows; Pax itself also stays hidden when launched with --pax-login."""
+        return plistlib.dumps({
+            "Label": LOGIN_AGENT_LABEL,
+            "ProgramArguments": ["/usr/bin/open", "-g", "-j", "-F", "-a", PAX_APP, "--args", LOGIN_AGENT_ARG],
+            "RunAtLoad": True,
+            "LimitLoadToSessionType": "Aqua",
+            "ProcessType": "Interactive",
+            # macOS 13+: Login Items shows "Pax" for this item (older macOS ignores the key).
+            "AssociatedBundleIdentifiers": [PAX_BUNDLE_ID],
+        }, sort_keys=True).decode()
+
+    def _login_agent_file_ok(self, path: str) -> bool:
+        """Root-owned, not a link, not writable by group/others. A path that isn't on this disk
+        (tests with a fake System) has nothing to check."""
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return True
+        import stat as _stat
+        return _stat.S_ISREG(st.st_mode) and st.st_uid == 0 and not st.st_mode & 0o022
+
+    def ensure_login_agent(self) -> str | None:
+        """Every cycle: None when the agent is as it should be, "installed" the first time,
+        "repaired" when it was removed or changed after pax-guard had put it there (tamper log)."""
+        path = str(self.login_agent_path)
+        want = self.login_agent_plist()
+        have = self.sys.read(path)
+        if have == want and self._login_agent_file_ok(path):
+            return None
+        meta = self._load_json("login-agent.json", {})
+        parent = os.path.dirname(path)
+        if not os.path.isdir(parent):
+            self.sys.run(["/bin/mkdir", "-p", parent])
+        if os.path.islink(path):
+            self.sys.run(["/bin/rm", "-f", path])
+        self.sys.write_atomic(path, want, 0o644)
+        if meta.get("installed"):
+            why = "missing" if not have else ("changed" if have != want else "permissions")
+            self.tamper_log.append("changed:login_agent", {"why": why, "repaired": True})
+            log(f"PAX-GUARD-016 Pax's open-at-login item was {why}; put back")
+            return "repaired"
+        meta["installed"] = self.sys.now()
+        self._save_json("login-agent.json", meta)
+        log("Pax will open at login (LaunchAgent installed)")
+        return "installed"
+
+    def ensure_login_agent_enabled(self) -> bool:
+        """From periodic(): `launchctl disable gui/<uid>/<label>` (the logged-in user's own override)
+        is undone as root. True when something had to be re-enabled."""
+        uid = self.console_uid()
+        if uid is None:
+            return False
+        code, out = self.sys.run(["/bin/launchctl", "print-disabled", f"gui/{uid}"])
+        if code != 0:
+            return False
+        if not re.search(r'"%s"\s*=>\s*(true|disabled)' % re.escape(LOGIN_AGENT_LABEL), out):
+            return False
+        self.sys.run(["/bin/launchctl", "enable", f"gui/{uid}/{LOGIN_AGENT_LABEL}"])
+        self.tamper_log.append("changed:login_agent", {"why": "disabled", "repaired": True})
+        log("PAX-GUARD-016 Pax's open-at-login item was disabled; enabled again")
+        return True
+
+    def remove_login_agent(self) -> bool:
+        path = str(self.login_agent_path)
+        if not self.sys.read(path) and not os.path.lexists(path):
+            return False
+        self.sys.run(["/bin/rm", "-f", path])
+        return True
 
     # ------------------------------------------------------- v0.8 services
     def start_services(self, dns: bool = True, ipc: bool = True) -> None:
@@ -1375,6 +1466,10 @@ class Guard:
             self.enforce_standard_accounts()
         except Exception as exc:  # noqa: BLE001 - never stop the loop
             log(f"PAX-GUARD-011 standard-accounts check error: {type(exc).__name__}: {exc}")
+        try:
+            self.ensure_login_agent_enabled()          # v0.8.34
+        except Exception as exc:  # noqa: BLE001
+            log(f"PAX-GUARD-016 open-at-login check error: {type(exc).__name__}: {exc}")
         if self.filter_store is not None and self.cfg.dns_mode == "local" and self.filter_store.due(now):
             self._background("lists", self.update_lists_now)
         if self.updater is not None and self.cfg.updates:
@@ -1980,6 +2075,8 @@ class Guard:
                     done.append("firmware password removed")
         except Exception as exc:  # noqa: BLE001
             done.append(f"firmware password left in place ({type(exc).__name__})")
+        if self.remove_login_agent():                  # v0.8.34: Pax no longer opens at login
+            done.append("open at login removed")
         if restore_apps:
             for item in self._load_json("quarantine.json", []):
                 if self.sys.exists(item["to"]) and not self.sys.exists(item["from"]):
@@ -2131,6 +2228,8 @@ class PkgIntegrity:
                               ("user_apps", "a blocked app"), ("vpn_stopped", "a VPN")):
                 if r.get(key):
                     problems.append(f"{what} had to be stopped or put back")
+            if r.get("login_agent") in ("repaired", "error"):         # v0.8.34
+                problems.append("Pax's open-at-login item had to be put back")
             if r.get("profile_installed") is False and before.get("profile") is True:
                 problems.append("the Pax profile is missing")
 

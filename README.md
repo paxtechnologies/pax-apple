@@ -1,4 +1,4 @@
-# Pax Peace (Apple), v0.8.33
+# Pax Peace (Apple), v0.8.34
 
 **Less scrolling. More living.**
 
@@ -631,6 +631,17 @@ Apple's own; Apple's software updates can be installed from the same screen, and
 Mac for you. Pax itself, Apple's apps and anything outside Applications are never touched. Everything
 is checked as root on a root-only copy, and anything unexpected refuses. Details:
 [docs/APP_INSTALLS.md](docs/APP_INSTALLS.md).
+
+**Pax opens at login (v0.8.34).** On a Mac Pax protects, pax-guard keeps a root-owned LaunchAgent,
+`/Library/LaunchAgents/org.paxpeace.pax-login.plist`, that starts Pax hidden in the background in every
+login session (`open -g -j -F -a /Applications/Pax.app --args --pax-login`, `RunAtLoad`, Aqua sessions
+only, no `KeepAlive`), so the install helpers and notifications are ready without Pax's window popping
+open each time you log in. Pax comes forward only when something needs you (an install prompt, a
+notification you click, the Dock icon). If the agent is removed, changed or switched off
+(`launchctl disable`), pax-guard puts it back and logs `changed:login_agent` (`PAX-GUARD-016`).
+Quitting Pax isn't fought: it isn't relaunched until the next login. macOS 13+ shows a one-time
+"Background Items Added" notice for it. Unprotected Macs get no agent; Remove Pax deletes it. Details:
+[docs/APP_INSTALLS.md](docs/APP_INSTALLS.md) "Pax opens at login".
 
 **Profile** (`make_profile.py --self-lock`, System scope, no removal password: once you're Standard,
 removing a System profile needs an administrator, and Apple's schema says a manually installed profile

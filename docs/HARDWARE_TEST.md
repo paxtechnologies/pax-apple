@@ -168,7 +168,7 @@ turn-off wait.
    Dock icon, and a drop on Pax's window each show "Install <App>?" (or "Update <App>?" when it's in
    Applications) once, with one button, and no extra Pax window opens. Repeat with Pax quit first.
 
-### v0.8.34: pointing at Pax for installs, trusted packages (branch mac-install-helper, not released)
+### v0.8.34: pointing at Pax for installs, trusted packages, open at login (released in 0.8.34)
 
 On a protected Mac, signed in as the Standard user, Pax open (docs/APP_INSTALLS.md "v0.8.34"):
 1. **Disk image prompt**: download a notarised app's .dmg (e.g. Firefox) and open it. Pax comes forward
@@ -204,6 +204,24 @@ On a protected Mac, signed in as the Standard user, Pax open (docs/APP_INSTALLS.
    Expect PAX-MAC-033 on the sheet, the Pax block back in `/etc/hosts`, a notification, an email to the
    trusted person, `install:pkg_check_failed` in the tamper log, and every later third-party .pkg →
    PAX-MAC-024 (fast path off; `/Library/PaxGuard/state/pkg-fastpath.json` has `"off": true`).
+10. **Open at login** (docs/APP_INSTALLS.md "Pax opens at login"): after setting up (or updating to 0.8.34),
+   `ls -l /Library/LaunchAgents/org.paxpeace.pax-login.plist` → `-rw-r--r-- root wheel`, `plutil -p` shows
+   `/usr/bin/open -g -j -F -a /Applications/Pax.app --args --pax-login`, RunAtLoad, no KeepAlive. No Pax
+   window appeared when it was written. macOS 13+: note the "Background Items Added" notice wording (should
+   say Pax).
+11. Log out and in (and restart): Pax is running (`pgrep -fl Pax.app`) with **no window shown** and focus
+   left where it was; clicking the Dock icon shows the window. Repeat on macOS 12, 14, 15 and 26. With
+   "Reopen windows when logging back in" ticked, note whether a window comes back (macOS's own restore).
+12. With Pax running hidden, mount a .dmg with an app: "Install <App>?" comes forward. Quit Pax (⌘Q): it
+   stays quit (no relaunch) until the next login.
+13. **Tamper**: as admin `sudo rm /Library/LaunchAgents/org.paxpeace.pax-login.plist` → back within ~30 s,
+   Settings › Advanced › Security notices: "Pax's open-at-login item was removed or switched off, and Pax put
+   it back". As the Standard user `launchctl disable gui/$(id -u)/org.paxpeace.pax-login` → enabled again
+   within ~1 min (`launchctl print-disabled gui/$(id -u)`). System Settings › General › Login Items › Allow in
+   the Background: note whether a Standard user can switch Pax off without an administrator (if yes, record
+   it; pax-guard can't see that switch).
+14. Second account (fast user switching) and the Guest account: Pax starts hidden there too. An unprotected
+   Mac (Pax installed, not set up): no agent file. Remove Pax: the file is gone.
 
 ## iPhone / iPad
 

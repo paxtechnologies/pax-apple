@@ -39,7 +39,7 @@ side; Home card, notification and Open With in `AppUpdatePrompts.swift` + `AppUp
 | **Update to an app in /Applications** | Installed at once, no wait, when the new copy has the **same bundle ID** and the **same Apple Developer Team ID** as the installed one, passes `codesign --verify --deep --strict`, is a Developer ID chain to Apple Root CA, `spctl --assess --type execute` says `source=Notarized Developer ID`, isn't older, isn't blocked (below), and the app isn't running. The installed folder name is kept. |
 | **New app** | The same signature and notarisation checks, then refused if it's a blocked kind of app. Otherwise copied to `/Applications/<name>.app`. Refused if another app already has that name. |
 | **Updates the apps downloaded themselves** | Apps that update with Sparkle or Squirrel (Electron's ShipIt) unpack the new version in `~/Library/Caches` and then ask for an administrator. Pax lists a newer copy it finds there (only inside `org.sparkle-project.Sparkle` folders and `*.ShipIt` folders, at most 6 levels and 3,000 folders deep) under "Updates ready to install". Installing one is an ordinary request marked *update only*: every check above runs, and it must replace an installed app. Zipped or still-packed downloads aren't covered; drop the app or .dmg instead. Works only where the updater leaves an unpacked app; needs testing app by app on a real Mac. |
-| **.pkg installer** | **Refused** and left behind the turn-off wait: a package runs its own scripts as root and could remove Pax. Exceptions: (v0.8.34, not released) notarised Developer ID Installer packages from a short list of trusted developers that pass the content checks (see "v0.8.34" below), and packages Apple signed itself (`pkgutil --check-signature` says `signed Apple Software`, chain `Software Update` → `Apple Software Update Certification Authority` → `Apple Root CA`) that `spctl --assess --type install` accepts are installed with `installer -pkg … -target /`. Folder-style (non-flat) packages are refused. |
+| **.pkg installer** | **Refused** and left behind the turn-off wait: a package runs its own scripts as root and could remove Pax. Exceptions: (v0.8.34) notarised Developer ID Installer packages from a short list of trusted developers that pass the content checks (see "v0.8.34" below), and packages Apple signed itself (`pkgutil --check-signature` says `signed Apple Software`, chain `Software Update` → `Apple Software Update Certification Authority` → `Apple Root CA`) that `spctl --assess --type install` accepts are installed with `installer -pkg … -target /`. Folder-style (non-flat) packages are refused. |
 | **Apple software updates** | "Apple software updates" on the same screen runs `softwareupdate --list` and, for a label from that list, `softwareupdate --install <label> --agree-to-license`. **Never** `--restart`: Pax says "Restart your Mac when you're ready". On Apple silicon macOS asks a volume owner to approve macOS updates; when `softwareupdate` says so, Pax reports `PAX-UPDATE-011` and does **not** use the administrator password it holds (see "Left out"). Safari, XProtect and similar updates usually install fine. |
 
 ## Never touched
@@ -168,15 +168,14 @@ group-writable) and that apps installed this way open normally for the Standard 
 
 ## v0.8.34: pointing people at Pax, and trusted installer packages
 
-Status: **not released** (branch `mac-install-helper`; Ruben asked 28 Oct 2026 and has not approved a
-0.8.34 release).
+Status: released in 0.8.34 (28 Oct 2026).
 
 On a protected Mac, dragging an app from a disk image to Applications makes Finder ask "Finder wants
 to copy <App>. Enter an administrator's name and password", and third-party updaters do the same.
 People don't know Pax can install it. Two quiet pointers, both ending on the same one-button sheet and
 the same pax-guard checks (rules in `mac-app/Sources/PaxCore/InstallHelpers.swift`, tested in
 V0834Tests; AppKit side `mac-app/Sources/Pax/InstallHelpersModel.swift`). Both only while Pax is
-running, only on a Mac Pax protects, and only for a Standard account (admin group membership via
+running (since 0.8.34 Pax opens hidden at every login on a protected Mac; see "Pax opens at login"), only on a Mac Pax protects, and only for a Standard account (admin group membership via
 `getgrouplist`; if macOS won't say, the helpers stay quiet).
 
 * **A disk image with an app on it.** Pax watches `NSWorkspace.didMountNotification` (and looks at the
@@ -261,3 +260,34 @@ Finder's "wants to copy" dialog on macOS 12–26 (owner name vs pid on 26), and 
 listed team (Microsoft Office / Edge / Teams, Google Chrome, Adobe Acrobat Reader, Zoom), including
 whether their scripts or contents trip a check, `pkgutil --expand-full` on macOS 12, and the post-install
 check staying quiet after a clean install.
+
+## Pax opens at login (v0.8.34)
+
+Status: released in 0.8.34 (28 Oct 2026). Ruben approved 28 Oct 2026: the helpers above only work while
+Pax is running, so on a Mac Pax protects it now starts at every login, quietly.
+
+* pax-guard (root) keeps `/Library/LaunchAgents/org.paxpeace.pax-login.plist`, `root:wheel 0644`, written
+  by itself (no quarantine attribute), checked every cycle (~30 s): `ProgramArguments` = `/usr/bin/open -g
+  -j -F -a /Applications/Pax.app --args --pax-login`, `RunAtLoad` true, `LimitLoadToSessionType` Aqua (real
+  login sessions for every account, never ssh), `ProcessType` Interactive, `AssociatedBundleIdentifiers`
+  `org.paxmobile.pax` (so macOS 13+ Login Items shows "Pax"). **No `KeepAlive`**: if you quit Pax it stays
+  quit until the next login (no relaunch loop).
+* Hidden start: `-g` (don't bring forward), `-j` (launch hidden), `-F` (don't restore old windows); Pax
+  also hides itself when it sees `--pax-login` (`PaxCore/LoginLaunch.swift`, `PaxAppDelegate`) unless a
+  file was opened with it. It comes forward only when something needs you: a disk image install prompt,
+  the admin-dialog panel's Open Pax, a notification you click, or the Dock icon.
+* Nothing is loaded into the session that's already running when the agent is first written (no window
+  popping up after an update); it starts from the next login.
+* Tamper: missing, changed, not root-owned, group/other-writable or a link → rewritten, tamper log
+  `changed:login_agent` (Security notices: "Pax's open-at-login item was removed or switched off, and Pax
+  put it back"), log `PAX-GUARD-016`. `launchctl disable gui/<uid>/org.paxpeace.pax-login` (the logged-in
+  user's own override) is checked every minute and undone as root. The first install is quiet.
+* A trusted `.pkg` (above) can't write Pax's LaunchAgents (`PAX-MAC-032`), and a post-install check that
+  finds the agent had to be put back fails closed (`PAX-MAC-033`).
+* Unprotected Macs have no pax-guard, so no agent. Remove Pax (`pax_guard.py uninstall` and
+  `pax-uninstall-emergency.sh`) deletes it. While the password is released (before removal) the agent
+  stays but isn't re-checked.
+* Tests: `guard/tests/test_v0834_login_agent.py`, `mac-app/Tests/PaxCoreTests/V0834LoginTests.swift`.
+  Needs a real Mac: HARDWARE_TEST.md "v0.8.34" steps 10–14 (hidden start on macOS 12–26, the macOS 13+
+  "Background Items Added" notice, whether a Standard user can switch it off in Login Items without an
+  administrator, fast user switching).

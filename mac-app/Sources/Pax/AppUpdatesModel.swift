@@ -164,7 +164,26 @@ final class PaxAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        openedFiles = true
         Task { @MainActor in AppUpdatesModel.shared.open(urls) }
+    }
+
+    // v0.8.34: started at login by pax-guard's LaunchAgent (`--pax-login`): stay hidden in the
+    // background, so the window doesn't pop open at each login. Pax still comes forward when
+    // something needs it (an install prompt or notification activates it; so does the Dock icon).
+    private var openedFiles = false
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard LoginLaunch.startHidden(arguments: ProcessInfo.processInfo.arguments,
+                                      openedFiles: openedFiles) else { return }
+        NSApp.hide(nil)
+        // SwiftUI can put its window up just after launch: hide again on the next turn, unless
+        // something has already brought Pax forward.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !self.openedFiles, !NSApp.isActive else { return }
+            NSApp.hide(nil)
+        }
     }
 }
 

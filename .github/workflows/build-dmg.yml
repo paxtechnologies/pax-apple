@@ -40,7 +40,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PAX_VERSION: "0.8.33"
+  PAX_VERSION: "0.8.34"
 
 jobs:
   dmg:

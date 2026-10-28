@@ -276,6 +276,12 @@ CODES: list[PaxCode] = [
             "Set Pax up again with the current version to switch Pax Max in Settings.",
             "v0.8.12 paxmax.*: this Mac was set up before 0.8.12 (config has no pax_max_switchable), or "
             "keeps its key on a Pax server (server escrow)."),
+    PaxCode("PAX-GUARD-016", "Pax's open-at-login item was removed or switched off, and Pax put it back.",
+            "Nothing to do. Pax opens quietly in the background when you log in.",
+            "v0.8.34 pax-guard keeps /Library/LaunchAgents/org.paxpeace.pax-login.plist (root:wheel 0644; "
+            "open -g -j -F Pax.app --args --pax-login, RunAtLoad, Aqua sessions, no KeepAlive). Missing, "
+            "changed, wrong owner/mode, or `launchctl disable gui/<uid>/org.paxpeace.pax-login` is put back "
+            "and logged to the tamper log as changed:login_agent (log only)."),
     # ---------------------------------------------------------------- DNS
     PaxCode("PAX-DNS-001", "That filter address doesn't look right.",
             "Leave the filter setting on its default, or check the address under Advanced.",
