@@ -164,7 +164,8 @@ class Updater:
     def __init__(self, system, state_dir: Path, installed_version: str, log=print, notify=lambda t: None,
                  app_path: Path = APP_PATH, guard_bin: Path = GUARD_BIN, updates_dir: Path = UPDATES_DIR,
                  manifest_urls: list[str] | None = None, keys: list[bytes] | None = None,
-                 app_running=None, clock=time.time, runtime=None, runtime_dir: Path = RUNTIME_DIR):
+                 app_running=None, clock=time.time, runtime=None, runtime_dir: Path = RUNTIME_DIR,
+                 pinned_team: str | None = None):
         self.sys = system
         self.state_path = Path(state_dir) / "update.json"
         self.installed = installed_version
@@ -179,6 +180,8 @@ class Updater:
         self.runtime = runtime
         self.runtime_dir = Path(runtime.dir if runtime is not None else runtime_dir)
         self._staged_runtime: Path | None = None
+        # v0.8.35: Pax's Team ID, required when the installed app can't say (it's missing or broken).
+        self.pinned_team = pinned_team
 
     # --------------------------------------------------------------- state
     def state(self) -> dict:
@@ -372,6 +375,8 @@ class Updater:
         _c, cur = self._run(["/usr/bin/codesign", "-dv", "--verbose=2", str(self.app_path)])
         _c, new = self._run(["/usr/bin/codesign", "-dv", "--verbose=2", str(new_app)])
         cur_team = team_id(cur) if is_developer_id(cur) else None
+        if cur_team is None and self.pinned_team:
+            cur_team = self.pinned_team          # v0.8.35: never "any team" because Pax.app was deleted
         if cur_team and team_id(new) != cur_team:
             raise UpdateError("PAX-UPDATE-006", f"Team ID {team_id(new)} doesn't match the installed {cur_team}")
         python = self.stage_runtime(new_app, cur_team)
@@ -499,6 +504,81 @@ class Updater:
                 return old
         return exe
 
+    # ------------------------------------------- v0.8.35 put Pax.app back
+    PAX_BUNDLE_IDS = ("org.paxmobile.pax", "org.paxpeace.pax")
+
+    def restore_app(self, m: dict, pinned_team: str | None = None) -> Path:
+        """Put /Applications/Pax.app back (missing or broken) from the signed manifest's zip, the version
+        pax-guard itself runs: SHA-256 and size from the signed manifest, version and bundle ID inside,
+        codesign --verify --deep --strict, a Developer ID signature from Pax's Team ID, Gatekeeper's
+        "Notarized Developer ID". Only the app changes (pax-guard and its runtime stay as they are), and
+        it's swapped in atomically: /Applications never has a half-copied Pax."""
+        team = pinned_team or self.pinned_team
+        if not team:
+            raise UpdateError("PAX-UPDATE-006", "no Team ID to check the restored app against")
+        version = m["version"]
+        if parse_version(version) < parse_version(self.installed):
+            raise UpdateError("PAX-UPDATE-003", f"refusing to restore {version}, older than {self.installed}")
+        staging = self.updates / "restore"
+        shutil.rmtree(staging, ignore_errors=True)
+        staging.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(self.updates, 0o700)
+        except OSError:
+            pass
+        zip_path = staging / "Pax.zip"
+        self._download(m, zip_path)
+        code, out = self._run(["/usr/bin/ditto", "-x", "-k", str(zip_path), str(staging / "x")], timeout=300)
+        new_app = staging / "x" / "Pax.app"
+        if code != 0 or not new_app.is_dir() or new_app.is_symlink():
+            raise UpdateError("PAX-UPDATE-005", f"couldn't unpack Pax: {out.strip()[-160:]}")
+        self.sys.run(["/usr/bin/xattr", "-dr", "com.apple.quarantine", str(new_app)])
+        try:
+            with open(new_app / "Contents" / "Info.plist", "rb") as fh:
+                info = plistlib.load(fh)
+        except (OSError, plistlib.InvalidFileException, ValueError):
+            raise UpdateError("PAX-UPDATE-005", "the download has no readable Info.plist") from None
+        if info.get("CFBundleShortVersionString") != version:
+            raise UpdateError("PAX-UPDATE-005", f"the download says {info.get('CFBundleShortVersionString')}, "
+                              f"the manifest {version}")
+        if str(info.get("CFBundleIdentifier") or "").lower() not in self.PAX_BUNDLE_IDS:
+            raise UpdateError("PAX-UPDATE-005", "the download isn't Pax")
+        code, out = self._run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(new_app)], timeout=600)
+        if code != 0:
+            raise UpdateError("PAX-UPDATE-006", f"codesign rejected the download: {out.strip()[-160:]}")
+        _c, sig = self._run(["/usr/bin/codesign", "-dv", "--verbose=2", str(new_app)])
+        if not is_developer_id(sig) or team_id(sig) != team:
+            raise UpdateError("PAX-UPDATE-006", f"the download isn't Developer ID signed by {team}")
+        code, out = self._run(["/usr/sbin/spctl", "--assess", "--type", "execute", "-vv", str(new_app)],
+                              timeout=600)
+        if code != 0 or "source=Notarized Developer ID" not in out:
+            raise UpdateError("PAX-UPDATE-006", f"Gatekeeper didn't accept the download: {out.strip()[-120:]}")
+        self.sys.run(["/bin/chmod", "-R", "go-w", str(new_app)])
+        # Same volume as /Applications for the final swap.
+        dest = self.app_path
+        try:
+            same_dev = os.stat(new_app).st_dev == os.stat(dest.parent).st_dev
+        except OSError:
+            same_dev = False
+        if not same_dev:
+            near = dest.parent / ".pax-restore"
+            shutil.rmtree(near, ignore_errors=True)
+            near.mkdir(mode=0o700)
+            code, out = self._run(["/usr/bin/ditto", str(new_app), str(near / "Pax.app")], timeout=600)
+            if code != 0:
+                shutil.rmtree(near, ignore_errors=True)
+                raise UpdateError("PAX-UPDATE-007", f"couldn't copy Pax next to Applications: {out.strip()[-120:]}")
+            new_app = near / "Pax.app"
+        try:
+            atomic_replace(new_app, dest)
+        except OSError as exc:
+            raise UpdateError("PAX-UPDATE-007", f"couldn't put Pax back ({exc}); nothing changed") from exc
+        finally:
+            shutil.rmtree(staging, ignore_errors=True)
+            shutil.rmtree(dest.parent / ".pax-restore", ignore_errors=True)
+        self.log(f"Pax.app {version} put back in {dest.parent}")
+        return dest
+
     # ----------------------------------------------------- trial / rollback
     def confirm_trial(self) -> bool:
         """Called by a freshly started pax-guard after a healthy first cycle."""
@@ -548,6 +628,58 @@ class Updater:
         self._save(st)
         self.log(st["last_error"])
         return ok
+
+
+def _swap_entries(a: str, b: str) -> bool:
+    """Atomically exchange two directory entries: renamex_np(RENAME_SWAP) on macOS, renameat2
+    (RENAME_EXCHANGE) on Linux. False when the system has neither (the caller falls back)."""
+    import ctypes
+    import ctypes.util
+    try:
+        libc = ctypes.CDLL(ctypes.util.find_library("c") or None, use_errno=True)
+    except OSError:
+        return False
+    ea, eb = os.fsencode(a), os.fsencode(b)
+    fn = getattr(libc, "renamex_np", None)
+    if fn is not None:
+        rc = fn(ea, eb, ctypes.c_uint(0x2))                  # RENAME_SWAP
+    else:
+        fn = getattr(libc, "renameat2", None)
+        if fn is None:
+            return False
+        rc = fn(-100, ea, -100, eb, ctypes.c_uint(0x2))     # AT_FDCWD, RENAME_EXCHANGE
+    if rc != 0:
+        err = ctypes.get_errno()
+        if err in (22, 38, 45, 78, 95):                     # EINVAL/ENOSYS/ENOTSUP: not supported here
+            return False
+        raise OSError(err, os.strerror(err), b)
+    return True
+
+
+def atomic_replace(new: Path, dest: Path) -> None:
+    """v0.8.35: put `new` at `dest`. Nothing there: one rename. Something there (a broken copy, a link):
+    an atomic swap, then the old entry (now at `new`) is removed, so `dest` is never missing. Without a
+    swap call: the old entry is renamed aside first and put back if the second rename fails."""
+    new, dest = Path(new), Path(dest)
+    if not os.path.lexists(dest):
+        os.rename(new, dest)
+        return
+    if _swap_entries(str(new), str(dest)):
+        old = new
+    else:
+        old = dest.with_name(f".{dest.name}.pax-old")
+        if os.path.lexists(old):
+            shutil.rmtree(old) if old.is_dir() and not old.is_symlink() else old.unlink()
+        os.rename(dest, old)
+        try:
+            os.rename(new, dest)
+        except OSError:
+            os.rename(old, dest)
+            raise
+    if old.is_symlink() or not old.is_dir():
+        old.unlink()
+    else:
+        shutil.rmtree(old, ignore_errors=True)
 
 
 def stage_guard_bin(src: Path, dst: Path) -> None:

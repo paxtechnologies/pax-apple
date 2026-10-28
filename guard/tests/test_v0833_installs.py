@@ -395,8 +395,10 @@ def test_pax_apple_and_system_apps_are_never_touched(w):
     pax = make_app(w.home / "Downloads", "Pax Copy.app", "org.paxpeace.pax")
     w.sign("org.paxpeace.pax")
     assert w.install(w.installer(), pax)["code"] == ai.UNTOUCHABLE
-    paxteam = make_app(w.home / "Downloads", "Helper.app", "com.example.helper")
-    w.sign("com.example.helper", team="Z94GSK7JA8")
+    # v0.8.35: Pax's Team ID alone no longer makes an app untouchable (Swoop is signed by the same
+    # team); a Pax bundle ID signed by Pax's team still is (test_v0835_same_team_installs.py).
+    paxteam = make_app(w.home / "Downloads", "Helper.app", "org.paxmobile.helper")
+    w.sign("org.paxmobile.helper", team="Z94GSK7JA8")
     assert w.install(w.installer(), paxteam)["code"] == ai.UNTOUCHABLE
     named = make_app(w.home / "Desktop", "Pax.app", "com.example.pax")
     w.sign("com.example.pax")

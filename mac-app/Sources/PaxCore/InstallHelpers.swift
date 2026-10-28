@@ -243,14 +243,19 @@ public enum AdminPromptHelper {
         return true
     }
 
+    /// v0.8.35: `assumeInstallWhenUnknown` (Pax was just started by pax-guard because of this dialog,
+    /// InstallCheckLaunch.assumeInstallContext): no known front app counts as an install too. A known
+    /// non-install app (System Settings, Keychain Access...) still doesn't.
     public static func shouldShow(dialog: WindowInfo, now: Date, lastShown: Date?, shownWindows: Set<Int>,
-                                  protected: Bool, isAdmin: Bool, previousApp: String?) -> Bool {
+                                  protected: Bool, isAdmin: Bool, previousApp: String?,
+                                  assumeInstallWhenUnknown: Bool = false) -> Bool {
         guard protected, !isAdmin else { return false }
         guard !shownWindows.contains(dialog.number) else { return false }
         if let last = lastShown {
             let gap = now.timeIntervalSince(last)
             if gap >= 0 && gap < rateLimit { return false }
         }
+        if assumeInstallWhenUnknown && (previousApp ?? "").isEmpty { return true }
         return isInstallContext(previousApp)
     }
 

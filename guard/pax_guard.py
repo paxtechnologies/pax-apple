@@ -26,6 +26,10 @@ and soon after a network change, it:
      installers only when Apple signed them; Apple's own software updates on request
   8. (v0.8.34) keeps /Library/LaunchAgents/org.paxpeace.pax-login.plist (root-owned) so Pax opens,
      hidden, at every login; put back if removed, changed or disabled (tamper log)
+  9. (v0.8.35) opens Pax when the Standard user starts installing or updating an app (a second
+     LaunchAgent, org.paxpeace.pax-installs, StartOnMount; macOS's authorisation dialog or an app's
+     updater while Pax isn't running), and puts a missing or broken /Applications/Pax.app back from
+     the signed update channel (tamper log)
 v0.5 adds the "bypass" (always on) and "remote desktop" (server-controlled,
 on by default) categories to the hosts block, HaGeZi's DoH/VPN/Tor/Proxy bypass
 list, and remote-desktop ports to pf while that category is on.
@@ -132,6 +136,42 @@ LOGIN_AGENT_LABEL = "org.paxpeace.pax-login"
 LOGIN_AGENT_PATH = Path(f"/Library/LaunchAgents/{LOGIN_AGENT_LABEL}.plist")
 LOGIN_AGENT_ARG = "--pax-login"          # Pax.app stays hidden when it sees this (LoginLaunch.swift)
 PAX_APP = "/Applications/Pax.app"
+# v0.8.35 (Ruben, 28 Oct 2026): Pax opens itself when the Standard user starts installing or updating an
+# app, even when Pax isn't running.
+#  (a) a second root-owned Aqua LaunchAgent with StartOnMount: when a disk is mounted and Pax isn't
+#      running for this (Standard) user and a mounted volume has an app at its top level, it starts Pax
+#      hidden with --pax-install-check; Pax then offers "Install <App>?" only when there is something
+#      to install or update (PaxCore/InstallCheckLaunch.swift);
+#  (b) macOS's authorisation dialog (SecurityAgent) or an app's own updater (Sparkle, Squirrel/ShipIt)
+#      appears while Pax isn't running for the console user: pax-guard starts Pax in that user's
+#      session (launchctl asuser), at most once every 30 s, and Pax's floating panel appears;
+#  (c) an update an app's own updater has already downloaded: pax-guard starts Pax so the "App update
+#      ready" card and notification appear.
+# Only ever starts Pax (which only offers installs that pax-guard then checks); nothing is loosened.
+INSTALLS_AGENT_LABEL = "org.paxpeace.pax-installs"
+INSTALLS_AGENT_PATH = Path(f"/Library/LaunchAgents/{INSTALLS_AGENT_LABEL}.plist")
+INSTALL_CHECK_ARG = "--pax-install-check"              # PaxCore/InstallCheckLaunch.swift
+INSTALL_REASON_PREFIX = "--pax-install-reason="        # auth | update (the agent passes none: mount)
+PAX_EXECUTABLE = PAX_APP + "/Contents/MacOS/Pax"
+INSTALL_LAUNCH_MIN_GAP = 30          # at most one launch this often
+INSTALL_WATCH_INTERVAL = 2           # process list, like the blocked-app watcher
+STANDARD_CACHE_SECONDS = 300
+STAGED_UPDATE_SCAN_INTERVAL = 600    # (c) ~/Library/Caches scan for updates apps already downloaded
+# The agent's script, run by /bin/sh as the logged-in user: administrators (gid 80) are left alone;
+# a running Pax handles the mount itself (and `open` on a running app would bring its window up);
+# Pax is only started when some mounted volume has an app at its top level.
+INSTALLS_AGENT_SCRIPT = (
+    'case " $(/usr/bin/id -G) " in *" 80 "*) exit 0;; esac; '
+    '/usr/bin/pgrep -qx -U "$(/usr/bin/id -u)" Pax && exit 0; '
+    'for a in /Volumes/*/*.app; do [ -d "$a" ] && exec /usr/bin/open -g -j -a /Applications/Pax.app '
+    '--args --pax-install-check; done; exit 0')
+# (b) processes that mean "something is asking for an administrator to install or update".
+AUTH_AGENT_SUFFIX = "/SecurityAgent.bundle/Contents/MacOS/SecurityAgent"
+# v0.8.35 self-heal: /Applications/Pax.app missing or failing verification is restored from the signed
+# update channel (pax-update.json, the same path and checks as the updater, Team ID pinned).
+PAX_APP_QUICK_INTERVAL = 60          # existence + bundle ID every minute (from periodic)
+PAX_APP_VERIFY_INTERVAL = 900        # full codesign --verify --deep --strict + Team ID
+PAX_APP_RETRY_START, PAX_APP_RETRY_MAX = 300, 3600
 PAX_BUNDLE_ID = "org.paxmobile.pax"      # TODO(v0.8) with the app's org.paxpeace.pax move
 SHORT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")   # v0.8.10, as MacLockdown.isSafeShortName
 RUNTIME_CHECK_INTERVAL = 600     # v0.8.6: re-hash /Library/PaxGuard/runtime
@@ -321,6 +361,26 @@ class System:
                     procs.append((int(parts[0]), parts[1]))
         return procs
 
+    def processes_with_uid(self) -> list[tuple[int, int, str]]:
+        """v0.8.35: (pid, uid, executable path) for every process."""
+        code, out = self.run(["/bin/ps", "-axo", "pid=,uid=,comm="])
+        procs = []
+        if code == 0:
+            for line in out.splitlines():
+                parts = line.strip().split(None, 2)
+                if len(parts) == 3 and parts[0].isdigit() and parts[1].isdigit():
+                    procs.append((int(parts[0]), int(parts[1]), parts[2]))
+        return procs
+
+    def user_of(self, uid: int) -> tuple[str, str] | None:
+        """v0.8.35: (short name, home) for a uid, or None."""
+        import pwd
+        try:
+            pw = pwd.getpwuid(int(uid))
+        except (KeyError, ValueError, TypeError):
+            return None
+        return pw.pw_name, pw.pw_dir
+
     def kill(self, pid: int) -> None:
         try:
             os.kill(pid, signal.SIGKILL)
@@ -343,6 +403,11 @@ class System:
 
     def now(self) -> int:
         return int(time.time())
+
+
+def _pax_team_id() -> str:
+    import app_installs as ai
+    return ai.PAX_TEAM_ID
 
 
 class Guard:
@@ -1204,6 +1269,11 @@ class Guard:
         except Exception as exc:  # noqa: BLE001 - never stop the loop
             log(f"PAX-GUARD-016 open-at-login check error: {type(exc).__name__}: {exc}")
             result["login_agent"] = "error"
+        try:
+            result["installs_agent"] = self.ensure_installs_agent()   # v0.8.35 install helper
+        except Exception as exc:  # noqa: BLE001 - never stop the loop
+            log(f"PAX-GUARD-017 install-helper check error: {type(exc).__name__}: {exc}")
+            result["installs_agent"] = "error"
         return result
 
     # ------------------------------------------------ v0.8.34 open at login
@@ -1281,6 +1351,322 @@ class Guard:
         self.sys.run(["/bin/rm", "-f", path])
         return True
 
+    # ------------------------------------------- v0.8.35 Pax opens for installs
+    installs_agent_path = INSTALLS_AGENT_PATH      # tests point this at a temp file
+
+    @staticmethod
+    def installs_agent_plist() -> str:
+        """(a) Started by launchd whenever a filesystem is mounted, in the user's Aqua session. The
+        script (INSTALLS_AGENT_SCRIPT) leaves administrators and a running Pax alone and starts Pax
+        hidden only when a mounted volume has an app at its top level."""
+        return plistlib.dumps({
+            "Label": INSTALLS_AGENT_LABEL,
+            "ProgramArguments": ["/bin/sh", "-c", INSTALLS_AGENT_SCRIPT],
+            "StartOnMount": True,
+            "LimitLoadToSessionType": "Aqua",
+            "ProcessType": "Interactive",
+            "AssociatedBundleIdentifiers": [PAX_BUNDLE_ID],
+        }, sort_keys=True).decode()
+
+    def ensure_installs_agent(self) -> str | None:
+        """Every cycle, like the open-at-login agent: None when as it should be, "installed" the first
+        time, "repaired" (tamper log changed:installs_agent, PAX-GUARD-017) after that."""
+        path = str(self.installs_agent_path)
+        want = self.installs_agent_plist()
+        have = self.sys.read(path)
+        if have == want and self._login_agent_file_ok(path):
+            return None
+        meta = self._load_json("installs-agent.json", {})
+        parent = os.path.dirname(path)
+        if not os.path.isdir(parent):
+            self.sys.run(["/bin/mkdir", "-p", parent])
+        if os.path.islink(path):
+            self.sys.run(["/bin/rm", "-f", path])
+        self.sys.write_atomic(path, want, 0o644)
+        if meta.get("installed"):
+            why = "missing" if not have else ("changed" if have != want else "permissions")
+            self.tamper_log.append("changed:installs_agent", {"why": why, "repaired": True})
+            log(f"PAX-GUARD-017 Pax's install helper was {why}; put back")
+            return "repaired"
+        meta["installed"] = self.sys.now()
+        self._save_json("installs-agent.json", meta)
+        log("Pax will open when an app is being installed (LaunchAgent installed)")
+        return "installed"
+
+    def ensure_installs_agent_loaded(self) -> str | None:
+        """From periodic(): `launchctl disable` (the user's own override) is undone as root and logged;
+        an agent missing from the console user's session (first install, or `launchctl bootout`) is
+        loaded into it, so mounts are noticed without logging out. Returns what was done."""
+        uid = self.console_uid()
+        if uid is None or not self.sys.read(str(self.installs_agent_path)):
+            return None
+        done = None
+        code, out = self.sys.run(["/bin/launchctl", "print-disabled", f"gui/{uid}"])
+        if code == 0 and re.search(r'"%s"\s*=>\s*(true|disabled)' % re.escape(INSTALLS_AGENT_LABEL), out):
+            self.sys.run(["/bin/launchctl", "enable", f"gui/{uid}/{INSTALLS_AGENT_LABEL}"])
+            self.tamper_log.append("changed:installs_agent", {"why": "disabled", "repaired": True})
+            log("PAX-GUARD-017 Pax's install helper was disabled; enabled again")
+            done = "enabled"
+        code, _out = self.sys.run(["/bin/launchctl", "print", f"gui/{uid}/{INSTALLS_AGENT_LABEL}"])
+        if code != 0:
+            c2, out2 = self.sys.run(["/bin/launchctl", "bootstrap", f"gui/{uid}", str(self.installs_agent_path)])
+            if c2 == 0:
+                log("Pax's install helper loaded into the current session")
+                done = done or "loaded"
+            else:
+                log(f"PAX-GUARD-017 couldn't load Pax's install helper into the session: {out2.strip()[-120:]}")
+        return done
+
+    def remove_installs_agent(self) -> bool:
+        path = str(self.installs_agent_path)
+        if not self.sys.read(path) and not os.path.lexists(path):
+            return False
+        uid = self.console_uid()
+        if uid is not None:
+            self.sys.run(["/bin/launchctl", "bootout", f"gui/{uid}/{INSTALLS_AGENT_LABEL}"])
+        self.sys.run(["/bin/rm", "-f", path])
+        return True
+
+    # (b) / (c): pax-guard starts Pax in the console user's session.
+    def console_user_standard(self, uid: int) -> bool:
+        """True only when the console user is known not to be an administrator (cached 5 min). Unknown
+        counts as an administrator: Pax is then not started (it would stay quiet anyway)."""
+        cache = getattr(self, "_standard_cache", None) or {}
+        hit = cache.get(uid)
+        now = self.sys.now()
+        if hit and 0 <= now - hit[1] < STANDARD_CACHE_SECONDS:
+            return hit[0]
+        who = self.sys.user_of(uid)
+        ok = bool(who) and self._is_admin(who[0]) is False
+        self._standard_cache = {uid: (ok, now)}
+        return ok
+
+    @staticmethod
+    def install_trigger(uid_console: int, pid_uid: int, comm: str) -> str | None:
+        """What a process means for (b): "auth" for macOS's authorisation dialog process, "update" for
+        an app's own updater installing in the console user's session (Sparkle's Autoupdate/Updater,
+        Squirrel's ShipIt). None otherwise."""
+        base = comm.rsplit("/", 1)[-1]
+        if comm.endswith(AUTH_AGENT_SUFFIX) or comm == "SecurityAgent":
+            return "auth"
+        if pid_uid != uid_console:
+            return None
+        if base == "Autoupdate" and "parkle" in comm:
+            return "update"
+        if base == "Updater" and "/Sparkle.framework/" in comm:
+            return "update"
+        if base == "ShipIt":
+            return "update"
+        return None
+
+    def pax_running_for(self, uid: int, procs=None) -> bool:
+        procs = self.sys.processes_with_uid() if procs is None else procs
+        return any(pu == uid and comm == PAX_EXECUTABLE for _p, pu, comm in procs)
+
+    def launch_pax_for_install(self, uid: int, reason: str) -> bool:
+        """`launchctl asuser <uid> open -g -j -a Pax.app --args --pax-install-check --pax-install-reason=..`.
+        Rate-limited: at most once every INSTALL_LAUNCH_MIN_GAP seconds (shared by (b) and (c))."""
+        now = self.sys.now()
+        last = getattr(self, "_install_launch_at", None)
+        if last is not None and 0 <= now - last < INSTALL_LAUNCH_MIN_GAP:
+            return False
+        if not os.path.isdir(str(self.pax_app_path)):
+            return False                           # nothing to open (the self-heal puts it back)
+        self._install_launch_at = now
+        # -g: don't take focus from the dialog; -j: launched hidden, so no window flashes up. Pax shows
+        # only what it decides to (the panel unhides just itself; a sheet brings Pax forward).
+        args = ["/bin/launchctl", "asuser", str(uid), "/usr/bin/open", "-g", "-j",
+                "-a", PAX_APP, "--args", INSTALL_CHECK_ARG, INSTALL_REASON_PREFIX + reason]
+        code, out = self.sys.run(args, timeout=20)
+        if code != 0:
+            log(f"PAX-GUARD-017 couldn't open Pax for an install ({reason}): {out.strip()[-120:]}")
+            return False
+        log(f"opened Pax for an install ({reason})")
+        return True
+
+    def install_watch_tick(self) -> str | None:
+        """(b), every INSTALL_WATCH_INTERVAL s: a new authorisation-dialog or updater process while Pax
+        isn't running for a Standard console user starts Pax (once per process). Returns the reason
+        when Pax was started."""
+        if self.released:
+            return None
+        uid = self.console_uid()
+        if uid is None:
+            self._iw_uid = None
+            return None
+        procs = self.sys.processes_with_uid()
+        present = {}
+        for pid, pu, comm in procs:
+            r = self.install_trigger(uid, pu, comm)
+            if r:
+                present[pid] = r
+        if getattr(self, "_iw_uid", None) != uid:
+            # A new login (or pax-guard just started): what's already there is the baseline (the login
+            # window's own SecurityAgent, an updater that was already running).
+            self._iw_uid = uid
+            self._iw_handled = set(present)
+            return None
+        handled = getattr(self, "_iw_handled", set()) & set(present)
+        pending = {p: r for p, r in present.items() if p not in handled}
+        self._iw_handled = handled
+        if not pending:
+            return None
+        if self.pax_running_for(uid, procs) or not self.console_user_standard(uid):
+            self._iw_handled |= set(pending)       # a running Pax deals with it itself
+            return None
+        reason = "auth" if "auth" in pending.values() else "update"
+        if self.launch_pax_for_install(uid, reason):
+            self._iw_handled |= set(pending)
+            return reason
+        return None                                # rate-limited: tried again on the next tick
+
+    def _install_watch_loop(self) -> None:
+        while True:
+            try:
+                self.install_watch_tick()
+            except Exception as exc:  # noqa: BLE001 - never stop watching
+                log(f"PAX-GUARD-017 install watch error: {type(exc).__name__}")
+            time.sleep(INSTALL_WATCH_INTERVAL)
+
+    def staged_updates_tick(self, force: bool = False) -> str | None:
+        """(c), from periodic() every STAGED_UPDATE_SCAN_INTERVAL: an update an app's own updater has
+        already downloaded (the same scan as installs.updates) that Pax hasn't been opened for yet starts
+        Pax (hidden) so its "App update ready" card and notification appear."""
+        now = self.sys.now()
+        if not force and 0 <= now - getattr(self, "_staged_scan_at", -10**9) < STAGED_UPDATE_SCAN_INTERVAL:
+            return None
+        self._staged_scan_at = now
+        if self.released:
+            return None
+        uid = self.console_uid()
+        if uid is None or not self.console_user_standard(uid):
+            return None
+        home = self.install_home(uid)
+        if home is None:
+            return None
+        found = self.installer().downloaded_updates(home)
+        keys = [f"{u.get('bundle_id', '').lower()}|{u.get('version', '')}" for u in found]
+        meta = self._load_json("staged-updates.json", {})
+        seen = list(meta.get("opened_for", []))
+        new = [k for k in keys if k not in seen]
+        if not new:
+            return None
+        if not self.pax_running_for(uid):
+            if not self.launch_pax_for_install(uid, "update"):
+                return None                        # rate-limited or failed: next scan tries again
+            result = "launched"
+        else:
+            result = "running"                     # Pax's own scan shows it
+        meta["opened_for"] = (seen + new)[-200:]
+        self._save_json("staged-updates.json", meta)
+        return result
+
+    # --------------------------------------- v0.8.35 Pax.app self-heal
+    pax_app_path = Path(PAX_APP)                   # tests point this at a temp folder
+
+    def pax_app_problem(self, full: bool) -> str | None:
+        """None when /Applications/Pax.app is there and (full) verifies as Pax's own signed app."""
+        import app_installs as ai
+        path = str(self.pax_app_path)
+        if os.path.islink(path):
+            return "replaced by a link"
+        if not os.path.isdir(path):
+            return "missing"
+        bid = str(ai.read_plist(path).get("CFBundleIdentifier") or "").lower()
+        if bid not in ("org.paxmobile.pax", "org.paxpeace.pax"):
+            return "not Pax"
+        if not full:
+            return None
+        code, out = self.sys.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", path], timeout=600)
+        if code != 0:
+            return "signature broken"
+        code, out = self.sys.run(["/usr/bin/codesign", "-dv", "--verbose=4", path], timeout=120)
+        sig = ai.parse_codesign_details(out if code == 0 else "")
+        if sig["team_id"] != ai.PAX_TEAM_ID or ai.developer_id_problem(sig):
+            return "not signed by Pax"
+        return None
+
+    def check_pax_app(self) -> str | None:
+        """From periodic() (every minute): a missing or broken /Applications/Pax.app is restored from
+        the signed update channel, in the background. Returns the problem found (or None)."""
+        if self.released or self.updater is None:
+            return None
+        st = self.updater.state()
+        busy = self._bg.get("update")
+        if st.get("state") == "trial" or (busy is not None and busy.is_alive()):
+            return None                            # the updater is swapping the app itself
+        inst = self._installer
+        if inst is not None and (inst.job or {}).get("state") == "working":
+            return None
+        now = self.sys.now()
+        full = now - getattr(self, "_pax_app_verified", -10**9) >= PAX_APP_VERIFY_INTERVAL
+        why = self.pax_app_problem(full)
+        if full and why is None:
+            self._pax_app_verified = now
+        if why in ("signature broken", "not signed by Pax") and not self._developer_id_install():
+            # An ad hoc (developer) build: pax-guard isn't on Pax's Developer ID runtime either, so a
+            # non-Developer-ID Pax.app is expected; only a missing or non-Pax app is put back there.
+            self._pax_app_verified = now
+            why = None
+        meta = self._load_json("pax-app.json", {})
+        if why is None:
+            if meta.get("incident"):
+                meta = {}
+                self._save_json("pax-app.json", meta)
+            return None
+        if now < int(meta.get("retry_at", 0)):
+            return why
+        self._background("pax-app", lambda: self.restore_pax_app(why))
+        return why
+
+    def _developer_id_install(self) -> bool:
+        """pax-guard runs on its own copy of Pax's Developer ID runtime (release builds only)."""
+        try:
+            return bool(self.runtime_manager().running_on_runtime())
+        except Exception:  # noqa: BLE001
+            return False
+
+    def restore_pax_app(self, why: str) -> bool:
+        """Download the version in the signed pax-update.json (never older than this pax-guard), check it
+        (version, bundle ID, codesign --deep --strict, Pax's Team ID, notarisation) and put it in place
+        atomically. Logged to the tamper log (changed:pax_app); failures back off up to an hour."""
+        import pax_update as pu
+        meta = self._load_json("pax-app.json", {})
+        first = not meta.get("incident")
+        meta["incident"] = meta.get("incident") or self.sys.now()
+        try:
+            m = self.updater.fetch_manifest()
+            if pu.parse_version(m["version"]) < pu.parse_version(VERSION):
+                raise pu.UpdateError("PAX-UPDATE-003", f"the signed manifest offers {m['version']}, older than "
+                                                       f"this pax-guard ({VERSION})")
+            if pu.parse_version(m["version"]) > pu.parse_version(VERSION):
+                # A newer Pax is out: the normal update puts back the app and pax-guard together.
+                self.updater.check(force=True)
+                ok = self.pax_app_problem(False) is None
+                if not ok:
+                    raise pu.UpdateError("PAX-UPDATE-007", f"the update to {m['version']} didn't put Pax back")
+            else:
+                self.updater.restore_app(m, pinned_team=_pax_team_id())
+            version = m["version"]
+        except Exception as exc:  # noqa: BLE001 - back off and try again later
+            code = getattr(exc, "code", type(exc).__name__)
+            msg = getattr(exc, "message", str(exc))
+            delay = min(PAX_APP_RETRY_MAX, max(PAX_APP_RETRY_START, int(meta.get("retry_delay", 0)) * 2))
+            meta.update({"retry_delay": delay, "retry_at": self.sys.now() + delay})
+            if first:
+                self.tamper_log.append("changed:pax_app", {"why": why, "repaired": False})
+                self.notify("Pax was removed from Applications. Pax is putting it back.")
+            self._save_json("pax-app.json", meta)
+            log(f"PAX-GUARD-018 /Applications/Pax.app {why}; restoring failed ({code} {msg[:160]}); "
+                f"next try in {delay // 60} min")
+            return False
+        self.tamper_log.append("changed:pax_app", {"why": why, "repaired": True, "version": version})
+        self._save_json("pax-app.json", {})
+        self._pax_app_verified = self.sys.now()
+        log(f"PAX-GUARD-018 /Applications/Pax.app was {why}; put back ({version}) from the signed update")
+        self.notify("Pax was removed from Applications, so Pax put it back.")
+        return True
+
     # ------------------------------------------------------- v0.8 services
     def start_services(self, dns: bool = True, ipc: bool = True) -> None:
         """The forwarder (SERVFAIL until the lists load, never open) and the app socket."""
@@ -1300,7 +1686,8 @@ class Guard:
                                         primary_upstreams=dnsf.primary_upstreams(),
                                         on_fallback=self._dns_fallback_changed)
         self.updater = pu.Updater(self.sys, self.state_dir, VERSION, log=log, notify=self.notify,
-                                  app_running=self.pax_app_running, runtime=self.runtime_manager())
+                                  app_running=self.pax_app_running, runtime=self.runtime_manager(),
+                                  pinned_team=_pax_team_id())   # v0.8.35: Team ID pinned when Pax.app is gone
         if dns and self.cfg.dns_mode == "local":
             try:
                 dnsf.DNSServer(self.forwarder, log=log).start()
@@ -1310,6 +1697,7 @@ class Guard:
             threading.Thread(target=self._dns_health_loop, name="pax-dns-health", daemon=True).start()
         if self.cfg.local_escrow:
             threading.Thread(target=self._app_watch_loop, name="pax-app-watch", daemon=True).start()
+            threading.Thread(target=self._install_watch_loop, name="pax-install-watch", daemon=True).start()
             threading.Thread(target=self.list_sync.loop, name="pax-list-sync", daemon=True).start()
         if ipc:
             import guard_ipc
@@ -1470,6 +1858,15 @@ class Guard:
             self.ensure_login_agent_enabled()          # v0.8.34
         except Exception as exc:  # noqa: BLE001
             log(f"PAX-GUARD-016 open-at-login check error: {type(exc).__name__}: {exc}")
+        try:
+            self.ensure_installs_agent_loaded()        # v0.8.35 (a)
+            self._background("staged-updates", self.staged_updates_tick)   # v0.8.35 (c)
+        except Exception as exc:  # noqa: BLE001
+            log(f"PAX-GUARD-017 install-helper check error: {type(exc).__name__}: {exc}")
+        try:
+            self.check_pax_app()                       # v0.8.35 self-heal
+        except Exception as exc:  # noqa: BLE001
+            log(f"PAX-GUARD-018 Pax.app check error: {type(exc).__name__}: {exc}")
         if self.filter_store is not None and self.cfg.dns_mode == "local" and self.filter_store.due(now):
             self._background("lists", self.update_lists_now)
         if self.updater is not None and self.cfg.updates:
@@ -2077,6 +2474,8 @@ class Guard:
             done.append(f"firmware password left in place ({type(exc).__name__})")
         if self.remove_login_agent():                  # v0.8.34: Pax no longer opens at login
             done.append("open at login removed")
+        if self.remove_installs_agent():               # v0.8.35: nor for installs
+            done.append("install helper removed")
         if restore_apps:
             for item in self._load_json("quarantine.json", []):
                 if self.sys.exists(item["to"]) and not self.sys.exists(item["from"]):
@@ -2230,6 +2629,8 @@ class PkgIntegrity:
                     problems.append(f"{what} had to be stopped or put back")
             if r.get("login_agent") in ("repaired", "error"):         # v0.8.34
                 problems.append("Pax's open-at-login item had to be put back")
+            if r.get("installs_agent") in ("repaired", "error"):      # v0.8.35
+                problems.append("Pax's install helper had to be put back")
             if r.get("profile_installed") is False and before.get("profile") is True:
                 problems.append("the Pax profile is missing")
 

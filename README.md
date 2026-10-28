@@ -643,6 +643,16 @@ Quitting Pax isn't fought: it isn't relaunched until the next login. macOS 13+ s
 "Background Items Added" notice for it. Unprotected Macs get no agent; Remove Pax deletes it. Details:
 [docs/APP_INSTALLS.md](docs/APP_INSTALLS.md) "Pax opens at login".
 
+**Pax opens for installs (v0.8.35).** On a protected Mac with a Standard account, Pax now appears by itself
+when you start installing or updating an app, even if it isn't running: a second root-owned LaunchAgent
+(`org.paxpeace.pax-installs`, `StartOnMount`) starts it when a disk image with an app is mounted, and
+pax-guard starts it when macOS's administrator dialog or an app's own updater appears (at most every 30 s),
+or when an app has already downloaded an update. Pax stays out of sight unless it has something to offer.
+If `/Applications/Pax.app` is deleted (for example by a cleaner app) or broken, pax-guard puts it back from
+its signed update channel and logs it (`PAX-GUARD-018`). Apps from Pax's own developer team other than Pax
+itself (e.g. Swoop) now install like any other notarised app. Details:
+[docs/APP_INSTALLS.md](docs/APP_INSTALLS.md).
+
 **Profile** (`make_profile.py --self-lock`, System scope, no removal password: once you're Standard,
 removing a System profile needs an administrator, and Apple's schema says a manually installed profile
 with `PayloadRemovalDisallowed` and no removal password "requires admin auth"):

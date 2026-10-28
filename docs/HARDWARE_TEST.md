@@ -229,6 +229,58 @@ On a protected Mac, signed in as the Standard user, Pax open (docs/APP_INSTALLS.
    set-up page says "Pax is still protecting this Mac. Open the Pax account you set it up with, or contact
    hello@paxpeace.com." and never offers set-up.
 
+### v0.8.35: Pax opens for installs when it isn't running, Pax.app self-heal, same-team apps
+
+Use a protected Mac with a **Standard** everyday account. Before each step make sure Pax is **not running**
+(`pgrep -x Pax` prints nothing; quit with ⌘Q). Watch `/var/log/pax-guard.log`.
+
+16. **Agent**: `ls -l /Library/LaunchAgents/org.paxpeace.pax-installs.plist` → `-rw-r--r-- root wheel`;
+   `plutil -p` shows `StartOnMount` true, Aqua, `/bin/sh -c …--pax-install-check`, no RunAtLoad/KeepAlive.
+   `launchctl print gui/$(id -u)/org.paxpeace.pax-installs` works in the current session without logging out
+   (pax-guard bootstraps it within ~1 min of first writing it).
+17. **Mount a .dmg with an app** (e.g. Firefox, Swoop): within a couple of seconds Pax opens by itself on
+   "Install <App>?" (or "Update <App>?"). No Pax window or Dock icon flashes first. Note the delay on macOS
+   12, 14, 15, 26 and 27 (launchd's StartOnMount throttling may delay a second mount by ~10 s).
+18. Mount a .dmg **without** an app (a documents image), plug in a USB stick with no apps, let Time Machine
+   mount a snapshot: Pax is **not** started (`pgrep -x Pax` empty). Mount the same app .dmg again after
+   dismissing the sheet: Pax may start but shows nothing (already offered for that disk/app/version), and
+   stays out of sight (no window, no Dock icon). Then open Pax from Applications: it appears normally with a
+   Dock icon.
+19. **Finder drag to Applications** (Ruben's case): with Pax not running, drag an app from a mounted .dmg
+   to Applications in Finder. When macOS asks for an administrator, Pax appears within ~2–4 s: the floating
+   "Installing or updating an app?" / "Pax can do it for you." panel beside the dialog (the dialog keeps
+   focus). "Open Pax" → "Install <App>?" for that disk. Also drag an app that was unzipped into Downloads (no
+   disk image): panel → Open Pax → Settings › Updates › Install or update an app. Log line: `opened Pax for
+   an install (auth)`.
+20. **Rate limit / no loops**: cancel the dialog, quit Pax, trigger the dialog again within 30 s: Pax is not
+   started again until 30 s have passed. Leave a dialog open and quit Pax: Pax is not relaunched for that same
+   dialog. Unlock a System Settings pane with Pax not running: Pax may start but no panel shows (not an install
+   context); note what happens.
+21. **App updaters**: an app using Sparkle (e.g. an older version of a Sparkle-updated app) or Squirrel
+   (an Electron app: Slack, Discord) runs its updater while Pax isn't running → Pax starts hidden, posts
+   "<App> has an update ready" and shows the Home card. An update already downloaded to
+   `~/Library/Caches/…/org.sparkle-project.Sparkle` or `*.ShipIt` is noticed within ~10 min even with no
+   updater running (once per app and version).
+22. **Administrators and other sessions**: log in as an administrator: mounting a .dmg or an admin dialog
+   never starts Pax. Fast user switching: only the console user's session is used.
+23. **Tamper**: as admin `sudo rm /Library/LaunchAgents/org.paxpeace.pax-installs.plist` → back within ~30 s,
+   Security notices "Pax's install helper was removed or switched off, and Pax put it back" (`PAX-GUARD-017`).
+   As the Standard user `launchctl disable gui/$(id -u)/org.paxpeace.pax-installs` → enabled again within
+   ~1 min; `launchctl bootout gui/$(id -u)/org.paxpeace.pax-installs` → loaded again within ~1 min. Remove
+   Pax: the file is gone.
+24. **Pax.app self-heal**: with Pax quit, delete `/Applications/Pax.app` (as admin, or with a cleaner app such
+   as CleanMyMac). Within ~1–3 min (download time) Pax.app is back, same version, `codesign --verify --deep
+   --strict` and `spctl -a -vv` pass (Team Z94GSK7JA8, Notarized Developer ID); a notification "Pax was removed
+   from Applications, so Pax put it back."; Security notices "Pax was removed from Applications, and Pax put it
+   back"; log `PAX-GUARD-018 … put back`. Offline: it keeps trying (5 min, doubling up to 1 h) and puts it back
+   once online. Also replace Pax.app with another app renamed Pax.app, or break its signature (as admin, edit a
+   file inside the bundle): put back within ~15 min. Check `ls -la /Applications` never shows Pax.app missing
+   during the swap and no `.pax-restore` / `.Pax.app.pax-old` is left behind.
+25. **Same-team apps** (Ruben's PAX-MAC-023 report): with Swoop (com.swoopkey.swoop, signed by Pax's Team ID,
+   notarised) open its .dmg / Open With › Pax / drop on Pax → "Install Swoop?" installs it (no PAX-MAC-023); a
+   newer Swoop updates it. A copy of Pax.app (any bundle named Pax.app, or bundle ID org.paxpeace.* /
+   org.paxmobile.*) still gives PAX-MAC-023 "Pax doesn't change this app."
+
 ## iPhone / iPad
 
 0. (v0.8.6) Use a Mac that has **never had the old helper**: no `~/Library/Application Support/Pax/venv`,

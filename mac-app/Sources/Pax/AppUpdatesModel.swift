@@ -147,11 +147,37 @@ final class AppUpdatesModel: ObservableObject {
     }
 
     private func bringToFront() {
+        PaxActivation.showMainWindow()
+    }
+}
+
+/// v0.8.35: an install-check launch starts with no Dock icon and its window ordered out; anything
+/// that brings Pax forward (a sheet, a notification click, "Open Pax", reopening Pax) goes through here.
+@MainActor
+enum PaxActivation {
+    static func becomeRegular() {
+        if NSApp.activationPolicy() != .regular {
+            _ = NSApp.setActivationPolicy(.regular)
+        }
+    }
+
+    /// Main windows SwiftUI made (not the helper panel).
+    static var mainWindows: [NSWindow] { NSApp.windows.filter { $0.canBecomeMain } }
+
+    static func showMainWindow() {
+        becomeRegular()
         NSApp.activate(ignoringOtherApps: true)
-        let hasWindow = NSApp.windows.contains { $0.isVisible && $0.canBecomeMain }
-        if !hasWindow {
+        if mainWindows.contains(where: { $0.isVisible }) { return }
+        if let w = mainWindows.first {
+            w.makeKeyAndOrderFront(nil)              // the window ordered out at launch
+        } else {
             NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
         }
+    }
+
+    /// Keep Pax out of sight without hiding the app (a hidden app can't show the helper panel).
+    static func orderOutMainWindows() {
+        for w in mainWindows where w.isVisible { w.orderOut(nil) }
     }
 }
 
@@ -161,6 +187,17 @@ final class PaxAppDelegate: NSObject, NSApplicationDelegate {
         if AppUpdatesModel.notificationsAvailable {
             UNUserNotificationCenter.current().delegate = PaxNotificationDelegate.shared
         }
+        // v0.8.35: started by pax-guard for an install check: no Dock icon until there's something to show.
+        if InstallCheckLaunch.startAsAccessory(arguments: ProcessInfo.processInfo.arguments, openedFiles: false) {
+            _ = NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    /// v0.8.35: opening Pax again (Finder, Spotlight) after a quiet install-check start shows it normally.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard NSApp.activationPolicy() != .regular else { return true }     // as before
+        Task { @MainActor in PaxActivation.showMainWindow() }
+        return false
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -174,8 +211,22 @@ final class PaxAppDelegate: NSObject, NSApplicationDelegate {
     private var openedFiles = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        guard LoginLaunch.startHidden(arguments: ProcessInfo.processInfo.arguments,
-                                      openedFiles: openedFiles) else { return }
+        let args = ProcessInfo.processInfo.arguments
+        if openedFiles, NSApp.activationPolicy() != .regular {
+            _ = NSApp.setActivationPolicy(.regular)     // a file opened with Pax: show it normally
+        }
+        // v0.8.35: an install check keeps its windows ordered out (not NSApp.hide: a hidden app can't
+        // put the helper panel up); Pax comes forward only for a sheet, a click or the panel.
+        if InstallCheckLaunch.isInstallCheck(args) && !openedFiles {
+            Task { @MainActor in
+                PaxActivation.orderOutMainWindows()
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !self.openedFiles, !NSApp.isActive else { return }
+                PaxActivation.orderOutMainWindows()
+            }
+            return
+        }
+        guard InstallCheckLaunch.startHidden(arguments: args, openedFiles: openedFiles) else { return }
         NSApp.hide(nil)
         // SwiftUI can put its window up just after launch: hide again on the next turn, unless
         // something has already brought Pax forward.
