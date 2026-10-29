@@ -924,7 +924,7 @@ class Forwarder:
         self._inflight_lock = threading.Lock()
         self._refreshing: set = set()
         self._latency: dict = {}          # upstream name -> (ewma seconds, mean deviation)
-        self.last_query_at = 0.0
+        self.last_query_at = float("-inf")  # never: monotonic() is uptime, can be < KEEPWARM_WINDOW after boot
         self._bg_started = False
 
     # -------------------------------------------------------- configuration
