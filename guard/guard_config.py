@@ -21,6 +21,7 @@ What it builds:
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import re
 from dataclasses import dataclass, field
@@ -216,7 +217,51 @@ def is_protected(domain: str, protected: list[str]) -> bool:
     return any(d == p.strip(".").lower() for p in protected)
 
 
+_HOSTS_MEMO: dict = {}
+
+
+def _memo_key(args: dict) -> str:
+    h = hashlib.sha256()
+    for k in sorted(args):
+        v = args[k]
+        h.update(k.encode() + b"=")
+        if isinstance(v, (list, tuple)):
+            h.update(str(len(v)).encode() + b":")
+            h.update("\n".join(str(x) for x in v).encode("utf-8", "replace"))
+        else:
+            h.update(repr(v).encode())
+        h.update(b"\x00")
+    return h.hexdigest()
+
+
 def hosts_domains(custom: list[str], ads: list[str] | None = None,
+                  allowlist: list[str] | None = None,
+                  bypass_names: list[str] | None = None,
+                  protected: list[str] | None = None,
+                  max_entries: int = MAX_HOSTS_ENTRIES,
+                  categories: list[str] | None = None,
+                  bypass_list: list[str] | None = None,
+                  exceptions: list[str] | None = None,
+                  restricted: list[str] | None = None,
+                  restricted_exact: list[str] | None = None) -> list[str]:
+    """See _hosts_domains. v0.8.36: the answer for the same inputs is remembered (one
+    entry), because working it out for ~175,000 names took ~1.8 s of Python every 30 s
+    in the daemon that also answers DNS, which slowed lookups while it ran (bench:
+    tools/dns-bench.py --gil). Same inputs always give the same list, so nothing changes
+    in what is blocked."""
+    args = dict(custom=custom, ads=ads, allowlist=allowlist, bypass_names=bypass_names, protected=protected,
+                max_entries=max_entries, categories=categories, bypass_list=bypass_list, exceptions=exceptions,
+                restricted=restricted, restricted_exact=restricted_exact)
+    key = _memo_key(args)
+    hit = _HOSTS_MEMO.get(key)
+    if hit is None:
+        hit = _hosts_domains(**args)
+        _HOSTS_MEMO.clear()
+        _HOSTS_MEMO[key] = hit
+    return list(hit)
+
+
+def _hosts_domains(custom: list[str], ads: list[str] | None = None,
                   allowlist: list[str] | None = None,
                   bypass_names: list[str] | None = None,
                   protected: list[str] | None = None,

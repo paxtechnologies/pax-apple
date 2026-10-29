@@ -93,7 +93,7 @@ import pax_restricted as pr  # noqa: E402
 
 grt.ssl_env()   # v0.8.6: the bundled CPython trusts macOS's /etc/ssl/cert.pem, like /usr/bin/python3
 
-VERSION = "0.8.35"
+VERSION = "0.8.36"
 
 
 # v0.8.23: a short backup-filter episode (pax-guard restarting after an update starts on
@@ -1693,6 +1693,9 @@ class Guard:
                 dnsf.DNSServer(self.forwarder, log=log).start()
             except OSError as exc:
                 log(f"PAX-DNS-008 the DNS forwarder couldn't start on 127.0.0.1:53 ({exc})")
+            # v0.8.36: keep the first upstream's connection warm while browsing, and look up
+            # a few everyday names once the lists are in (see dns_forwarder.keep_warm/warm).
+            self.forwarder.start_background()
             threading.Thread(target=self._load_filters, name="pax-lists-load", daemon=True).start()
             threading.Thread(target=self._dns_health_loop, name="pax-dns-health", daemon=True).start()
         if self.cfg.local_escrow:
@@ -2441,6 +2444,8 @@ class Guard:
                 if sig != last_net:
                     last_net = sig
                     log("network change")
+                    if self.forwarder is not None:
+                        self.forwarder.reset_connections()     # v0.8.36: old network's connections
                     break
 
     def _network_signature(self) -> str:

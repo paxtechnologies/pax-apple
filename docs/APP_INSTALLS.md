@@ -197,7 +197,8 @@ running (since 0.8.34 Pax opens hidden at every login on a protected Mac; see "P
   app?" / "Pax can do it for you."** with **Open Pax** and **Not now**. No mention of passwords. Pax
   never clicks, types into, moves or reads the dialog. At most once every 2 minutes and once per
   dialog; it closes by itself when the dialog goes. Apple's other apps (System Settings, Installer,
-  Safari, Keychain Access) and Pax itself don't trigger it. **Open Pax** opens the sheet already
+  Safari, Keychain Access) and Pax itself don't trigger it (v0.8.36: System Settings gets its own calm
+  note instead, "A calm note for privacy permission prompts" below). **Open Pax** opens the sheet already
   waiting, else the disk image just offered, else an update an app already downloaded, else Settings ›
   Updates › Install or update an app.
   * Permission note: on macOS 10.15–15 the window list gives other apps' owner names and bounds without
@@ -319,7 +320,7 @@ admin-dialog panel only worked while Pax was running. On a Mac Pax protects, for
   after you quit Pax doesn't bring it back). Processes already there at a new login or pax-guard start are
   the baseline. The existing floating panel then appears beside the dialog; because Pax wasn't running to see
   which app was in front, an `auth` launch treats an unknown front app as an install for one minute (a known
-  non-install app such as System Settings still gets no panel). This covers Finder's drag to Applications:
+  non-install app such as System Settings still gets no install panel; 0.8.36 shows its privacy note instead). This covers Finder's drag to Applications:
   the panel's Open Pax goes to the mounted disk's "Install <App>?" sheet, or the Install or update an app
   sheet when there's no disk.
 * **(c) An update is already downloaded.** Every ~10 minutes pax-guard runs the same scan as
@@ -334,6 +335,40 @@ admin-dialog panel only worked while Pax was running. On a Mac Pax protects, for
   (0.8.34 rule). StartOnMount throttling and the exact SecurityAgent process name/owner need checking on
   each macOS (HARDWARE_TEST v0.8.35 16–23).
 * Tests: `guard/tests/test_v0835_autolaunch.py`, `mac-app/Tests/PaxCoreTests/V0835Tests.swift`.
+
+## A calm note for privacy permission prompts (v0.8.36)
+
+Status: built on branch `mac-privacy-prompt` (29 Oct 2026, Ruben). On a Mac Pax protects, a **Standard**
+user who switches on a privacy permission in System Settings › Privacy & Security (Accessibility, Full Disk
+Access, Input Monitoring, Screen Recording...) gets macOS's administrator dialog "Privacy & Security is trying
+to modify your system settings". Before 0.8.36 Pax showed nothing for it (Apple's own apps are not an install
+context). Now the same window-list watcher (above: owner, pid, layer, bounds only; no titles, contents or
+Screen Recording) shows a small floating, non-activating panel beside the dialog:
+
+* "**<App> wants a privacy permission.**" — only when Pax can tell which app: the newest non-Apple, non-Pax
+  app opened or brought forward in the last 5 minutes that is still running, with a plain name of at most 32
+  characters (`NSWorkspace` launch/activate notifications). Otherwise no app line.
+* "**Changing a privacy setting needs an administrator.**" / "**On this Mac, ask someone you trust to type
+  their password.**" and one **OK** button, which only closes the panel.
+
+When: the dialog appears with System Settings (bundle ID `com.apple.systempreferences`, panes
+`com.apple.settings.*`) as the last app in front, or, when Pax was just started by pax-guard for this dialog
+and didn't see the front app (v0.8.35 (b)), when the topmost ordinary window under the dialog belongs to
+System Settings. In that case the privacy panel replaces, never adds to, the install panel. Standard accounts
+on protected Macs only; administrators see nothing. At most once every 2 minutes (own limit, same length as
+the install panel) and once per dialog; closes by itself when the dialog goes.
+
+It only explains. Pax never grants, requests or changes a permission, never reads or edits the privacy
+database (TCC) or runs `tccutil`, never clicks, types into or reads the dialog, and the panel offers nothing
+that would loosen or switch off Pax. pax-guard is unchanged. The install panel for Finder, third-party
+installers and updaters is unchanged (Installer.app and Keychain Access still get nothing).
+
+* Limits: Pax can't see which System Settings pane asked, so an administrator prompt for another pane (Users &
+  Groups, Network...) gets the same note. The app line is a best guess from recent app activity and can name
+  the wrong app if the person switched apps before opening System Settings. Needs a real Mac on each macOS
+  (HARDWARE_TEST v0.8.36 26–31), especially whether macOS 26/27 still draws this dialog in `SecurityAgent`.
+* Code: `mac-app/Sources/PaxCore/PrivacyPrompts.swift`, `mac-app/Sources/Pax/InstallHelpersModel.swift`.
+  Tests: `mac-app/Tests/PaxCoreTests/V0836Tests.swift`.
 
 ## Same-team apps and Pax.app self-heal (v0.8.35)
 

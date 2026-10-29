@@ -422,7 +422,7 @@ def doh_lookup(url: str = CLEANBROWSING_FAMILY_DOH, timeout: float = 5.0) -> Cal
     def lookup(wire: bytes) -> bytes:
         req = urllib.request.Request(url, data=wire, method="POST", headers={
             "Content-Type": "application/dns-message", "Accept": "application/dns-message",
-            "User-Agent": "pax/0.8.35"})
+            "User-Agent": "pax/0.8.36"})
         with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (fixed https URL)
             return r.read()
     return lookup

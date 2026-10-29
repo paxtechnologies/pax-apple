@@ -254,8 +254,8 @@ Use a protected Mac with a **Standard** everyday account. Before each step make 
    an install (auth)`.
 20. **Rate limit / no loops**: cancel the dialog, quit Pax, trigger the dialog again within 30 s: Pax is not
    started again until 30 s have passed. Leave a dialog open and quit Pax: Pax is not relaunched for that same
-   dialog. Unlock a System Settings pane with Pax not running: Pax may start but no panel shows (not an install
-   context); note what happens.
+   dialog. Unlock a System Settings pane with Pax not running: Pax may start; no install panel shows (not an
+   install context). From 0.8.36 the calm privacy note shows instead (v0.8.36 step 28).
 21. **App updaters**: an app using Sparkle (e.g. an older version of a Sparkle-updated app) or Squirrel
    (an Electron app: Slack, Discord) runs its updater while Pax isn't running → Pax starts hidden, posts
    "<App> has an update ready" and shows the Home card. An update already downloaded to
@@ -280,6 +280,72 @@ Use a protected Mac with a **Standard** everyday account. Before each step make 
    notarised) open its .dmg / Open With › Pax / drop on Pax → "Install Swoop?" installs it (no PAX-MAC-023); a
    newer Swoop updates it. A copy of Pax.app (any bundle named Pax.app, or bundle ID org.paxpeace.* /
    org.paxmobile.*) still gives PAX-MAC-023 "Pax doesn't change this app."
+
+### v0.8.36: a calm note for System Settings' privacy administrator prompts
+
+Use a protected Mac with a **Standard** everyday account (and, for step 31, an administrator account). Pax
+only reads the window list (owner, pid, layer, bounds); it never asks for Screen Recording.
+
+26. **Privacy permission, Pax running**: open an app that asks for a privacy permission (e.g. Swoop for
+   Accessibility, or any app for Screen Recording / Input Monitoring / Full Disk Access). Follow macOS's
+   "Open System Settings", switch the app on in Privacy & Security. When macOS shows "Privacy & Security is
+   trying to modify your system settings" asking for an administrator, a small floating Pax panel appears
+   beside it: "Swoop wants a privacy permission." (when Pax can tell) / "Changing a privacy setting needs an
+   administrator." / "On this Mac, ask someone you trust to type their password." [OK]. The dialog keeps
+   focus (typing goes to it); OK closes the panel; the panel also closes when the dialog goes. No "Open Pax",
+   no install panel. Try Accessibility, Full Disk Access, Input Monitoring and Screen Recording on macOS 12
+   (System Preferences), 13, 14, 15, 26 and 27; note any version where nothing shows.
+27. **Naming**: open Firefox, then a second app (e.g. Swoop) that asks for a permission → the panel names
+   the second app. With no third-party app opened or used in the last 5 minutes (go straight to System
+   Settings › Privacy & Security and switch on an existing entry) → no app line, just the two sentences.
+   Quit the app before switching it on → no app line. Note any case where it names the wrong app.
+28. **Pax not running**: quit Pax (⌘Q), then repeat step 26. pax-guard starts Pax (log `opened Pax for an
+   install (auth)`, at most every 30 s) and the privacy panel appears, **not** "Installing or updating an
+   app?". Also on macOS 26 (owner names hidden without Screen Recording).
+29. **Rate limit / once per dialog**: cancel the dialog and switch the permission on again within 2 minutes:
+   no second panel until 2 minutes have passed. Leaving one dialog up never shows the panel twice.
+30. **Other System Settings prompts** (Users & Groups, Network, Date & Time unlock): the same calm panel
+   appears (Pax can't see which pane asked; the wording still says "a privacy setting"). Record whether that
+   reads acceptably; nothing else happens.
+31. **Unchanged**: as the administrator, steps 26–28 show nothing. As the Standard user, Finder drag to
+   Applications and a third-party updater still show "Installing or updating an app?" with Open Pax (v0.8.34
+   / v0.8.35 steps); Installer.app (.pkg) and Keychain Access dialogs still show nothing. Nothing in Privacy &
+   Security changes because of Pax (`tccutil` is never run; the permission stays off after Cancel).
+
+### v0.8.36: faster browsing (DNS)
+
+Use a protected Mac on a normal home connection, Pax's own filter on (Settings › Advanced: filter "Pax";
+extra family layer off unless a step says so). `dig` ships with macOS. Write down every number.
+
+32. **Speed, before/after**: on 0.8.35 first, then on 0.8.36, open a Terminal and run
+    `for n in www.bbc.co.uk www.theguardian.com github.com www.amazon.co.uk www.apple.com; do dig @127.0.0.1 $n | grep 'Query time'; done`
+    twice in a row (2nd run = cache), wait 30 seconds, run it again (Quad9 has closed the idle connection on
+    0.8.35; 0.8.36 keeps it warm for 2 minutes after the last lookup). Then browse 10 minutes of normal sites
+    in Safari and Chrome and note whether pages feel slower than with Pax switched off.
+33. **Revisit**: visit five news sites, wait 30-60 minutes (most answers expire), visit them again: on 0.8.36
+    the revisit should start loading at once (an expired *allowed* answer is used once with a 30 s TTL while a
+    fresh one is fetched). `/Library/PaxGuard/runtime/bin/python3.12 /Library/PaxGuard/bin/pax_guard.py ask
+    '{"cmd":"dns.status"}' | python3 -m json.tool | grep -E 'stale_served|prefetched|hedged|latency_ms|handshakes'`
+    shows the counts and each upstream's usual answer time (`via_curl` should be false everywhere).
+34. **Protection unchanged**: a known restricted test site and a site on your Blocked sites still answer
+    `0.0.0.0` (`dig @127.0.0.1 <name> +short`), immediately and after waiting 30-60 minutes; add a site to
+    Blocked sites and `dig` it straight away: `0.0.0.0` at once (the cache never answers for a blocked name).
+    `dig @127.0.0.1 www.google.com` still CNAMEs to forcesafesearch.google.com and `www.youtube.com` to
+    restrict(moderate).youtube.com (unless the YouTube switch is off). Turn the extra family layer on: lookups
+    still work (slower is fine), restricted names still blocked.
+35. **Sleep and network change**: browse, close the lid for 10 minutes, open it and load a page at once: it
+    should load within about half a second of normal (0.8.35 could hang ~2.5 s per name on a dead kept-alive
+    connection). Switch Wi-Fi network (or tether to a phone) and load a page: same. `log show --last 5m
+    --predicate 'process == "Python"' | grep -i "network change"` shows the change.
+36. **Quad9 blocked**: as an administrator, `sudo pfctl -a com.apple/250.org.paxpeace.pax -sr` to see the
+    rules, then temporarily block 9.9.9.9 and 149.112.112.112 port 853 in a second test anchor (or unplug
+    the router's upstream for Quad9 if you can). Pages should still load with about 0.3-0.5 s extra on the
+    first lookup (Cloudflare's security resolver takes over), never unfiltered: restricted names still
+    `0.0.0.0`. Remove the test rule.
+37. **CPU**: Activity Monitor › CPU, filter "Python" (pax-guard): idle Mac, should stay near 0 % with short
+    blips every 30 s (0.8.35 used ~1-2 s of CPU every 30 s rebuilding its /etc/hosts list). Note the value.
+    Optional: `python3 tools/dns-bench.py browse` from a checkout on the same Mac (needs no root; it runs its
+    own copy of the forwarder on a high port) and keep the JSON.
 
 ## iPhone / iPad
 
