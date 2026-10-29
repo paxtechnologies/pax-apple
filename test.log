@@ -1,0 +1,2526 @@
+Building for debugging...
+[0/7] Write sources
+[1/7] Write Pax-entitlement.plist
+[3/7] Write swift-version--79AA4F9932D1E87A.txt
+[5/35] Compiling PaxCore CfgutilDeviceService.swift
+[6/35] Compiling PaxCore CommandRunner.swift
+[7/35] Compiling PaxCore DeviceService.swift
+[8/35] Compiling PaxCore EmailCode.swift
+[9/35] Compiling PaxCore EscrowClient.swift
+[10/35] Compiling PaxCore GuardClient.swift
+[11/35] Compiling PaxCore GuardReconnect.swift
+[12/35] Compiling PaxCore InstallCheckLaunch.swift
+[13/35] Compiling PaxCore InstallHelpers.swift
+[14/44] Compiling PaxCore AlwaysBlockedMedia.swift
+[15/44] Compiling PaxCore AppBlocks.swift
+[16/44] Compiling PaxCore AppInstalls.swift
+[17/44] Compiling PaxCore AppSettingsLayout.swift
+[18/44] Compiling PaxCore AppUpdatePrompts.swift
+[19/44] Compiling PaxCore BlockedPage.swift
+[20/44] Compiling PaxCore Blocklist.swift
+[21/44] Compiling PaxCore BulkSiteImport.swift
+[22/44] Compiling PaxCore Categories.swift
+[23/44] Emitting module PaxCore
+[24/44] Compiling PaxCore KeepDataSupervision.swift
+[25/44] Compiling PaxCore ListSync.swift
+[26/44] Compiling PaxCore LoginLaunch.swift
+[27/44] Compiling PaxCore MacLockdown.swift
+[28/44] Compiling PaxCore PaxDNS.swift
+[29/44] Compiling PaxCore PaxError.swift
+[30/44] Compiling PaxCore PaxMax.swift
+[31/44] Compiling PaxCore PhoneStatus.swift
+[32/44] Compiling PaxCore PrivacyPrompts.swift
+[33/44] Compiling PaxCore SecurityNotices.swift
+[34/44] Compiling PaxCore ServerSettings.swift
+[35/44] Compiling PaxCore SetupCoordinator.swift
+[36/44] Compiling PaxCore SupportRelease.swift
+[37/44] Compiling PaxCore Supporting.swift
+[38/44] Compiling PaxCore SystemSettingsPlace.swift
+[39/44] Compiling PaxCore TrialDay.swift
+[40/44] Compiling PaxCore TurnOffWait.swift
+[41/44] Compiling PaxCore Updates.swift
+[42/60] Compiling Pax BlockedAppsViews.swift
+[43/60] Compiling Pax BlockedSitesView.swift
+[44/60] Compiling Pax HomeView.swift
+[45/60] Compiling Pax ImportListView.swift
+[46/60] Compiling Pax ProtectMacView.swift
+[47/65] Compiling Pax AppUpdatesModel.swift
+[48/65] Compiling Pax BlocklistModel.swift
+[49/65] Compiling Pax Compat.swift
+[50/65] Compiling Pax InstallHelpersModel.swift
+[51/65] Compiling Pax KeychainTokenStore.swift
+[52/65] Emitting module Pax
+[53/65] Compiling Pax MacProtectModel.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Sources/Pax/MacProtectModel.swift:303:21: warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+301 |                     }
+302 |                 }
+303 |                 let env = ProcessInfo.processInfo.environment
+    |                     `- warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+304 |                 let fm = FileManager.default
+305 |                 let dir = fm.temporaryDirectory.appendingPathComponent("pax-mac-\(UUID().uuidString)", isDirectory: true)
+[54/65] Compiling Pax PaxApp.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Sources/Pax/MacProtectModel.swift:303:21: warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+301 |                     }
+302 |                 }
+303 |                 let env = ProcessInfo.processInfo.environment
+    |                     `- warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+304 |                 let fm = FileManager.default
+305 |                 let dir = fm.temporaryDirectory.appendingPathComponent("pax-mac-\(UUID().uuidString)", isDirectory: true)
+[55/65] Compiling Pax SetupModel.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Sources/Pax/MacProtectModel.swift:303:21: warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+301 |                     }
+302 |                 }
+303 |                 let env = ProcessInfo.processInfo.environment
+    |                     `- warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+304 |                 let fm = FileManager.default
+305 |                 let dir = fm.temporaryDirectory.appendingPathComponent("pax-mac-\(UUID().uuidString)", isDirectory: true)
+[56/65] Compiling Pax Theme.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Sources/Pax/MacProtectModel.swift:303:21: warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+301 |                     }
+302 |                 }
+303 |                 let env = ProcessInfo.processInfo.environment
+    |                     `- warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+304 |                 let fm = FileManager.default
+305 |                 let dir = fm.temporaryDirectory.appendingPathComponent("pax-mac-\(UUID().uuidString)", isDirectory: true)
+[57/65] Compiling Pax AppInstallViews.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Sources/Pax/MacProtectModel.swift:303:21: warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+301 |                     }
+302 |                 }
+303 |                 let env = ProcessInfo.processInfo.environment
+    |                     `- warning: initialization of immutable value 'env' was never used; consider replacing with assignment to '_' or removing it
+304 |                 let fm = FileManager.default
+305 |                 let dir = fm.temporaryDirectory.appendingPathComponent("pax-mac-\(UUID().uuidString)", isDirectory: true)
+[58/65] Compiling Pax ServerSettingsView.swift
+[59/65] Compiling Pax SettingsView.swift
+[60/65] Compiling Pax SetupFlowView.swift
+[61/65] Compiling Pax SharedSteps.swift
+[62/65] Compiling Pax SupportReleaseViews.swift
+[62/65] Write Objects.LinkFileList
+[63/65] Linking Pax
+[64/65] Applying Pax
+Build complete! (56.20s)
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[0/8] /Users/runner/work/pax-apple/pax-apple/mac-app/.build/x86_64-apple-macosx/debug/PaxPackageTests.derived/runner.swift
+[2/8] Write sources
+[3/8] Write swift-version--79AA4F9932D1E87A.txt
+[5/36] Compiling PaxCoreTests V0812Tests.swift
+[6/36] Compiling PaxCoreTests V0813Tests.swift
+[7/36] Compiling PaxCoreTests V0814Tests.swift
+[8/36] Compiling PaxCoreTests V0815Tests.swift
+[9/36] Compiling PaxCoreTests V0816Tests.swift
+[10/36] Compiling PaxCoreTests V0818FilterTests.swift
+[11/36] Compiling PaxCoreTests V0818Tests.swift
+[12/36] Compiling PaxCoreTests V0819FilterPackTests.swift
+[13/36] Compiling PaxCoreTests V0820Tests.swift
+[14/36] Compiling PaxCoreTests V0821NavTests.swift
+[15/36] Compiling PaxCoreTests V0821Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[16/36] Compiling PaxCoreTests V0823Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[17/36] Compiling PaxCoreTests V0826Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[18/36] Compiling PaxCoreTests V0827Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[19/36] Compiling PaxCoreTests V0829Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[20/36] Compiling PaxCoreTests V0832Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[21/36] Compiling PaxCoreTests V0833Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[22/36] Compiling PaxCoreTests V0834LoginTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[23/36] Compiling PaxCoreTests V0834ReconnectTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0829Tests.swift:36:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 34 |             password: world.userPassword, deviceName: "Alex's Mac", paths: paths, profileIdentifier: ident,
+ 35 |             writeConfig: { _, _ in },
+ 36 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 37 |             progress: { _ in })
+ 38 |     }
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[24/45] Emitting module PaxCoreTests
+[25/45] Compiling PaxCoreTests BlocklistTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[26/45] Compiling PaxCoreTests BulkSiteImportTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[27/45] Compiling PaxCoreTests CfgutilDeviceServiceTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[28/45] Compiling PaxCoreTests GuardClientTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[29/45] Compiling PaxCoreTests GuardSocketTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[30/45] Compiling PaxCoreTests KeepDataSupervisionTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[31/45] Compiling PaxCoreTests MacLockdownTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[32/45] Compiling PaxCoreTests PaxErrorTests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[33/45] Compiling PaxCoreTests V05Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[34/45] Compiling PaxCoreTests V0810Tests.swift
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:14: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |              `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/GuardClientTests.swift:15:35: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 13 |     func exchange(_ request: Data) async throws -> Data {
+ 14 |         let obj = (try JSONSerialization.jsonObject(with: request)) as? [String: Any] ?? [:]
+ 15 |         lock.lock(); defer { lock.unlock() }
+    |                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 16 |         sent.append(obj)
+ 17 |         let cmd = obj["cmd"] as? String ?? ""
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:41: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                         `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:221:91: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+219 |             writeConfig: { _, _ in },
+220 |             waitForProfileApproval: {
+221 |                 if approve { world.lock.lock(); world.profileInstalled = true; world.lock.unlock() }
+    |                                                                                           `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+222 |                 return approve
+223 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:50: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                  `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:612:100: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+610 |                 XCTAssertEqual(token, "")            // no guard token: pax-guard holds the key itself
+611 |             },
+612 |             waitForProfileApproval: { world.lock.lock(); world.profileInstalled = true; world.lock.unlock(); return true },
+    |                                                                                                    `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+613 |             progress: { _ in })
+614 |         XCTAssertEqual(outcome.deviceID, "local")
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:24: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                        `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/MacLockdownTests.swift:669:51: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+667 |             let file = arguments[arguments.firstIndex(of: "--secret-file")! + 1]
+668 |             let secret = (try? String(contentsOfFile: file, encoding: .utf8)) ?? ""
+669 |             world.lock.lock(); defer { world.lock.unlock() }
+    |                                                   `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+670 |             world.safe = secret
+671 |             let sha = world.safeLies ? String(repeating: "0", count: 64) : SHA256Hex.hash(Data(secret.utf8))
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:28: warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                            `- warning: instance method 'lock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.lock:2:11: note: 'lock()' declared here
+1 | class NSLock {
+2 | open func lock()}
+  |           `- note: 'lock()' declared here
+3 | 
+
+/Users/runner/work/pax-apple/pax-apple/mac-app/Tests/PaxCoreTests/V0810Tests.swift:53:78: warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 51 |             },
+ 52 |             waitForProfileApproval: {
+ 53 |                 world.lock.lock(); world.profileInstalled = true; world.lock.unlock()
+    |                                                                              `- warning: instance method 'unlock' is unavailable from asynchronous contexts; Use async-safe scoped locking instead; this is an error in the Swift 6 language mode
+ 54 |                 return true
+ 55 |             },
+
+Foundation.NSLock.unlock:2:11: note: 'unlock()' declared here
+1 | class NSLock {
+2 | open func unlock()}
+  |           `- note: 'unlock()' declared here
+3 | 
+[35/45] Compiling PaxCoreTests V0834Tests.swift
+[36/45] Compiling PaxCoreTests V0835Tests.swift
+[37/45] Compiling PaxCoreTests V0836Tests.swift
+[38/45] Compiling PaxCoreTests V085Tests.swift
+[39/45] Compiling PaxCoreTests V086Tests.swift
+[40/45] Compiling PaxCoreTests V086bTests.swift
+[41/45] Compiling PaxCoreTests V087Tests.swift
+[42/45] Compiling PaxCoreTests V088Tests.swift
+[43/45] Compiling PaxCoreTests V089Tests.swift
+[44/47] Compiling PaxPackageTests runner.swift
+[45/47] Emitting module PaxPackageTests
+[45/47] Write Objects.LinkFileList
+[46/47] Linking PaxPackageTests
+Build complete! (32.64s)
+Test Suite 'All tests' started at 2026-10-29 21:43:08.608.
+Test Suite 'PaxPackageTests.xctest' started at 2026-10-29 21:43:08.611.
+Test Suite 'BlocklistTests' started at 2026-10-29 21:43:08.611.
+Test Case '-[PaxCoreTests.BlocklistTests testCountdownCorrectsForServerClock]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testCountdownCorrectsForServerClock]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testCountdownFormatting]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testCountdownFormatting]' passed (0.006 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testDecodesServerRequestResult]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testDecodesServerRequestResult]' passed (0.003 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testDomainInputNormalise]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testDomainInputNormalise]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testInMemoryTokenStore]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testInMemoryTokenStore]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testMaskHidesToken]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testMaskHidesToken]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testProfileArgumentsWithoutTokenKeepV02Behaviour]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testProfileArgumentsWithoutTokenKeepV02Behaviour]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testProfileArgumentsWithUserToken]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testProfileArgumentsWithUserToken]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testResourceLocatorOrder]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testResourceLocatorOrder]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testUserDoHURLCustomBaseAndEnv]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testUserDoHURLCustomBaseAndEnv]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testUserDoHURLDefaultBase]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testUserDoHURLDefaultBase]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.BlocklistTests testUserDoHURLRejectsBadInput]' started.
+Test Case '-[PaxCoreTests.BlocklistTests testUserDoHURLRejectsBadInput]' passed (0.001 seconds).
+Test Suite 'BlocklistTests' passed at 2026-10-29 21:43:08.632.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.019 (0.021) seconds
+Test Suite 'BulkSiteImportTests' started at 2026-10-29 21:43:08.632.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testCapIsRespectedAndReported]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testCapIsRespectedAndReported]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.BulkSiteImportTests testCsvAndDedupeAndAlreadyBlocked]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testCsvAndDedupeAndAlreadyBlocked]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BulkSiteImportTests testHardCapIsMaxPerImport]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testHardCapIsMaxPerImport]' passed (0.115 seconds).
+Test Case '-[PaxCoreTests.BulkSiteImportTests testInvalidEntriesAreSkippedAndCounted]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testInvalidEntriesAreSkippedAndCounted]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BulkSiteImportTests testPlainDomainsUrlsAndHostsLines]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testPlainDomainsUrlsAndHostsLines]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BulkSiteImportTests testProfileLimitIsSane]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testProfileLimitIsSane]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.BulkSiteImportTests testWindowsLineEndingsAndBOM]' started.
+Test Case '-[PaxCoreTests.BulkSiteImportTests testWindowsLineEndingsAndBOM]' passed (0.000 seconds).
+Test Suite 'BulkSiteImportTests' passed at 2026-10-29 21:43:08.754.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.122 (0.123) seconds
+Test Suite 'CfgutilDeviceServiceTests' started at 2026-10-29 21:43:08.754.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testErrorTypeThrows]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testErrorTypeThrows]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testInstallProfilePipesStdinWithIdentity]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testInstallProfilePipesStdinWithIdentity]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testIsSupervisedParsesGetOutput]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testIsSupervisedParsesGetOutput]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testKeepDataRefusesIOS28]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testKeepDataRefusesIOS28]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testMajorOSVersion]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testMajorOSVersion]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testParseDevicesDefensively]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testParseDevicesDefensively]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testPrepareArguments]' started.
+Test Case '-[PaxCoreTests.CfgutilDeviceServiceTests testPrepareArguments]' passed (0.001 seconds).
+Test Suite 'CfgutilDeviceServiceTests' passed at 2026-10-29 21:43:08.760.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'GuardClientTests' started at 2026-10-29 21:43:08.760.
+Test Case '-[PaxCoreTests.GuardClientTests testBlocklistBackendShapes]' started.
+Test Case '-[PaxCoreTests.GuardClientTests testBlocklistBackendShapes]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.GuardClientTests testCodedErrorsCarryTheirCode]' started.
+Test Case '-[PaxCoreTests.GuardClientTests testCodedErrorsCarryTheirCode]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.GuardClientTests testEscrowModeDefaultsToLocal]' started.
+Test Case '-[PaxCoreTests.GuardClientTests testEscrowModeDefaultsToLocal]' passed (0.003 seconds).
+Test Case '-[PaxCoreTests.GuardClientTests testIPhoneCustomLimitLeavesRoomForBuiltIns]' started.
+Test Case '-[PaxCoreTests.GuardClientTests testIPhoneCustomLimitLeavesRoomForBuiltIns]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.GuardClientTests testLocalEscrowRoundTrip]' started.
+Test Case '-[PaxCoreTests.GuardClientTests testLocalEscrowRoundTrip]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.GuardClientTests testStatusAndFilterLine]' started.
+Test Case '-[PaxCoreTests.GuardClientTests testStatusAndFilterLine]' passed (0.001 seconds).
+Test Suite 'GuardClientTests' passed at 2026-10-29 21:43:08.770.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.010 (0.010) seconds
+Test Suite 'GuardSocketTests' started at 2026-10-29 21:43:08.770.
+Test Case '-[PaxCoreTests.GuardSocketTests testCanonicalOfParsedJSONKeepsBooleansAndIntegers]' started.
+Test Case '-[PaxCoreTests.GuardSocketTests testCanonicalOfParsedJSONKeepsBooleansAndIntegers]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.GuardSocketTests testNoListenerIsGuard012]' started.
+Test Case '-[PaxCoreTests.GuardSocketTests testNoListenerIsGuard012]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.GuardSocketTests testUnixSocketRoundTrip]' started.
+Test Case '-[PaxCoreTests.GuardSocketTests testUnixSocketRoundTrip]' passed (0.002 seconds).
+Test Suite 'GuardSocketTests' passed at 2026-10-29 21:43:08.774.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'KeepDataSupervisionTests' started at 2026-10-29 21:43:08.774.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testDefaultsAreKeepDataAndFamily]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testDefaultsAreKeepDataAndFamily]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testHelperErrorSurfaces]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testHelperErrorSurfaces]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testInstallProfileSendsBytesOnStdin]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testInstallProfileSendsBytesOnStdin]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testOnlyNotFoundAndLockedArePolled]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testOnlyNotFoundAndLockedArePolled]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testPreflightParsing]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testPreflightParsing]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testProfileGeneratorDefaultsToFamilyFilter]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testProfileGeneratorDefaultsToFamilyFilter]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testSeedRestorePassesCertificateAndStrictFlag]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testSeedRestorePassesCertificateAndStrictFlag]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testVersionPlan]' started.
+Test Case '-[PaxCoreTests.KeepDataSupervisionTests testVersionPlan]' passed (0.000 seconds).
+Test Suite 'KeepDataSupervisionTests' passed at 2026-10-29 21:43:08.781.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'MacLockdownTests' started at 2026-10-29 21:43:08.781.
+Test Case '-[PaxCoreTests.MacLockdownTests testAdminParsing]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testAdminParsing]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testAppleScriptQuotingCannotBreakOut]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testAppleScriptQuotingCannotBreakOut]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testCreateAdminRunsWithUsersCredentialsAndAdminFlag]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testCreateAdminRunsWithUsersCredentialsAndAdminFlag]' passed (0.015 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testDemotionFailureKeepsUserAdmin]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testDemotionFailureKeepsUserAdmin]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testEscrowFailureRollsBackAndNeverDemotes]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testEscrowFailureRollsBackAndNeverDemotes]' passed (0.003 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testExistingPaxadminIsALeftoverWarningNotABlock]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testExistingPaxadminIsALeftoverWarningNotABlock]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testFailureAfterDemotionRepromotesWithPaxadminFirst]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testFailureAfterDemotionRepromotesWithPaxadminFirst]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testFileVaultWarnings]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testFileVaultWarnings]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testGuardConfigJSON]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testGuardConfigJSON]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testGuardInstallFailureRemovesProfileAndAdmin]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testGuardInstallFailureRemovesProfileAndAdmin]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testHappyPathOrderIsSafe]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testHappyPathOrderIsSafe]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testLeftoverPaxadminRecordIsClearedBeforeCreating]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testLeftoverPaxadminRecordIsClearedBeforeCreating]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testLocalEscrowBadReceiptRollsBackAndEmptiesSafe]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testLocalEscrowBadReceiptRollsBackAndEmptiesSafe]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testLocalEscrowStoresKeyOnThisMacNoServer]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testLocalEscrowStoresKeyOnThisMacNoServer]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testMDMEnrolledIsAWarningAndKeyRotationNoticeOnlyWhenLocal]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testMDMEnrolledIsAWarningAndKeyRotationNoticeOnlyWhenLocal]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testNonAdminUserBlocked]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testNonAdminUserBlocked]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testNoSecureTokenIsFineWithFileVaultOff]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testNoSecureTokenIsFineWithFileVaultOff]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testOSAScriptRunnerSendsScriptOnStdinNotArgs]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testOSAScriptRunnerSendsScriptOnStdinNotArgs]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testOtherAdminBlocksSetUp]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testOtherAdminBlocksSetUp]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testPasswordGenerator]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testPasswordGenerator]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testProfileNotApprovedRollsBack]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testProfileNotApprovedRollsBack]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testRemovePaxPromotesFirstThenRemovesThenDeletes]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testRemovePaxPromotesFirstThenRemovesThenDeletes]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testRemovePaxWithWrongPasswordChangesNothing]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testRemovePaxWithWrongPasswordChangesNothing]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testSecureTokenFailureWithFileVaultRollsBack]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testSecureTokenFailureWithFileVaultRollsBack]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testSelfLockProfileArguments]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testSelfLockProfileArguments]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testSilentAddUserFailureIsCaughtAtCreate]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testSilentAddUserFailureIsCaughtAtCreate]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testTestModeAllowsOtherAdminWithWarning]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testTestModeAllowsOtherAdminWithWarning]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testTestModeTreatsExistingPaxadminAsLeftover]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testTestModeTreatsExistingPaxadminAsLeftover]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testVerifyFailureRollsBackBeforeEscrow]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testVerifyFailureRollsBackBeforeEscrow]' passed (0.017 seconds).
+Test Case '-[PaxCoreTests.MacLockdownTests testWrongPasswordChangesNothing]' started.
+Test Case '-[PaxCoreTests.MacLockdownTests testWrongPasswordChangesNothing]' passed (0.001 seconds).
+Test Suite 'MacLockdownTests' passed at 2026-10-29 21:43:08.883.
+	 Executed 30 tests, with 0 failures (0 unexpected) in 0.099 (0.102) seconds
+Test Suite 'PaxErrorTests' started at 2026-10-29 21:43:08.883.
+Test Case '-[PaxCoreTests.PaxErrorTests testCodesAreUniqueAndWellFormed]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testCodesAreUniqueAndWellFormed]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testDeviceAndSetupCodes]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testDeviceAndSetupCodes]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testEscrowAndNetworkCodes]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testEscrowAndNetworkCodes]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testEveryCodeIsDocumented]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testEveryCodeIsDocumented]' passed (0.133 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testGuardInstallCodes]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testGuardInstallCodes]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testMacPreflightCodes]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testMacPreflightCodes]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testRestrictedSiteRefusal]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testRestrictedSiteRefusal]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testSupportDetailsRemovePersonalData]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testSupportDetailsRemovePersonalData]' passed (0.005 seconds).
+Test Case '-[PaxCoreTests.PaxErrorTests testUnknownErrorsGetTheGenericCode]' started.
+Test Case '-[PaxCoreTests.PaxErrorTests testUnknownErrorsGetTheGenericCode]' passed (0.001 seconds).
+Test Suite 'PaxErrorTests' passed at 2026-10-29 21:43:09.028.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.144 (0.145) seconds
+Test Suite 'UpdatesTests' started at 2026-10-29 21:43:09.028.
+Test Case '-[PaxCoreTests.UpdatesTests testCanonicalJSONMatchesGuard]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testCanonicalJSONMatchesGuard]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testDecisions]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testDecisions]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testLocalEscrowReceipt]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testLocalEscrowReceipt]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testPinnedKeyMatchesGuard]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testPinnedKeyMatchesGuard]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testSHA256Vectors]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testSHA256Vectors]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testSignatureFromGuardVerifies]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testSignatureFromGuardVerifies]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testUnsignedIsRejected]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testUnsignedIsRejected]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.UpdatesTests testVersionCompare]' started.
+Test Case '-[PaxCoreTests.UpdatesTests testVersionCompare]' passed (0.000 seconds).
+Test Suite 'UpdatesTests' passed at 2026-10-29 21:43:09.035.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'V05Tests' started at 2026-10-29 21:43:09.035.
+Test Case '-[PaxCoreTests.V05Tests testCategoriesDecode]' started.
+Test Case '-[PaxCoreTests.V05Tests testCategoriesDecode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V05Tests testDefaultIsProductionServer]' started.
+Test Case '-[PaxCoreTests.V05Tests testDefaultIsProductionServer]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V05Tests testPrivateHosts]' started.
+Test Case '-[PaxCoreTests.V05Tests testPrivateHosts]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V05Tests testResolveOrder]' started.
+Test Case '-[PaxCoreTests.V05Tests testResolveOrder]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V05Tests testValidateAddsSchemeAndSlash]' started.
+Test Case '-[PaxCoreTests.V05Tests testValidateAddsSchemeAndSlash]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V05Tests testValidateRejectsUnsafeOrOdd]' started.
+Test Case '-[PaxCoreTests.V05Tests testValidateRejectsUnsafeOrOdd]' passed (0.000 seconds).
+Test Suite 'V05Tests' passed at 2026-10-29 21:43:09.038.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'V0810Tests' started at 2026-10-29 21:43:09.039.
+Test Case '-[PaxCoreTests.V0810Tests testAdminThatAppearedAfterTheCheckBlocksBeforeAnyChange]' started.
+Test Case '-[PaxCoreTests.V0810Tests testAdminThatAppearedAfterTheCheckBlocksBeforeAnyChange]' passed (0.003 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testErrorWording]' started.
+Test Case '-[PaxCoreTests.V0810Tests testErrorWording]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testFailedOtherDemotionRollsEverythingBack]' started.
+Test Case '-[PaxCoreTests.V0810Tests testFailedOtherDemotionRollsEverythingBack]' passed (0.008 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testManagedMacKeepsAnInfoLineAndIsNotSpecialCased]' started.
+Test Case '-[PaxCoreTests.V0810Tests testManagedMacKeepsAnInfoLineAndIsNotSpecialCased]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testNoOtherAdminsKeepsConfigAndStepsAsBefore]' started.
+Test Case '-[PaxCoreTests.V0810Tests testNoOtherAdminsKeepsConfigAndStepsAsBefore]' passed (0.006 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testOtherAdminsMadeStandardAfterGuardBeforeUser]' started.
+Test Case '-[PaxCoreTests.V0810Tests testOtherAdminsMadeStandardAfterGuardBeforeUser]' passed (0.009 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testOtherStillAdminAfterDemotionFailsClosed]' started.
+Test Case '-[PaxCoreTests.V0810Tests testOtherStillAdminAfterDemotionFailsClosed]' passed (0.007 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testPreflightListsOtherAdminsAndOnlyBlocksWithoutTheOK]' started.
+Test Case '-[PaxCoreTests.V0810Tests testPreflightListsOtherAdminsAndOnlyBlocksWithoutTheOK]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testTestModeUnchanged]' started.
+Test Case '-[PaxCoreTests.V0810Tests testTestModeUnchanged]' passed (0.006 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testUnsafeNameStillBlocks]' started.
+Test Case '-[PaxCoreTests.V0810Tests testUnsafeNameStillBlocks]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0810Tests testUserDemotionFailureAlsoRestoresOthers]' started.
+Test Case '-[PaxCoreTests.V0810Tests testUserDemotionFailureAlsoRestoresOthers]' passed (0.007 seconds).
+Test Suite 'V0810Tests' passed at 2026-10-29 21:43:09.092.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.052 (0.053) seconds
+Test Suite 'V0812Tests' started at 2026-10-29 21:43:09.092.
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxCommandsGoToPaxGuard]' started.
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxCommandsGoToPaxGuard]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxRefusalsKeepTheirCodes]' started.
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxRefusalsKeepTheirCodes]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxStatusLines]' started.
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxStatusLines]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxWordingExplainsAndWarns]' started.
+Test Case '-[PaxCoreTests.V0812Tests testPaxMaxWordingExplainsAndWarns]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0812Tests testSettingsCarryPaxMaxAndOldGuardHasNone]' started.
+Test Case '-[PaxCoreTests.V0812Tests testSettingsCarryPaxMaxAndOldGuardHasNone]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0812Tests testSetUpAsksForASwitchableBlurOnlyWhenAsked]' started.
+Test Case '-[PaxCoreTests.V0812Tests testSetUpAsksForASwitchableBlurOnlyWhenAsked]' passed (0.001 seconds).
+Test Suite 'V0812Tests' passed at 2026-10-29 21:43:09.098.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'V0813Tests' started at 2026-10-29 21:43:09.098.
+Test Case '-[PaxCoreTests.V0813Tests testFilterSettingsOnlyCarryYouTube]' started.
+Test Case '-[PaxCoreTests.V0813Tests testFilterSettingsOnlyCarryYouTube]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0813Tests testGuardConfigHasNoMediaSwitches]' started.
+Test Case '-[PaxCoreTests.V0813Tests testGuardConfigHasNoMediaSwitches]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0813Tests testHostsMatchPaxGuardAndTheProfile]' started.
+Test Case '-[PaxCoreTests.V0813Tests testHostsMatchPaxGuardAndTheProfile]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0813Tests testLegacyDeviceNote]' started.
+Test Case '-[PaxCoreTests.V0813Tests testLegacyDeviceNote]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0813Tests testNoticeIsShortCalmAndNeutral]' started.
+Test Case '-[PaxCoreTests.V0813Tests testNoticeIsShortCalmAndNeutral]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0813Tests testOlderPaxGuardSettingsStillDecode]' started.
+Test Case '-[PaxCoreTests.V0813Tests testOlderPaxGuardSettingsStillDecode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0813Tests testServerRefusalHasItsOwnCode]' started.
+Test Case '-[PaxCoreTests.V0813Tests testServerRefusalHasItsOwnCode]' passed (0.000 seconds).
+Test Suite 'V0813Tests' passed at 2026-10-29 21:43:09.102.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'V0814Tests' started at 2026-10-29 21:43:09.102.
+Test Case '-[PaxCoreTests.V0814Tests testBlockedAppsShowACountNotATruncatedList]' started.
+Test Case '-[PaxCoreTests.V0814Tests testBlockedAppsShowACountNotATruncatedList]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0814Tests testBrowserRulesNotice]' started.
+Test Case '-[PaxCoreTests.V0814Tests testBrowserRulesNotice]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0814Tests testMediaIsOneAlwaysBlockedRow]' started.
+Test Case '-[PaxCoreTests.V0814Tests testMediaIsOneAlwaysBlockedRow]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0814Tests testSettingsSectionsInOrderWithAdvancedLast]' started.
+Test Case '-[PaxCoreTests.V0814Tests testSettingsSectionsInOrderWithAdvancedLast]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0814Tests testSetUpNoteIsPlain]' started.
+Test Case '-[PaxCoreTests.V0814Tests testSetUpNoteIsPlain]' passed (0.000 seconds).
+Test Suite 'V0814Tests' passed at 2026-10-29 21:43:09.105.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'V0815Tests' started at 2026-10-29 21:43:09.105.
+Test Case '-[PaxCoreTests.V0815Tests testCodeShapeCheck]' started.
+Test Case '-[PaxCoreTests.V0815Tests testCodeShapeCheck]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testDepositPassesTheSetUpChoice]' started.
+Test Case '-[PaxCoreTests.V0815Tests testDepositPassesTheSetUpChoice]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testDeviceStatusDecodesWithAndWithoutSupportFields]' started.
+Test Case '-[PaxCoreTests.V0815Tests testDeviceStatusDecodesWithAndWithoutSupportFields]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testGuardRedeemAndSwitch]' started.
+Test Case '-[PaxCoreTests.V0815Tests testGuardRedeemAndSwitch]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testGuardRefusalCarriesItsCode]' started.
+Test Case '-[PaxCoreTests.V0815Tests testGuardRefusalCarriesItsCode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testRefusedCodesKeepTheirOwnCode]' started.
+Test Case '-[PaxCoreTests.V0815Tests testRefusedCodesKeepTheirOwnCode]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testSetUpDefaultsToOn]' started.
+Test Case '-[PaxCoreTests.V0815Tests testSetUpDefaultsToOn]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0815Tests testWordingIsCalmAndNamesNoOne]' started.
+Test Case '-[PaxCoreTests.V0815Tests testWordingIsCalmAndNamesNoOne]' passed (0.004 seconds).
+Test Suite 'V0815Tests' passed at 2026-10-29 21:43:09.113.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'V0816Tests' started at 2026-10-29 21:43:09.113.
+Test Case '-[PaxCoreTests.V0816Tests testChoiceTitles]' started.
+Test Case '-[PaxCoreTests.V0816Tests testChoiceTitles]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0816Tests testCountdown]' started.
+Test Case '-[PaxCoreTests.V0816Tests testCountdown]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0816Tests testDeviceStatusReadsTheWait]' started.
+Test Case '-[PaxCoreTests.V0816Tests testDeviceStatusReadsTheWait]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0816Tests testDurations]' started.
+Test Case '-[PaxCoreTests.V0816Tests testDurations]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0816Tests testSetupWordingSaysWhatTheWaitIsFor]' started.
+Test Case '-[PaxCoreTests.V0816Tests testSetupWordingSaysWhatTheWaitIsFor]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0816Tests testWordingIsCalm]' started.
+Test Case '-[PaxCoreTests.V0816Tests testWordingIsCalm]' passed (0.000 seconds).
+Test Suite 'V0816Tests' passed at 2026-10-29 21:43:09.116.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'V0818FilterTests' started at 2026-10-29 21:43:09.116.
+Test Case '-[PaxCoreTests.V0818FilterTests testFamilyLayerOffWaitsAndCarriesItsRequest]' started.
+Test Case '-[PaxCoreTests.V0818FilterTests testFamilyLayerOffWaitsAndCarriesItsRequest]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0818FilterTests testFamilyLayerOnIsImmediateAndOlderGuardsDecode]' started.
+Test Case '-[PaxCoreTests.V0818FilterTests testFamilyLayerOnIsImmediateAndOlderGuardsDecode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0818FilterTests testFilterModesInPlainWords]' started.
+Test Case '-[PaxCoreTests.V0818FilterTests testFilterModesInPlainWords]' passed (0.001 seconds).
+Test Suite 'V0818FilterTests' passed at 2026-10-29 21:43:09.120.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'V0818Tests' started at 2026-10-29 21:43:09.120.
+Test Case '-[PaxCoreTests.V0818Tests testCountsAndCaptions]' started.
+Test Case '-[PaxCoreTests.V0818Tests testCountsAndCaptions]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testDepositAsksForATrialDay]' started.
+Test Case '-[PaxCoreTests.V0818Tests testDepositAsksForATrialDay]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testDeviceStatusDecodesTheTrial]' started.
+Test Case '-[PaxCoreTests.V0818Tests testDeviceStatusDecodesTheTrial]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testFilterLineOnlyWhenUnusual]' started.
+Test Case '-[PaxCoreTests.V0818Tests testFilterLineOnlyWhenUnusual]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testHardwareIDIsHashedAndStable]' started.
+Test Case '-[PaxCoreTests.V0818Tests testHardwareIDIsHashedAndStable]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testHomeHasThreeSteps]' started.
+Test Case '-[PaxCoreTests.V0818Tests testHomeHasThreeSteps]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testOneThingToKnow]' started.
+Test Case '-[PaxCoreTests.V0818Tests testOneThingToKnow]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testStatusPicksOneCalmState]' started.
+Test Case '-[PaxCoreTests.V0818Tests testStatusPicksOneCalmState]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testSupportReleaseSetUpChoice]' started.
+Test Case '-[PaxCoreTests.V0818Tests testSupportReleaseSetUpChoice]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testTrialActivityFollowsTheClock]' started.
+Test Case '-[PaxCoreTests.V0818Tests testTrialActivityFollowsTheClock]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0818Tests testTrialDayWords]' started.
+Test Case '-[PaxCoreTests.V0818Tests testTrialDayWords]' passed (0.001 seconds).
+Test Suite 'V0818Tests' passed at 2026-10-29 21:43:09.126.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
+Test Suite 'V0819FilterPackTests' started at 2026-10-29 21:43:09.126.
+Test Case '-[PaxCoreTests.V0819FilterPackTests testFilterPackStatusDecodesAndReadsPlainly]' started.
+Test Case '-[PaxCoreTests.V0819FilterPackTests testFilterPackStatusDecodesAndReadsPlainly]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0819FilterPackTests testOlderGuardWithoutFilterPackStillDecodes]' started.
+Test Case '-[PaxCoreTests.V0819FilterPackTests testOlderGuardWithoutFilterPackStillDecodes]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0819FilterPackTests testPackNoticesArePlain]' started.
+Test Case '-[PaxCoreTests.V0819FilterPackTests testPackNoticesArePlain]' passed (0.000 seconds).
+Test Suite 'V0819FilterPackTests' passed at 2026-10-29 21:43:09.129.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'V0820Tests' started at 2026-10-29 21:43:09.129.
+Test Case '-[PaxCoreTests.V0820Tests testMontereyNamesSystemPreferencesAndItsProfilesPane]' started.
+Test Case '-[PaxCoreTests.V0820Tests testMontereyNamesSystemPreferencesAndItsProfilesPane]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0820Tests testProfileErrorExplainsBothPlaces]' started.
+Test Case '-[PaxCoreTests.V0820Tests testProfileErrorExplainsBothPlaces]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0820Tests testVenturaAndLaterKeepSystemSettings]' started.
+Test Case '-[PaxCoreTests.V0820Tests testVenturaAndLaterKeepSystemSettings]' passed (0.000 seconds).
+Test Suite 'V0820Tests' passed at 2026-10-29 21:43:09.130.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'V0821NavTests' started at 2026-10-29 21:43:09.130.
+Test Case '-[PaxCoreTests.V0821NavTests testAppsAreAlwaysPerDevice]' started.
+Test Case '-[PaxCoreTests.V0821NavTests testAppsAreAlwaysPerDevice]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0821NavTests testDeviceLine]' started.
+Test Case '-[PaxCoreTests.V0821NavTests testDeviceLine]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0821NavTests testSidebarHasNoHomeRow]' started.
+Test Case '-[PaxCoreTests.V0821NavTests testSidebarHasNoHomeRow]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0821NavTests testSitesReach]' started.
+Test Case '-[PaxCoreTests.V0821NavTests testSitesReach]' passed (0.000 seconds).
+Test Suite 'V0821NavTests' passed at 2026-10-29 21:43:09.132.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'V0821Tests' started at 2026-10-29 21:43:09.132.
+Test Case '-[PaxCoreTests.V0821Tests testConfiguredCooloffIsFormattedTheSameWay]' started.
+Test Case '-[PaxCoreTests.V0821Tests testConfiguredCooloffIsFormattedTheSameWay]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0821Tests testDefaultCooloffIsExact]' started.
+Test Case '-[PaxCoreTests.V0821Tests testDefaultCooloffIsExact]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0821Tests testStatusDecodesTheCooloff]' started.
+Test Case '-[PaxCoreTests.V0821Tests testStatusDecodesTheCooloff]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0821Tests testTrialDayHasNoCooloff]' started.
+Test Case '-[PaxCoreTests.V0821Tests testTrialDayHasNoCooloff]' passed (0.000 seconds).
+Test Suite 'V0821Tests' passed at 2026-10-29 21:43:09.134.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'V0823Tests' started at 2026-10-29 21:43:09.134.
+Test Case '-[PaxCoreTests.V0823Tests testBriefBackupEpisodesAreNotShown]' started.
+Test Case '-[PaxCoreTests.V0823Tests testBriefBackupEpisodesAreNotShown]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0823Tests testLongBackupEpisodeIsOnePlainLine]' started.
+Test Case '-[PaxCoreTests.V0823Tests testLongBackupEpisodeIsOnePlainLine]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.V0823Tests testNoRawCodesInNotices]' started.
+Test Case '-[PaxCoreTests.V0823Tests testNoRawCodesInNotices]' passed (0.002 seconds).
+Test Case '-[PaxCoreTests.V0823Tests testPartnerSummaryIsOneLine]' started.
+Test Case '-[PaxCoreTests.V0823Tests testPartnerSummaryIsOneLine]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0823Tests testPartnerViewDecodesQueuedCount]' started.
+Test Case '-[PaxCoreTests.V0823Tests testPartnerViewDecodesQueuedCount]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0823Tests testPaxMaxCopyIsHonestAboutBrowsers]' started.
+Test Case '-[PaxCoreTests.V0823Tests testPaxMaxCopyIsHonestAboutBrowsers]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0823Tests testSettingsFoldsPaxMaxAndAboutWithoutLosingAnything]' started.
+Test Case '-[PaxCoreTests.V0823Tests testSettingsFoldsPaxMaxAndAboutWithoutLosingAnything]' passed (0.001 seconds).
+Test Suite 'V0823Tests' passed at 2026-10-29 21:43:09.141.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'V0826Tests' started at 2026-10-29 21:43:09.141.
+Test Case '-[PaxCoreTests.V0826Tests testDecodesServerFieldsAndOlderServers]' started.
+Test Case '-[PaxCoreTests.V0826Tests testDecodesServerFieldsAndOlderServers]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0826Tests testFreshnessNeverLooksFreshWhenStale]' started.
+Test Case '-[PaxCoreTests.V0826Tests testFreshnessNeverLooksFreshWhenStale]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0826Tests testRefreshButtonIsRateLimited]' started.
+Test Case '-[PaxCoreTests.V0826Tests testRefreshButtonIsRateLimited]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0826Tests testStatusMapping]' started.
+Test Case '-[PaxCoreTests.V0826Tests testStatusMapping]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0826Tests testWordsAreCalm]' started.
+Test Case '-[PaxCoreTests.V0826Tests testWordsAreCalm]' passed (0.003 seconds).
+Test Suite 'V0826Tests' passed at 2026-10-29 21:43:09.148.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
+Test Suite 'V0827Tests' started at 2026-10-29 21:43:09.148.
+Test Case '-[PaxCoreTests.V0827Tests testHiddenWhenSwitchOffOrNotYetOn]' started.
+Test Case '-[PaxCoreTests.V0827Tests testHiddenWhenSwitchOffOrNotYetOn]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testHiddenWhenTurnedOff]' started.
+Test Case '-[PaxCoreTests.V0827Tests testHiddenWhenTurnedOff]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testMacLeavesThePageWhenReleasedOrRemoved]' started.
+Test Case '-[PaxCoreTests.V0827Tests testMacLeavesThePageWhenReleasedOrRemoved]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testPastedCodeToleratesWhitespaceNewlinesAndLowerCase]' started.
+Test Case '-[PaxCoreTests.V0827Tests testPastedCodeToleratesWhitespaceNewlinesAndLowerCase]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testPhonesShownOnlyWhileProtectedWaitingOrSettingUp]' started.
+Test Case '-[PaxCoreTests.V0827Tests testPhonesShownOnlyWhileProtectedWaitingOrSettingUp]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testShownWhenSwitchOn]' started.
+Test Case '-[PaxCoreTests.V0827Tests testShownWhenSwitchOn]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testSubjectSkipsTurnedOffAndFallsBack]' started.
+Test Case '-[PaxCoreTests.V0827Tests testSubjectSkipsTurnedOffAndFallsBack]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testSupportIDLeftAdvanced]' started.
+Test Case '-[PaxCoreTests.V0827Tests testSupportIDLeftAdvanced]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testTidyingALongPasteIsCheap]' started.
+Test Case '-[PaxCoreTests.V0827Tests testTidyingALongPasteIsCheap]' passed (0.164 seconds).
+Test Case '-[PaxCoreTests.V0827Tests testWordingIsShortAndCalm]' started.
+Test Case '-[PaxCoreTests.V0827Tests testWordingIsShortAndCalm]' passed (0.000 seconds).
+Test Suite 'V0827Tests' passed at 2026-10-29 21:43:09.318.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.170 (0.171) seconds
+Test Suite 'V0829Tests' started at 2026-10-29 21:43:09.318.
+Test Case '-[PaxCoreTests.V0829Tests testDirectoryLagAfterDeleteIsWaitedOut]' started.
+Test Case '-[PaxCoreTests.V0829Tests testDirectoryLagAfterDeleteIsWaitedOut]' passed (0.010 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testNeitherDeletableNorReusableStopsWithMAC004AndTheReasons]' started.
+Test Case '-[PaxCoreTests.V0829Tests testNeitherDeletableNorReusableStopsWithMAC004AndTheReasons]' passed (0.018 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testOldAdminPaxadminNoLongerBlocksAndIsDeleted]' started.
+Test Case '-[PaxCoreTests.V0829Tests testOldAdminPaxadminNoLongerBlocksAndIsDeleted]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testOldAdminPaxadminThatWontGoIsReusedAndRollbackTakesAdminAway]' started.
+Test Case '-[PaxCoreTests.V0829Tests testOldAdminPaxadminThatWontGoIsReusedAndRollbackTakesAdminAway]' passed (0.048 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testOneShellScriptCarriesNoPassword]' started.
+Test Case '-[PaxCoreTests.V0829Tests testOneShellScriptCarriesNoPassword]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testRemovalKeepsPaxadminUnlessTheUserIsProvenAdmin]' started.
+Test Case '-[PaxCoreTests.V0829Tests testRemovalKeepsPaxadminUnlessTheUserIsProvenAdmin]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testRemovalRunsEveryDeleteRouteInOneRootShell]' started.
+Test Case '-[PaxCoreTests.V0829Tests testRemovalRunsEveryDeleteRouteInOneRootShell]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testRemovalWhenMacOSKeepsPaxadminThenSetUpAgainWorks]' started.
+Test Case '-[PaxCoreTests.V0829Tests testRemovalWhenMacOSKeepsPaxadminThenSetUpAgainWorks]' passed (0.026 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testResetThatSilentlyDoesNothingFallsBackToDsclPasswd]' started.
+Test Case '-[PaxCoreTests.V0829Tests testResetThatSilentlyDoesNothingFallsBackToDsclPasswd]' passed (0.038 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testReusedLeftoverRollsBackToAStandardAccountAndUserKeepsAdmin]' started.
+Test Case '-[PaxCoreTests.V0829Tests testReusedLeftoverRollsBackToAStandardAccountAndUserKeepsAdmin]' passed (0.044 seconds).
+Test Case '-[PaxCoreTests.V0829Tests testUndeletableLeftoverIsReusedWithANewPassword]' started.
+Test Case '-[PaxCoreTests.V0829Tests testUndeletableLeftoverIsReusedWithANewPassword]' passed (0.014 seconds).
+Test Suite 'V0829Tests' passed at 2026-10-29 21:43:09.530.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.211 (0.212) seconds
+Test Suite 'V0832Tests' started at 2026-10-29 21:43:09.530.
+Test Case '-[PaxCoreTests.V0832Tests testCodeFieldFollowsTheAddressItWentTo]' started.
+Test Case '-[PaxCoreTests.V0832Tests testCodeFieldFollowsTheAddressItWentTo]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testDigitsFromTypingAndPasting]' started.
+Test Case '-[PaxCoreTests.V0832Tests testDigitsFromTypingAndPasting]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testEmailCheckAndNormalising]' started.
+Test Case '-[PaxCoreTests.V0832Tests testEmailCheckAndNormalising]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testNothingCallsTheRetiredRoute]' started.
+Test Case '-[PaxCoreTests.V0832Tests testNothingCallsTheRetiredRoute]' passed (0.088 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testPlainMessagesForCodeProblems]' started.
+Test Case '-[PaxCoreTests.V0832Tests testPlainMessagesForCodeProblems]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testResendWaitsAndRespectsFiveAnHour]' started.
+Test Case '-[PaxCoreTests.V0832Tests testResendWaitsAndRespectsFiveAnHour]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testRetiredRouteHasItsOwnSupportCode]' started.
+Test Case '-[PaxCoreTests.V0832Tests testRetiredRouteHasItsOwnSupportCode]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testStartAndVerifyCallTheEmailRoutes]' started.
+Test Case '-[PaxCoreTests.V0832Tests testStartAndVerifyCallTheEmailRoutes]' passed (0.004 seconds).
+Test Case '-[PaxCoreTests.V0832Tests testWrongCodeIsAPlainSentence]' started.
+Test Case '-[PaxCoreTests.V0832Tests testWrongCodeIsAPlainSentence]' passed (0.001 seconds).
+Test Suite 'V0832Tests' passed at 2026-10-29 21:43:09.627.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.095 (0.096) seconds
+Test Suite 'V0833Tests' started at 2026-10-29 21:43:09.627.
+Test Case '-[PaxCoreTests.V0833Tests testCardNotificationAndSheetWording]' started.
+Test Case '-[PaxCoreTests.V0833Tests testCardNotificationAndSheetWording]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testCopyIsCalmAndOnBrand]' started.
+Test Case '-[PaxCoreTests.V0833Tests testCopyIsCalmAndOnBrand]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testNoJobYetIsNil]' started.
+Test Case '-[PaxCoreTests.V0833Tests testNoJobYetIsNil]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testNotificationClickOnlyOpensAnUpdateStillInTheScan]' started.
+Test Case '-[PaxCoreTests.V0833Tests testNotificationClickOnlyOpensAnUpdateStillInTheScan]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testOnlyAppsImagesAndPackagesAreOffered]' started.
+Test Case '-[PaxCoreTests.V0833Tests testOnlyAppsImagesAndPackagesAreOffered]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testOpenWithAndDropsGoStraightToTheConfirmation]' started.
+Test Case '-[PaxCoreTests.V0833Tests testOpenWithAndDropsGoStraightToTheConfirmation]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testRefusalsUseTheCatalogAndNameTheKindOfApp]' started.
+Test Case '-[PaxCoreTests.V0833Tests testRefusalsUseTheCatalogAndNameTheKindOfApp]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testScanBecomesCardsAndNotifiesOncePerAppAndVersion]' started.
+Test Case '-[PaxCoreTests.V0833Tests testScanBecomesCardsAndNotifiesOncePerAppAndVersion]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testScanTiming]' started.
+Test Case '-[PaxCoreTests.V0833Tests testScanTiming]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testStartInstallSendsOnlyThePathAndDecodesTheJob]' started.
+Test Case '-[PaxCoreTests.V0833Tests testStartInstallSendsOnlyThePathAndDecodesTheJob]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0833Tests testSystemUpdatesDecodeAndNeverRestart]' started.
+Test Case '-[PaxCoreTests.V0833Tests testSystemUpdatesDecodeAndNeverRestart]' passed (0.001 seconds).
+Test Suite 'V0833Tests' passed at 2026-10-29 21:43:09.633.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
+Test Suite 'V0834LoginTests' started at 2026-10-29 21:43:09.633.
+Test Case '-[PaxCoreTests.V0834LoginTests testALoginLaunchStaysHiddenUnlessAFileWasOpenedWithPax]' started.
+Test Case '-[PaxCoreTests.V0834LoginTests testALoginLaunchStaysHiddenUnlessAFileWasOpenedWithPax]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834LoginTests testARepairedLoginItemReadsPlainly]' started.
+Test Case '-[PaxCoreTests.V0834LoginTests testARepairedLoginItemReadsPlainly]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834LoginTests testOnlyTheLoginAgentsFlagMakesALoginLaunch]' started.
+Test Case '-[PaxCoreTests.V0834LoginTests testOnlyTheLoginAgentsFlagMakesALoginLaunch]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834LoginTests testTheAgentNamesMatchPaxGuard]' started.
+Test Case '-[PaxCoreTests.V0834LoginTests testTheAgentNamesMatchPaxGuard]' passed (0.000 seconds).
+Test Suite 'V0834LoginTests' passed at 2026-10-29 21:43:09.634.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'V0834ReconnectTests' started at 2026-10-29 21:43:09.634.
+Test Case '-[PaxCoreTests.V0834ReconnectTests testASavedDeviceIsKept]' started.
+Test Case '-[PaxCoreTests.V0834ReconnectTests testASavedDeviceIsKept]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834ReconnectTests testLocalKeyHeldByPaxGuardReconnects]' started.
+Test Case '-[PaxCoreTests.V0834ReconnectTests testLocalKeyHeldByPaxGuardReconnects]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834ReconnectTests testNoPaxGuardOrNothingHeldLeavesSetUpAlone]' started.
+Test Case '-[PaxCoreTests.V0834ReconnectTests testNoPaxGuardOrNothingHeldLeavesSetUpAlone]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834ReconnectTests testServerKeyNeverGuessesAnID]' started.
+Test Case '-[PaxCoreTests.V0834ReconnectTests testServerKeyNeverGuessesAnID]' passed (0.000 seconds).
+Test Suite 'V0834ReconnectTests' passed at 2026-10-29 21:43:09.636.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'V0834Tests' started at 2026-10-29 21:43:09.636.
+Test Case '-[PaxCoreTests.V0834Tests testANewAppOnADiskImageAsksToInstallItOncePerDiskAppAndVersion]' started.
+Test Case '-[PaxCoreTests.V0834Tests testANewAppOnADiskImageAsksToInstallItOncePerDiskAppAndVersion]' passed (0.008 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testAnInstalledAppIsAnUpdateOnlyWhenTheDiskHasANewerVersion]' started.
+Test Case '-[PaxCoreTests.V0834Tests testAnInstalledAppIsAnUpdateOnlyWhenTheDiskHasANewerVersion]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testHdiutilInfoMapsMountPointsToImages]' started.
+Test Case '-[PaxCoreTests.V0834Tests testHdiutilInfoMapsMountPointsToImages]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testOnlyASecurityAgentDialogCountsEvenWithoutOwnerNames]' started.
+Test Case '-[PaxCoreTests.V0834Tests testOnlyASecurityAgentDialogCountsEvenWithoutOwnerNames]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testOnlyProtectedStandardMacsAndOnlyRealDiskImages]' started.
+Test Case '-[PaxCoreTests.V0834Tests testOnlyProtectedStandardMacsAndOnlyRealDiskImages]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testOpenPaxGoesToTheWaitingSheetThenTheDiskThenAnUpdateThenSettings]' started.
+Test Case '-[PaxCoreTests.V0834Tests testOpenPaxGoesToTheWaitingSheetThenTheDiskThenAnUpdateThenSettings]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testPaxsOwnDiskImageAndApplesAppsAreIgnored]' started.
+Test Case '-[PaxCoreTests.V0834Tests testPaxsOwnDiskImageAndApplesAppsAreIgnored]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testSeveralAppsHandPaxGuardTheImageSoItAsksWhichOne]' started.
+Test Case '-[PaxCoreTests.V0834Tests testSeveralAppsHandPaxGuardTheImageSoItAsksWhichOne]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testThePanelIsRateLimitedOncePerDialogAndOnlyInAnInstallContext]' started.
+Test Case '-[PaxCoreTests.V0834Tests testThePanelIsRateLimitedOncePerDialogAndOnlyInAnInstallContext]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0834Tests testThePanelSitsBesideTheDialogOnScreen]' started.
+Test Case '-[PaxCoreTests.V0834Tests testThePanelSitsBesideTheDialogOnScreen]' passed (0.000 seconds).
+Test Suite 'V0834Tests' passed at 2026-10-29 21:43:09.649.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.012 (0.013) seconds
+Test Suite 'V0835Tests' started at 2026-10-29 21:43:09.649.
+Test Case '-[PaxCoreTests.V0835Tests testAgentNamesMatchPaxGuard]' started.
+Test Case '-[PaxCoreTests.V0835Tests testAgentNamesMatchPaxGuard]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testAnAuthLaunchTreatsAnUnknownFrontAppAsAnInstallForAMinute]' started.
+Test Case '-[PaxCoreTests.V0835Tests testAnAuthLaunchTreatsAnUnknownFrontAppAsAnInstallForAMinute]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testErrorCodeWording]' started.
+Test Case '-[PaxCoreTests.V0835Tests testErrorCodeWording]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testFinderDragWithADiskImageOpensOnItsSheet]' started.
+Test Case '-[PaxCoreTests.V0835Tests testFinderDragWithADiskImageOpensOnItsSheet]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testInstallCheckFlagAndReason]' started.
+Test Case '-[PaxCoreTests.V0835Tests testInstallCheckFlagAndReason]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testInstallChecksStartQuietWithoutADockIconUnlessAFileWasOpened]' started.
+Test Case '-[PaxCoreTests.V0835Tests testInstallChecksStartQuietWithoutADockIconUnlessAFileWasOpened]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testSecurityNoticesForTheNewTamperKinds]' started.
+Test Case '-[PaxCoreTests.V0835Tests testSecurityNoticesForTheNewTamperKinds]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0835Tests testThePanelAfterAnAuthLaunch]' started.
+Test Case '-[PaxCoreTests.V0835Tests testThePanelAfterAnAuthLaunch]' passed (0.000 seconds).
+Test Suite 'V0835Tests' passed at 2026-10-29 21:43:09.652.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'V0836Tests' started at 2026-10-29 21:43:09.652.
+Test Case '-[PaxCoreTests.V0836Tests testAppBehindDialogSkipsTheDialogMenuBarPaxAndTinyWindows]' started.
+Test Case '-[PaxCoreTests.V0836Tests testAppBehindDialogSkipsTheDialogMenuBarPaxAndTinyWindows]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testDisplayNameIsOneShortPlainLine]' started.
+Test Case '-[PaxCoreTests.V0836Tests testDisplayNameIsOneShortPlainLine]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testRequesterIsTheNewestRunningThirdPartyApp]' started.
+Test Case '-[PaxCoreTests.V0836Tests testRequesterIsTheNewestRunningThirdPartyApp]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testSettingsContextFromTheAppInFrontOrTheWindowBehindTheDialog]' started.
+Test Case '-[PaxCoreTests.V0836Tests testSettingsContextFromTheAppInFrontOrTheWindowBehindTheDialog]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testShowsOnlyForStandardUsersOnProtectedMacsOncePerDialogAndRateLimited]' started.
+Test Case '-[PaxCoreTests.V0836Tests testShowsOnlyForStandardUsersOnProtectedMacsOncePerDialogAndRateLimited]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testSystemSettingsIsRecognised]' started.
+Test Case '-[PaxCoreTests.V0836Tests testSystemSettingsIsRecognised]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testTheInstallPanelIsUnchangedForInstallersAndStillQuietForSystemSettings]' started.
+Test Case '-[PaxCoreTests.V0836Tests testTheInstallPanelIsUnchangedForInstallersAndStillQuietForSystemSettings]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V0836Tests testWording]' started.
+Test Case '-[PaxCoreTests.V0836Tests testWording]' passed (0.000 seconds).
+Test Suite 'V0836Tests' passed at 2026-10-29 21:43:09.655.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'V085Tests' started at 2026-10-29 21:43:09.655.
+Test Case '-[PaxCoreTests.V085Tests testProductionServerIsTheDefaultAndSelfHostingStillWins]' started.
+Test Case '-[PaxCoreTests.V085Tests testProductionServerIsTheDefaultAndSelfHostingStillWins]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V085Tests testRelayDefaultsToTheAppServerWithItsAccount]' started.
+Test Case '-[PaxCoreTests.V085Tests testRelayDefaultsToTheAppServerWithItsAccount]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V085Tests testRelayToASelfHostedServerNeedsItsOwnToken]' started.
+Test Case '-[PaxCoreTests.V085Tests testRelayToASelfHostedServerNeedsItsOwnToken]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V085Tests testServerPartnerUnreachableIsEscrow010]' started.
+Test Case '-[PaxCoreTests.V085Tests testServerPartnerUnreachableIsEscrow010]' passed (0.000 seconds).
+Test Suite 'V085Tests' passed at 2026-10-29 21:43:09.657.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'V086Tests' started at 2026-10-29 21:43:09.657.
+Test Case '-[PaxCoreTests.V086Tests testBundledPythonIsTheDefault]' started.
+Test Case '-[PaxCoreTests.V086Tests testBundledPythonIsTheDefault]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V086Tests testDeveloperHelperHasNoExtraFlags]' started.
+Test Case '-[PaxCoreTests.V086Tests testDeveloperHelperHasNoExtraFlags]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086Tests testDeveloperVenvThenSystemPythonWithoutABundle]' started.
+Test Case '-[PaxCoreTests.V086Tests testDeveloperVenvThenSystemPythonWithoutABundle]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V086Tests testEmptyOverrideIsIgnored]' started.
+Test Case '-[PaxCoreTests.V086Tests testEmptyOverrideIsIgnored]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086Tests testHelperCallsPutInterpreterFlagsBeforeTheScript]' started.
+Test Case '-[PaxCoreTests.V086Tests testHelperCallsPutInterpreterFlagsBeforeTheScript]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V086Tests testMissingHelperMessageNoLongerMentionsATerminalScript]' started.
+Test Case '-[PaxCoreTests.V086Tests testMissingHelperMessageNoLongerMentionsATerminalScript]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086Tests testPaxPythonOverrideWins]' started.
+Test Case '-[PaxCoreTests.V086Tests testPaxPythonOverrideWins]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086Tests testProfileGeneratorRunsOnTheBundledPythonIsolated]' started.
+Test Case '-[PaxCoreTests.V086Tests testProfileGeneratorRunsOnTheBundledPythonIsolated]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V086Tests testRelativePathMatchesTheBundleLayout]' started.
+Test Case '-[PaxCoreTests.V086Tests testRelativePathMatchesTheBundleLayout]' passed (0.000 seconds).
+Test Suite 'V086Tests' passed at 2026-10-29 21:43:09.664.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
+Test Suite 'V086bTests' started at 2026-10-29 21:43:09.664.
+Test Case '-[PaxCoreTests.V086bTests testCanonicalJSONMatchesPythonForNestedParts]' started.
+Test Case '-[PaxCoreTests.V086bTests testCanonicalJSONMatchesPythonForNestedParts]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086bTests testGuardConfigCarriesTheSetUpChoice]' started.
+Test Case '-[PaxCoreTests.V086bTests testGuardConfigCarriesTheSetUpChoice]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086bTests testIPhoneProfileArgumentsCarryTheSwitch]' started.
+Test Case '-[PaxCoreTests.V086bTests testIPhoneProfileArgumentsCarryTheSwitch]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086bTests testLocalEscrowDepositUsesTheBundledPython]' started.
+Test Case '-[PaxCoreTests.V086bTests testLocalEscrowDepositUsesTheBundledPython]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086bTests testManifestWithPartsStillDecodes]' started.
+Test Case '-[PaxCoreTests.V086bTests testManifestWithPartsStillDecodes]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086bTests testRuntimeInstallFailureMapsToGuard002]' started.
+Test Case '-[PaxCoreTests.V086bTests testRuntimeInstallFailureMapsToGuard002]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V086bTests testStatusCarriesSettings]' started.
+Test Case '-[PaxCoreTests.V086bTests testStatusCarriesSettings]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V086bTests testYouTubeSwitchGoesStraightToPaxGuard]' started.
+Test Case '-[PaxCoreTests.V086bTests testYouTubeSwitchGoesStraightToPaxGuard]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V086bTests testYouTubeSwitchUnavailableKeepsItsCode]' started.
+Test Case '-[PaxCoreTests.V086bTests testYouTubeSwitchUnavailableKeepsItsCode]' passed (0.001 seconds).
+Test Suite 'V086bTests' passed at 2026-10-29 21:43:09.669.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'V087Tests' started at 2026-10-29 21:43:09.669.
+Test Case '-[PaxCoreTests.V087Tests testAdsSwitchGoesStraightToPaxGuard]' started.
+Test Case '-[PaxCoreTests.V087Tests testAdsSwitchGoesStraightToPaxGuard]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testAppListFailureKeepsItsCode]' started.
+Test Case '-[PaxCoreTests.V087Tests testAppListFailureKeepsItsCode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testChosenAppsReachTheProfileGenerator]' started.
+Test Case '-[PaxCoreTests.V087Tests testChosenAppsReachTheProfileGenerator]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V087Tests testGuardConfigStillCarriesTheSetUpChoice]' started.
+Test Case '-[PaxCoreTests.V087Tests testGuardConfigStillCarriesTheSetUpChoice]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V087Tests testIPhoneAppListFromTheHelper]' started.
+Test Case '-[PaxCoreTests.V087Tests testIPhoneAppListFromTheHelper]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testMacAppScannerReadsInfoPlists]' started.
+Test Case '-[PaxCoreTests.V087Tests testMacAppScannerReadsInfoPlists]' passed (0.006 seconds).
+Test Case '-[PaxCoreTests.V087Tests testMacBlockedAppsGoToPaxGuard]' started.
+Test Case '-[PaxCoreTests.V087Tests testMacBlockedAppsGoToPaxGuard]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testNeverBlockedApps]' started.
+Test Case '-[PaxCoreTests.V087Tests testNeverBlockedApps]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V087Tests testOlderPaxGuardSettingsStillDecode]' started.
+Test Case '-[PaxCoreTests.V087Tests testOlderPaxGuardSettingsStillDecode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testRefusedMacAppKeepsItsCode]' started.
+Test Case '-[PaxCoreTests.V087Tests testRefusedMacAppKeepsItsCode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testServerEscrowRefusalKeepsItsCode]' started.
+Test Case '-[PaxCoreTests.V087Tests testServerEscrowRefusalKeepsItsCode]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testStatusCarriesTheAdsSetting]' started.
+Test Case '-[PaxCoreTests.V087Tests testStatusCarriesTheAdsSetting]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V087Tests testTypedBundleIDs]' started.
+Test Case '-[PaxCoreTests.V087Tests testTypedBundleIDs]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V087Tests testWhereTheSwitchGoes]' started.
+Test Case '-[PaxCoreTests.V087Tests testWhereTheSwitchGoes]' passed (0.000 seconds).
+Test Suite 'V087Tests' passed at 2026-10-29 21:43:09.683.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.013 (0.014) seconds
+Test Suite 'V088Tests' started at 2026-10-29 21:43:09.683.
+Test Case '-[PaxCoreTests.V088Tests testDefaultBaseIsPaxFilter]' started.
+Test Case '-[PaxCoreTests.V088Tests testDefaultBaseIsPaxFilter]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V088Tests testDirectCleanBrowsingAndCoreKeepTheOldPath]' started.
+Test Case '-[PaxCoreTests.V088Tests testDirectCleanBrowsingAndCoreKeepTheOldPath]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V088Tests testEnvironmentOverrideWins]' started.
+Test Case '-[PaxCoreTests.V088Tests testEnvironmentOverrideWins]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V088Tests testFilterSettingsDefaultToProtection]' started.
+Test Case '-[PaxCoreTests.V088Tests testFilterSettingsDefaultToProtection]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V088Tests testHealthURL]' started.
+Test Case '-[PaxCoreTests.V088Tests testHealthURL]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V088Tests testProfileArgumentsUseTheTokenOnPaxFilter]' started.
+Test Case '-[PaxCoreTests.V088Tests testProfileArgumentsUseTheTokenOnPaxFilter]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V088Tests testUnreachableFilterErrorCode]' started.
+Test Case '-[PaxCoreTests.V088Tests testUnreachableFilterErrorCode]' passed (0.000 seconds).
+Test Suite 'V088Tests' passed at 2026-10-29 21:43:09.686.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'V089Tests' started at 2026-10-29 21:43:09.686.
+Test Case '-[PaxCoreTests.V089Tests testBlocklistViewWithSyncStillDecodes]' started.
+Test Case '-[PaxCoreTests.V089Tests testBlocklistViewWithSyncStillDecodes]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testCalmWording]' started.
+Test Case '-[PaxCoreTests.V089Tests testCalmWording]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testEscrowCodeTwoNoLongerMentionsThreeDays]' started.
+Test Case '-[PaxCoreTests.V089Tests testEscrowCodeTwoNoLongerMentionsThreeDays]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testLimitsFromHealth]' started.
+Test Case '-[PaxCoreTests.V089Tests testLimitsFromHealth]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testLinkSendsTokenOnlyOverTheSocket]' started.
+Test Case '-[PaxCoreTests.V089Tests testLinkSendsTokenOnlyOverTheSocket]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V089Tests testOfflineRemovalCodeIsCalm]' started.
+Test Case '-[PaxCoreTests.V089Tests testOfflineRemovalCodeIsCalm]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testOlderServerHidesTheOneDayChoice]' started.
+Test Case '-[PaxCoreTests.V089Tests testOlderServerHidesTheOneDayChoice]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testStandardLimitsAreOneDayToAYear]' started.
+Test Case '-[PaxCoreTests.V089Tests testStandardLimitsAreOneDayToAYear]' passed (0.000 seconds).
+Test Case '-[PaxCoreTests.V089Tests testSyncStatusAndSwitch]' started.
+Test Case '-[PaxCoreTests.V089Tests testSyncStatusAndSwitch]' passed (0.001 seconds).
+Test Case '-[PaxCoreTests.V089Tests testWhenToLink]' started.
+Test Case '-[PaxCoreTests.V089Tests testWhenToLink]' passed (0.000 seconds).
+Test Suite 'V089Tests' passed at 2026-10-29 21:43:09.690.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'PaxPackageTests.xctest' passed at 2026-10-29 21:43:09.690.
+	 Executed 307 tests, with 0 failures (0 unexpected) in 1.049 (1.079) seconds
+Test Suite 'All tests' passed at 2026-10-29 21:43:09.691.
+	 Executed 307 tests, with 0 failures (0 unexpected) in 1.049 (1.082) seconds
+◇ Test run started.
+↳ Testing Library Version: 124.4
+↳ Target Platform: x86_64-apple-macos14.0
+✔ Test run with 0 tests passed after 0.001 seconds.
+checked 1 Mach-O files (1 slices): all run on macOS 12.0
