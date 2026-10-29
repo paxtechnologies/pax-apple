@@ -660,6 +660,16 @@ administrator. On this Mac, ask someone you trust to type their password." [OK],
 permission when it can tell. It only explains: Pax never grants or changes permissions or touches the privacy
 database. Administrators see nothing. Details: [docs/APP_INSTALLS.md](docs/APP_INSTALLS.md).
 
+**Faster browsing (v0.8.36).** The Mac's DNS forwarder in pax-guard got quicker without changing what it
+blocks: queries to Quad9 share one or two kept-alive DNS-over-TLS connections instead of a new TLS
+handshake each (Quad9 drops idle connections after ~10 s, so the first one is kept warm while you browse), an
+expired allowed answer is used once with a 30-second TTL while a fresh one is fetched, popular names are
+refreshed before they expire, a slow resolver is backed up by the next one in the same chain after
+0.25-0.8 s instead of waiting 2.5 s, kept-alive connections are dropped when the network changes, and the
+/etc/hosts list is no longer rebuilt every 30 seconds when nothing changed. Blocked names, SafeSearch and
+YouTube rules, the family-filter fallback and fail-closed SERVFAIL are unchanged. Details and measurements:
+[docs/DNS.md](docs/DNS.md#speed-v0836).
+
 **Profile** (`make_profile.py --self-lock`, System scope, no removal password: once you're Standard,
 removing a System profile needs an administrator, and Apple's schema says a manually installed profile
 with `PayloadRemovalDisallowed` and no removal password "requires admin auth"):

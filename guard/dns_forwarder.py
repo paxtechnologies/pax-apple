@@ -48,7 +48,9 @@ from __future__ import annotations
 import email.utils
 import http.client
 import os
+import queue
 import random
+import select
 import socket
 import socketserver
 import ssl
@@ -70,6 +72,33 @@ NEG_MAX_TTL = 900       # cap for negative caching (RFC 2308 SOA minimum)
 MAX_TTL = 3600          # cap for positive caching (upstream TTLs respected below it)
 MAX_UDP_DEFAULT = 512
 MAX_UDP_EDNS = 1232
+
+# v0.8.36 faster browsing. Measured 29 Oct 2026 (bench: tools/dns-bench.py, docs/DNS.md "Speed"):
+# Quad9 closes an idle DNS-over-TLS connection after about 10 s, a new TLS connection costs
+# about 6 round trips against 1 for a kept-alive one, and Quad9 answers pipelined queries
+# out of order on one connection.
+STALE_MAX = 3600         # RFC 8767: an expired *allowed* answer may be served for up to an hour...
+STALE_TTL = 30           # ...with this TTL, while a fresh copy is fetched in the background
+PREFETCH_FRACTION = 0.1  # refresh a name asked at least PREFETCH_MIN_HITS times in its last 10 % of TTL
+PREFETCH_MIN_HITS = 2
+HEDGE_DEFAULT = 0.40     # ask the next upstream of the same chain when the first is this slow (s)...
+HEDGE_MIN, HEDGE_MAX = 0.25, 0.80   # ...adapted to each upstream's measured latency, within these bounds
+FORWARD_BUDGET = 4.0     # one lookup never waits longer than this for the whole chain (then SERVFAIL)
+DOT_IDLE_MAX = 8.0       # a DoT connection idle this long is closed, not reused (Quad9 drops it ~10 s)
+DOT_MAX_CONNS = 2        # pipelined DoT connections per resolver address
+DOT_PIPELINE = 24        # in-flight queries on one DoT connection before a second one is opened
+DOH_IDLE_MAX = 25.0      # an idle kept-alive DoH connection older than this is not reused
+KEEPWARM_EVERY = 6.0     # while the Mac is browsing, keep the first upstream's connection warm...
+KEEPWARM_WINDOW = 120.0  # ...for this long after the last lookup (one tiny query per KEEPWARM_EVERY)
+# Names nearly every Mac looks up within minutes of starting; asked once after the lists load
+# so the first pages after a restart or update don't wait. Nothing about the user is stored.
+WARM_NAMES = ("apple.com", "www.apple.com", "icloud.com", "gateway.icloud.com", "configuration.apple.com",
+              "gstatic.com", "www.gstatic.com", "fonts.gstatic.com", "fonts.googleapis.com", "ajax.googleapis.com",
+              "www.googletagmanager.com", "cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com",
+              "www.bbc.co.uk", "www.gov.uk", "en.wikipedia.org", "upload.wikimedia.org", "github.com",
+              "www.amazon.co.uk", "m.media-amazon.com", "www.microsoft.com", "login.microsoftonline.com",
+              "outlook.office.com", "accounts.google.com", "mail.google.com", "www.google.com", "www.youtube.com",
+              "i.ytimg.com", "paxpeace.com", "api.paxpeace.com")
 
 # Upstreams, in order. URLs from the project brief; AdGuard Family checked on
 # adguard-dns.io 2026-10-15 (restricted content + SafeSearch). Addresses resolved
@@ -318,6 +347,35 @@ def age_ttls(msg: bytes, elapsed: int) -> bytes:
     return bytes(out)
 
 
+def cap_ttls(msg: bytes, ttl: int) -> bytes:
+    """v0.8.36: every TTL (OPT left alone) lowered to at most `ttl`: a stale answer served
+    while it is refreshed (RFC 8767) is held by clients for STALE_TTL seconds only."""
+    out = bytearray(msg)
+    try:
+        for off, rtype, old, _section, _rdata in _sections(msg):
+            if rtype != QTYPE_OPT:
+                struct.pack_into("!I", out, off, max(0, min(old, ttl)))
+    except (DNSError, struct.error):
+        return msg
+    return bytes(out)
+
+
+def is_positive(msg: bytes) -> bool:
+    """NOERROR: addresses, or "no address of this type" (NODATA, e.g. no IPv6), the only
+    answers ever served stale. NXDOMAIN, SERVFAIL and the rest never are."""
+    return len(msg) >= 12 and (msg[3] & 0xF) == RCODE_NOERROR
+
+
+def rcode_of(msg: bytes) -> int:
+    return msg[3] & 0xF if len(msg) >= 12 else RCODE_SERVFAIL
+
+
+def question_len(wire: bytes) -> int:
+    """Length of the (single) question section, so an answer can be matched to its query."""
+    _, pos = read_name(wire, 12)
+    return pos + 4 - 12
+
+
 def make_rewrite(q: Query, target: str, upstream_answer: bytes | None) -> bytes:
     """CNAME <qname> -> <target>, then the target's A/AAAA records (re-encoded,
     so no compression pointer from the upstream message is copied)."""
@@ -342,6 +400,16 @@ def build_query(name: str, qtype: int, qid: int = 0) -> bytes:
 
 def with_id(msg: bytes, qid: int) -> bytes:
     return struct.pack("!H", qid) + msg[2:]
+
+
+def for_query(msg: bytes, q: "Query") -> bytes:
+    """A cached or shared answer for this asker: its id, and its question exactly as it
+    asked it (same name and type, possibly other letter case)."""
+    out = struct.pack("!H", q.id) + msg[2:]
+    n = len(q.question)
+    if out[12:12 + n].lower() == q.question.lower() and out[12:12 + n] != q.question:
+        out = out[:12] + q.question + out[12 + n:]
+    return out
 
 
 def truncate_for_udp(q: Query, resp: bytes) -> bytes:
@@ -403,18 +471,36 @@ class DohUpstream:
         return self._ctx
 
     def _take(self, ip: str) -> _PinnedHTTPS:
+        stale = []
+        conn = None
+        now = time.monotonic()
         with self._lock:
-            for i, c in enumerate(self._pool):
-                if c._ip == ip:
-                    return self._pool.pop(i)
-        return _PinnedHTTPS(self.host, ip, self.timeout, self._context())
+            # v0.8.36: newest first, and never one idle past DOH_IDLE_MAX (the server has
+            # probably closed it, which costs a failed request and a retry).
+            for i in range(len(self._pool) - 1, -1, -1):
+                c = self._pool[i]
+                if now - getattr(c, "_pax_idle_since", now) > DOH_IDLE_MAX:
+                    stale.append(self._pool.pop(i))
+                elif conn is None and c._ip == ip:
+                    conn = self._pool.pop(i)
+        for c in stale:
+            c.close()
+        return conn or _PinnedHTTPS(self.host, ip, self.timeout, self._context())
 
     def _give(self, conn: _PinnedHTTPS) -> None:
+        conn._pax_idle_since = time.monotonic()
         with self._lock:
             if len(self._pool) < 8:
                 self._pool.append(conn)
                 return
         conn.close()
+
+    def reset(self) -> None:
+        """v0.8.36: drop every kept-alive connection (the network changed)."""
+        with self._lock:
+            pool, self._pool = self._pool, []
+        for c in pool:
+            c.close()
 
     def _record_date(self, date_header: str | None) -> None:
         if not date_header:
@@ -487,9 +573,161 @@ class DohUpstream:
         return r.stdout
 
 
+class _DotConn:
+    """v0.8.36: one DNS-over-TLS connection carrying many queries at once (RFC 7766
+    pipelining; Quad9 answers out of order). One I/O thread per connection does every
+    read and write, because an SSL object must not be read and written from two threads.
+    Each query gets an id unique on this connection; the answer must carry that id and
+    the same question, or it is ignored."""
+
+    def __init__(self, ip: str, sock):
+        self.ip = ip
+        self.sock = sock
+        self.lock = threading.Lock()
+        self.pending: dict = {}          # wire id -> [Event, answer | None, error | None]
+        self.outbuf = bytearray()
+        self.dead = False
+        now = time.monotonic()
+        self.opened = self.last_rx = self.last_tx = now
+        self._wr, self._ww = socket.socketpair()
+        self._wr.setblocking(False)
+        self._ww.setblocking(False)
+        sock.setblocking(False)
+        threading.Thread(target=self._run, name=f"pax-dot-{ip}", daemon=True).start()
+
+    # ------------------------------------------------------------ state
+    def idle(self, now: float) -> float:
+        return now - max(self.last_rx, self.last_tx)
+
+    def usable(self, now: float) -> bool:
+        return not self.dead and self.idle(now) < DOT_IDLE_MAX
+
+    def load(self) -> int:
+        return len(self.pending)
+
+    def kill(self) -> None:
+        with self.lock:
+            if self.dead:
+                return
+            self.dead = True
+        self._wake()
+
+    def _wake(self) -> None:
+        try:
+            self._ww.send(b"x")
+        except OSError:
+            pass
+
+    # ------------------------------------------------------------ query
+    def ask(self, wire: bytes, timeout: float) -> bytes:
+        qlen = question_len(wire)
+        question = wire[12:12 + qlen].lower()
+        slot = [threading.Event(), None, None]
+        with self.lock:
+            if self.dead:
+                raise ConnectionResetError("connection closed")
+            for _ in range(64):
+                qid = random.getrandbits(16)
+                if qid not in self.pending:
+                    break
+            else:
+                raise DNSError("no free query id")
+            self.pending[qid] = slot
+            msg = struct.pack("!H", qid) + wire[2:]
+            self.outbuf += struct.pack("!H", len(msg)) + msg
+            sent = time.monotonic()
+            self.last_tx = sent
+        self._wake()
+        if not slot[0].wait(timeout):
+            with self.lock:
+                self.pending.pop(qid, None)
+                quiet = self.last_rx < sent
+            if quiet:
+                self.kill()              # nothing came back at all: a dead connection (sleep, NAT)
+            raise TimeoutError("DoT answer timed out")
+        if slot[2] is not None:
+            raise slot[2]
+        data = slot[1]
+        if len(data) < 12 + qlen or data[12:12 + qlen].lower() != question:
+            raise DNSError("answer for another question")
+        return wire[:2] + data[2:]
+
+    # ------------------------------------------------------------ I/O thread
+    def _run(self) -> None:
+        sock = self.sock
+        inbuf = bytearray()
+        err: Exception = ConnectionResetError("connection closed")
+        try:
+            while True:
+                with self.lock:
+                    if self.dead:
+                        break
+                    want_write = bool(self.outbuf)
+                pending = getattr(sock, "pending", None)      # plain sockets in tests
+                wait = 0 if pending and pending() else 1.0
+                r, w, _ = select.select([sock, self._wr], [sock] if want_write else [], [], wait)
+                if self._wr in r:
+                    try:
+                        while self._wr.recv(512):
+                            pass
+                    except (BlockingIOError, InterruptedError):
+                        pass
+                if sock in r or (pending and pending()):
+                    while True:
+                        try:
+                            chunk = sock.recv(65536)
+                        except (ssl.SSLWantReadError, ssl.SSLWantWriteError, BlockingIOError):
+                            break
+                        if not chunk:
+                            raise ConnectionResetError("closed by the resolver")
+                        inbuf += chunk
+                        if not (pending and pending()):
+                            break
+                    while len(inbuf) >= 2:
+                        (n,) = struct.unpack("!H", inbuf[:2])
+                        if len(inbuf) < 2 + n:
+                            break
+                        msg = bytes(inbuf[2:2 + n])
+                        del inbuf[:2 + n]
+                        self.last_rx = time.monotonic()
+                        if len(msg) < 12:
+                            continue
+                        with self.lock:
+                            slot = self.pending.pop(struct.unpack("!H", msg[:2])[0], None)
+                        if slot is not None:
+                            slot[1] = msg
+                            slot[0].set()
+                if want_write and sock in w:
+                    with self.lock:
+                        data = bytes(self.outbuf)
+                    try:
+                        sent = sock.send(data)
+                    except (ssl.SSLWantReadError, ssl.SSLWantWriteError, BlockingIOError):
+                        sent = 0
+                    if sent:
+                        with self.lock:
+                            del self.outbuf[:sent]
+        except (OSError, ValueError, ssl.SSLError) as exc:
+            err = exc if isinstance(exc, OSError) else ConnectionResetError(str(exc))
+        with self.lock:
+            self.dead = True
+            pending, self.pending = self.pending, {}
+        for slot in pending.values():
+            slot[2] = err if isinstance(err, OSError) else ConnectionResetError("closed")
+            slot[0].set()
+        for s in (sock, self._wr, self._ww):
+            try:
+                s.close()
+            except OSError:
+                pass
+
+
 class DotUpstream:
-    """v0.8.18: DNS-over-TLS (RFC 7858) to one resolver, at pinned addresses, with
-    kept-alive connections. Same interface as DohUpstream."""
+    """v0.8.18: DNS-over-TLS (RFC 7858) to one resolver, at pinned addresses. Same
+    interface as DohUpstream. v0.8.36: queries are pipelined over at most DOT_MAX_CONNS
+    kept-alive connections per address (no new TLS handshake per query), a connection
+    idle past DOT_IDLE_MAX is replaced rather than reused, and one that stops answering
+    is dropped at once."""
 
     def __init__(self, name: str, url: str, ips: list[str], timeout: float = 2.5,
                  ssl_context: ssl.SSLContext | None = None, port: int = 853):
@@ -501,62 +739,95 @@ class DotUpstream:
         self.ips = list(dict.fromkeys(ips))
         self.timeout = timeout
         self._ctx = ssl_context
-        self._pool: list[tuple[str, ssl.SSLSocket]] = []
+        self._conns: dict = {}           # ip -> [_DotConn]
+        self._openers: dict = {}         # ip -> Lock (one TLS handshake at a time)
         self._lock = threading.Lock()
         self.healthy = True
         self.last_error = ""
         self.last_ok = 0.0
         self.trusted_time: tuple[float, float] | None = None   # no Date header over DoT
+        self.handshakes = 0
 
     def _context(self) -> ssl.SSLContext:
         if self._ctx is None:
             self._ctx = _ssl_context()
         return self._ctx
 
-    def _take(self, ip: str):
-        with self._lock:
-            for i, (pip, sock) in enumerate(self._pool):
-                if pip == ip:
-                    return self._pool.pop(i)[1]
-        fam = socket.AF_INET6 if ":" in ip else socket.AF_INET
-        raw = socket.create_connection((ip, self.port), self.timeout) if fam == socket.AF_INET \
+    def _open(self, ip: str) -> _DotConn:
+        raw = socket.create_connection((ip, self.port), self.timeout) if ":" not in ip \
             else socket.create_connection((ip, self.port, 0, 0), self.timeout)
-        return self._context().wrap_socket(raw, server_hostname=self.host)
+        try:
+            raw.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except OSError:
+            pass
+        try:
+            sock = self._context().wrap_socket(raw, server_hostname=self.host)
+        except Exception:
+            raw.close()
+            raise
+        self.handshakes += 1
+        return _DotConn(ip, sock)
 
-    def _give(self, ip: str, sock) -> None:
+    def _pick(self, ip: str):
+        now = time.monotonic()
+        drop = []
         with self._lock:
-            if len(self._pool) < 8:
-                self._pool.append((ip, sock))
-                return
-        sock.close()
+            live = []
+            for c in self._conns.get(ip, []):
+                (live if c.usable(now) else drop).append(c)
+            self._conns[ip] = live
+            best = min(live, key=lambda c: c.load()) if live else None
+            pick = best if best is not None and (best.load() < DOT_PIPELINE
+                                                  or len(live) >= DOT_MAX_CONNS) else None
+        for c in drop:
+            c.kill()
+        return pick
+
+    def _conn(self, ip: str) -> tuple[_DotConn, bool]:
+        """(connection, opened_now) for `ip`: the least busy usable one, or a new one.
+        One thread opens a connection at a time per address; the others wait for it and
+        pipeline on it instead of each paying for its own TLS handshake."""
+        pick = self._pick(ip)
+        if pick is not None:
+            return pick, False
+        with self._lock:
+            opener = self._openers.setdefault(ip, threading.Lock())
+        with opener:
+            pick = self._pick(ip)
+            if pick is not None:
+                return pick, False
+            c = self._open(ip)
+            with self._lock:
+                self._conns.setdefault(ip, []).append(c)
+        return c, True
+
+    def warm_idle(self) -> float:
+        """Seconds since the busiest live connection last carried anything (inf: none)."""
+        now = time.monotonic()
+        with self._lock:
+            idles = [c.idle(now) for cs in self._conns.values() for c in cs if not c.dead]
+        return min(idles) if idles else float("inf")
+
+    def reset(self) -> None:
+        with self._lock:
+            conns, self._conns = [c for cs in self._conns.values() for c in cs], {}
+        for c in conns:
+            c.kill()
 
     def query(self, wire: bytes) -> bytes:
         errors = []
         for ip in self.ips:
-            for attempt in range(2):     # a kept-alive connection may have gone stale
-                sock = None
+            for attempt in range(2):     # a kept-alive connection may close under us: retry once
+                fresh = False
                 try:
-                    sock = self._take(ip)
-                    sock.settimeout(self.timeout)
-                    sock.sendall(struct.pack("!H", len(wire)) + wire)
-                    hdr = _recv_exact(sock, 2)
-                    if not hdr:
-                        raise ConnectionResetError("closed")
-                    (n,) = struct.unpack("!H", hdr)
-                    data = _recv_exact(sock, n)
-                    if not data or len(data) < 12 or data[:2] != wire[:2]:
-                        raise DNSError("bad answer")
-                    self._give(ip, sock)
+                    conn, fresh = self._conn(ip)
+                    data = conn.ask(wire, self.timeout)
                     self.last_ok = time.time()
                     return data
-                except (OSError, DNSError, struct.error) as exc:
-                    if sock is not None:
-                        try:
-                            sock.close()
-                        except OSError:
-                            pass
+                except (OSError, DNSError, struct.error, ssl.SSLError) as exc:
                     errors.append(f"{ip}: {type(exc).__name__}")
-                    if attempt == 0 and isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+                    if attempt == 0 and not fresh and isinstance(exc, (ConnectionResetError, BrokenPipeError,
+                                                                       ConnectionAbortedError)):
                         continue
                     break
         self.last_error = "; ".join(errors)[-300:]
@@ -611,9 +882,9 @@ class Policy:
 
 class Forwarder:
     def __init__(self, upstreams: list, filters=None, policy: Policy | None = None,
-                 log=print, cache_size: int = 10_000, clock=time.time, youtube_upstreams: list | None = None,
+                 log=print, cache_size: int = 20_000, clock=time.time, youtube_upstreams: list | None = None,
                  primary_upstreams: list | None = None, canary_min_entries: int = CANARY_MIN_ENTRIES,
-                 on_fallback=None):
+                 on_fallback=None, serve_stale: bool = True, prefetch: bool = True, hedge: bool = True):
         # `upstreams` is the family-filter chain. v0.8.18: `primary_upstreams` (the
         # malware-only resolvers) take allowed queries while Pax's own filter is
         # healthy; without them the family chain is the only one (as before 0.8.18).
@@ -640,14 +911,30 @@ class Forwarder:
         self.ready = filters is not None
         self.active = upstreams[0].name if upstreams else None
         self.stats = {"queries": 0, "blocked": 0, "rewritten": 0, "servfail": 0, "cache_hits": 0,
-                      "upstream": {}}
+                      "stale_served": 0, "prefetched": 0, "coalesced": 0, "hedged": 0, "upstream": {}}
         self._last_all_down_log = 0.0
+        # v0.8.36 speed: serve-stale + prefetch for allowed answers, one upstream query per
+        # name at a time, hedged requests within a chain, per-upstream latency.
+        self.serve_stale = serve_stale
+        self.prefetch = prefetch
+        self.hedge = hedge
+        self._upool = ThreadPoolExecutor(max_workers=64, thread_name_prefix="pax-dns-up")
+        self._bgpool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="pax-dns-refresh")
+        self._inflight: dict = {}
+        self._inflight_lock = threading.Lock()
+        self._refreshing: set = set()
+        self._latency: dict = {}          # upstream name -> (ewma seconds, mean deviation)
+        self.last_query_at = 0.0
+        self._bg_started = False
 
     # -------------------------------------------------------- configuration
     def set_filters(self, filters) -> None:
+        # v0.8.36: every lookup is decided again with the new lists before the cache is read,
+        # so allowed answers can stay; only SafeSearch rewrites (whose target comes from the
+        # lists) are dropped. Blocked answers are never cached.
         self.filters = filters
         self.ready = filters is not None
-        self.flush()
+        self.flush(rewrites_only=True)
         if self.primary_upstreams:
             self.canary()                 # after every list change
 
@@ -740,12 +1027,22 @@ class Forwarder:
         return time.monotonic() - self._last_canary_at >= every
 
     def set_policy(self, policy: Policy) -> None:
+        # v0.8.36: the user's blocks and exceptions are applied by decide() before the cache
+        # is read, so a list change keeps the cache. A change of route (extra family layer,
+        # YouTube Restricted Mode) still empties it.
+        old = self.policy
         self.policy = policy
-        self.flush()
+        if (getattr(old, "family_layer", False) != getattr(policy, "family_layer", False)
+                or getattr(old, "youtube_restricted", True) != getattr(policy, "youtube_restricted", True)):
+            self.flush()
 
-    def flush(self) -> None:
+    def flush(self, rewrites_only: bool = False) -> None:
         with self._cache_lock:
-            self._cache.clear()
+            if rewrites_only:
+                for key in [k for k in self._cache if len(k) > 3 and k[3]]:
+                    del self._cache[key]
+            else:
+                self._cache.clear()
 
     # ------------------------------------------------------------- decision
     def decide(self, name: str, policy: Policy | None = None) -> tuple[str, str]:
@@ -801,26 +1098,48 @@ class Forwarder:
                 and bool(self.youtube_upstreams or (self.primary_upstreams and not self.family_route(p))))
 
     # ---------------------------------------------------------------- cache
-    def _cache_get(self, key):
+    def _cache_lookup(self, key):
+        """(answer, state): state "fresh", "prefetch" (fresh, but popular and about to
+        expire: refresh it now) or "stale" (expired allowed answer, served with STALE_TTL
+        while it is refreshed; RFC 8767). (None, None) on a miss."""
         with self._cache_lock:
             item = self._cache.get(key)
             if not item:
-                return None
-            expires, resp, stored = item
+                return None, None
+            expires, resp, stored, ttl, hits, positive = item
             now = monotonic_continuous()
-            if now >= expires:
-                del self._cache[key]
-                return None
-            self._cache.move_to_end(key)
-            self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
-        return age_ttls(resp, int(now - stored))
+            if now < expires:
+                item[4] = hits + 1
+                self._cache.move_to_end(key)
+                self.stats["cache_hits"] = self.stats.get("cache_hits", 0) + 1
+                state = "fresh"
+                if (self.prefetch and hits + 1 >= PREFETCH_MIN_HITS
+                        and expires - now <= max(1.0, ttl * PREFETCH_FRACTION)):
+                    state = "prefetch"
+                return age_ttls(resp, int(now - stored)), state
+            # Stale only on Pax's own route (key[4] False): there every content decision is the
+            # lists' and was just made again. On the family-filter route the upstream decides
+            # content too, so its answers are never used past their TTL.
+            if self.serve_stale and positive and not key[4] and now < expires + STALE_MAX:
+                self._cache.move_to_end(key)
+                self.stats["stale_served"] = self.stats.get("stale_served", 0) + 1
+                return cap_ttls(resp, STALE_TTL), "stale"
+            del self._cache[key]
+        return None, None
+
+    def _cache_get(self, key):
+        """Fresh answers only (pre-0.8.36 behaviour; kept for callers and tests)."""
+        resp, state = self._cache_lookup(key)
+        return resp if state in ("fresh", "prefetch") else None
 
     def _cache_put(self, key, resp: bytes, ttl: int) -> None:
         if ttl <= 0:
             return
         with self._cache_lock:
             now = monotonic_continuous()
-            self._cache[key] = (now + ttl, resp, now)
+            old = self._cache.get(key)
+            hits = old[4] if old else 0
+            self._cache[key] = [now + ttl, resp, now, ttl, hits, is_positive(resp)]
             self._cache.move_to_end(key)
             while len(self._cache) > self._cache_size:
                 self._cache.popitem(last=False)
@@ -850,25 +1169,98 @@ class Forwarder:
             return self._ordered(self.primary_upstreams) + list(self.youtube_upstreams)
         return self._ordered(self.primary_upstreams) + self._ordered(self.upstreams)
 
+    def hedge_delay(self, u) -> float:
+        """How long to wait for `u` before also asking the next upstream of the same chain:
+        its usual answer time plus four mean deviations, within HEDGE_MIN..HEDGE_MAX."""
+        lat = self._latency.get(u.name)
+        if not lat:
+            return HEDGE_DEFAULT
+        ewma, dev = lat
+        return min(HEDGE_MAX, max(HEDGE_MIN, ewma + 4 * dev))
+
+    def _record_latency(self, u, took: float) -> None:
+        ewma, dev = self._latency.get(u.name, (took, took / 2))
+        dev = 0.75 * dev + 0.25 * abs(took - ewma)
+        ewma = 0.8 * ewma + 0.2 * took
+        self._latency[u.name] = (ewma, dev)
+
+    def _attempt(self, u, wire: bytes, results) -> None:
+        """One upstream query. Health is recorded here, not by the caller, so an upstream
+        that fails after a hedge already answered (port 853 blocked on a hotel network,
+        say) is still marked down and moved to the back of the chain."""
+        t0 = time.monotonic()
+        try:
+            resp = u.query(wire)
+            if len(resp) < 12:
+                raise DNSError("short answer")
+        except Exception as exc:  # noqa: BLE001 - reported to forward()
+            if u.healthy:
+                u.healthy = False
+                self.log(f"PAX-DNS-003 {u.name} failed ({exc}); trying the next upstream")
+            results.put((u, None, exc, time.monotonic() - t0))
+            return
+        took = time.monotonic() - t0
+        if not u.healthy:
+            u.healthy = True
+        self._record_latency(u, took)
+        results.put((u, resp, None, took))
+
     def forward(self, wire: bytes, chain: list | None = None, note: bool = True) -> bytes | None:
         """The first good upstream answer, or None when every upstream failed.
         `chain` (v0.8.6 YouTube names, v0.8.18 per-query route) is tried in its
-        own order instead of the default one."""
-        for u in (chain if chain else self.ordered_upstreams()):
+        own order instead of the default one.
+
+        v0.8.36: upstreams are still asked strictly in chain order, but the next one is
+        also asked when the current one hasn't answered within hedge_delay() (it carries
+        on; the first good answer wins), when it fails, or when it answers SERVFAIL or
+        REFUSED. Every upstream in a chain is a filtered resolver Pax already trusts for
+        that query, so this is the same set of resolvers the pre-0.8.36 failover reached,
+        only sooner. The whole chain gets FORWARD_BUDGET seconds."""
+        ups = list(chain if chain else self.ordered_upstreams())
+        results: queue.Queue = queue.Queue()
+        deadline = time.monotonic() + FORWARD_BUDGET
+        started = finished = 0
+        fallback = None
+        next_hedge = 0.0
+
+        def start_next() -> None:
+            nonlocal started, next_hedge
+            u = ups[started]
+            started += 1
+            if started > 1:
+                self.stats["hedged"] = self.stats.get("hedged", 0) + 1
+            self._upool.submit(self._attempt, u, wire, results)
+            next_hedge = time.monotonic() + (self.hedge_delay(u) if self.hedge else FORWARD_BUDGET)
+
+        if ups:
+            start_next()
+        while ups:
+            now = time.monotonic()
+            if now >= deadline:
+                break
+            until = deadline if started >= len(ups) else min(deadline, next_hedge)
             try:
-                resp = u.query(wire)
-                if len(resp) < 12:
-                    raise DNSError("short answer")
-                if not u.healthy:
-                    u.healthy = True
-                if note:
-                    self._note_active(u)
-                self.stats["upstream"][u.name] = self.stats["upstream"].get(u.name, 0) + 1
-                return resp
-            except Exception as exc:  # noqa: BLE001 - try the next one
-                if u.healthy:
-                    u.healthy = False
-                    self.log(f"PAX-DNS-003 {u.name} failed ({exc}); trying the next upstream")
+                u, resp, exc, took = results.get(timeout=max(0.0, until - now))
+            except queue.Empty:
+                if started < len(ups) and time.monotonic() >= next_hedge:
+                    start_next()
+                continue
+            finished += 1
+            if exc is None:
+                if rcode_of(resp) in (RCODE_NOERROR, RCODE_NXDOMAIN):
+                    if note:
+                        self._note_active(u)
+                    self.stats["upstream"][u.name] = self.stats["upstream"].get(u.name, 0) + 1
+                    return resp
+                if fallback is None:
+                    fallback = resp            # SERVFAIL/REFUSED: the next one may know better
+            if finished >= started:
+                if started < len(ups):
+                    start_next()
+                else:
+                    break
+        if fallback is not None:
+            return fallback
         now = time.time()
         if now - self._last_all_down_log > 60:
             self._last_all_down_log = now
@@ -916,35 +1308,44 @@ class Forwarder:
         if action == "block":
             self.stats["blocked"] += 1
             return make_blocked(q)
+        if action == "rewrite" and q.qtype in (QTYPE_HTTPS, QTYPE_SVCB):
+            self.stats["rewritten"] += 1
+            return _header(q, RCODE_NOERROR, 0) + q.question     # use A/AAAA instead
         family = self.family_route(policy)
-        key = (name, q.qtype, q.do_bit, action == "rewrite", family)
-        cached = self._cache_get(key)
+        youtube = action == "forward" and self.youtube_unrestricted(name, policy)
+        key = (name, q.qtype, q.do_bit, action == "rewrite", family) + (("youtube",) if youtube else ())
+        self.last_query_at = time.monotonic()
+        # Only reached for a lookup decide() allowed (or rewrote) just now, with the lists
+        # in use: a blocked name never gets here and never has a cached answer.
+        cached, state = self._cache_lookup(key)
         if cached is not None:
-            return with_id(cached, q.id)
+            if state != "fresh":
+                self._refresh_later(key, raw, q, action, detail, policy, youtube, state)
+            return for_query(cached, q)
         if action == "rewrite":
             self.stats["rewritten"] += 1
-            if q.qtype in (QTYPE_HTTPS, QTYPE_SVCB):
-                return _header(q, RCODE_NOERROR, 0) + q.question     # use A/AAAA instead
+        resp = self._resolve_once(key, raw, q, action, detail, policy, youtube)
+        if resp is None:
+            self.stats["servfail"] += 1
+            return make_servfail(q)
+        return resp
+
+    def _resolve(self, key, raw: bytes, q: Query, action: str, detail: str, policy, youtube: bool):
+        """Ask upstream for an allowed (or rewritten) lookup and cache the answer.
+        None = every upstream failed (the caller answers SERVFAIL, never unfiltered)."""
+        if action == "rewrite":
             upstream = None
             if q.qtype in (QTYPE_A, QTYPE_AAAA):
                 upstream = self.forward(build_query(detail, q.qtype, random.getrandbits(16)),
                                         self.chain_for(policy, False))
                 if upstream is None:
-                    self.stats["servfail"] += 1
-                    return make_servfail(q)
+                    return None
             resp = make_rewrite(q, detail, upstream)
             self._cache_put(key, resp, min(BLOCK_TTL, cache_ttl(upstream)) if upstream else BLOCK_TTL)
             return resp
-        youtube = action == "forward" and self.youtube_unrestricted(name, policy)
-        if youtube:
-            key = key + ("youtube",)
-            cached = self._cache_get(key)
-            if cached is not None:
-                return with_id(cached, q.id)
         resp = self.forward(raw, self.chain_for(policy, youtube), note=not youtube)
         if resp is None:
-            self.stats["servfail"] += 1
-            return make_servfail(q)
+            return None
         resp = with_id(resp, q.id)
         try:
             rcode, _ = parse_answers(resp)
@@ -953,6 +1354,114 @@ class Forwarder:
         if rcode in (RCODE_NOERROR, RCODE_NXDOMAIN):
             self._cache_put(key, resp, cache_ttl(resp))     # TTL-respecting, negative too
         return resp
+
+    def _resolve_once(self, key, raw: bytes, q: Query, action: str, detail: str, policy, youtube: bool):
+        """v0.8.36: one upstream lookup per name at a time; a second asker of the same
+        name (the browser and macOS often ask together) waits for the first one's answer."""
+        with self._inflight_lock:
+            slot = self._inflight.get(key)
+            leader = slot is None
+            if leader:
+                slot = self._inflight[key] = [threading.Event(), None]
+        if not leader:
+            self.stats["coalesced"] = self.stats.get("coalesced", 0) + 1
+            if slot[0].wait(FORWARD_BUDGET + 1.0) and slot[1] is not None:
+                return for_query(slot[1], q)
+            return self._resolve(key, raw, q, action, detail, policy, youtube)
+        try:
+            resp = self._resolve(key, raw, q, action, detail, policy, youtube)
+            slot[1] = resp
+            return resp
+        finally:
+            with self._inflight_lock:
+                self._inflight.pop(key, None)
+            slot[0].set()
+
+    def _refresh_later(self, key, raw: bytes, q: Query, action: str, detail: str, policy, youtube: bool,
+                       state: str) -> None:
+        """Fetch a fresh copy of a stale or about-to-expire allowed answer in the background."""
+        with self._inflight_lock:
+            if key in self._refreshing or key in self._inflight:
+                return
+            self._refreshing.add(key)
+        if state == "prefetch":
+            self.stats["prefetched"] = self.stats.get("prefetched", 0) + 1
+
+        def run() -> None:
+            try:
+                self._resolve_once(key, raw, q, action, detail, policy, youtube)
+            except Exception:  # noqa: BLE001 - a failed refresh keeps the old answer until STALE_MAX
+                pass
+            finally:
+                with self._inflight_lock:
+                    self._refreshing.discard(key)
+        try:
+            self._bgpool.submit(run)
+        except RuntimeError:              # shutting down
+            with self._inflight_lock:
+                self._refreshing.discard(key)
+
+    # ------------------------------------------------------- warm + keep warm
+    def warm(self, names=WARM_NAMES) -> int:
+        """v0.8.36: look up a few names almost every Mac needs (A and AAAA), through the
+        normal path (decided, rewritten, cached), so the first pages after a restart don't
+        wait. Returns how many answers were cached."""
+        n = 0
+        for name in names:
+            for qtype in (QTYPE_A, QTYPE_AAAA):
+                try:
+                    resp = self.handle(build_query(name, qtype, random.getrandbits(16)))
+                    n += 1 if resp and rcode_of(resp) == RCODE_NOERROR else 0
+                except Exception:  # noqa: BLE001
+                    pass
+        return n
+
+    def keep_warm(self) -> bool:
+        """While the Mac has looked something up in the last KEEPWARM_WINDOW seconds, send
+        the first upstream of the default chain one tiny query when its connection has been
+        idle KEEPWARM_EVERY seconds, so a pause in browsing doesn't cost a new TLS handshake
+        (Quad9 closes idle connections after ~10 s). True when a query was sent."""
+        if time.monotonic() - self.last_query_at > KEEPWARM_WINDOW:
+            return False
+        first = next((u for u in self.ordered_upstreams() if u.healthy), None)
+        idle = getattr(first, "warm_idle", None)
+        if first is None or idle is None or idle() < KEEPWARM_EVERY:
+            return False
+        try:
+            first.query(build_query(HEALTH_NAME, QTYPE_A, random.getrandbits(16)))
+            return True
+        except Exception:  # noqa: BLE001 - the next real lookup hedges past it
+            return False
+
+    def start_background(self, warm: bool = True) -> None:
+        """pax-guard: the keep-warm loop, and the warm-up once the lists are in."""
+        if self._bg_started:
+            return
+        self._bg_started = True
+
+        def loop() -> None:
+            warmed = False
+            while True:
+                try:
+                    if warm and not warmed and self.ready:
+                        warmed = True
+                        self.warm()
+                    self.keep_warm()
+                except Exception:  # noqa: BLE001
+                    pass
+                time.sleep(2.0)
+        threading.Thread(target=loop, name="pax-dns-warm", daemon=True).start()
+
+    def reset_connections(self) -> None:
+        """v0.8.36: the network changed: kept-alive upstream connections belong to the old
+        one, so drop them instead of waiting for each to time out."""
+        for u in self.all_upstreams():
+            r = getattr(u, "reset", None)
+            if r is not None:
+                try:
+                    r()
+                except Exception:  # noqa: BLE001
+                    pass
 
     # ---------------------------------------------------------------- health
     def health_check(self) -> dict:
@@ -1036,7 +1545,13 @@ class Forwarder:
             "all_down": not any(u.healthy for u in allu),
             "upstreams": [{"name": u.name, "url": u.url, "healthy": u.healthy,
                            "role": "primary" if u in self.primary_upstreams else "family",
-                           "last_error": u.last_error[-120:]} for u in allu],
+                           "last_error": u.last_error[-120:],
+                           # v0.8.36: usual answer time and TLS handshakes, for "is it slow?"
+                           "latency_ms": (round(self._latency[u.name][0] * 1000, 1)
+                                          if u.name in self._latency else None),
+                           "handshakes": getattr(u, "handshakes", None),
+                           "via_curl": bool(getattr(u, "use_curl", False))} for u in allu],
+            "cache": {"entries": len(self._cache), "size": self._cache_size},
             "stats": dict(self.stats, upstream=dict(self.stats["upstream"])),
             "lists": (self.filters.info if self.filters is not None else {}),
         }
@@ -1086,7 +1601,7 @@ class DNSServer:
         self.fwd = forwarder
         self.host, self.port = host, port
         self.log = log
-        self.pool = ThreadPoolExecutor(max_workers=32, thread_name_prefix="pax-dns")
+        self.pool = ThreadPoolExecutor(max_workers=64, thread_name_prefix="pax-dns")
         self._udp: socket.socket | None = None
         self._tcp: socketserver.ThreadingTCPServer | None = None
         self._stop = threading.Event()

@@ -312,6 +312,41 @@ only reads the window list (owner, pid, layer, bounds); it never asks for Screen
    / v0.8.35 steps); Installer.app (.pkg) and Keychain Access dialogs still show nothing. Nothing in Privacy &
    Security changes because of Pax (`tccutil` is never run; the permission stays off after Cancel).
 
+### v0.8.36: faster browsing (DNS)
+
+Use a protected Mac on a normal home connection, Pax's own filter on (Settings › Advanced: filter "Pax";
+extra family layer off unless a step says so). `dig` ships with macOS. Write down every number.
+
+32. **Speed, before/after**: on 0.8.35 first, then on 0.8.36, open a Terminal and run
+    `for n in www.bbc.co.uk www.theguardian.com github.com www.amazon.co.uk www.apple.com; do dig @127.0.0.1 $n | grep 'Query time'; done`
+    twice in a row (2nd run = cache), wait 30 seconds, run it again (Quad9 has closed the idle connection on
+    0.8.35; 0.8.36 keeps it warm for 2 minutes after the last lookup). Then browse 10 minutes of normal sites
+    in Safari and Chrome and note whether pages feel slower than with Pax switched off.
+33. **Revisit**: visit five news sites, wait 30-60 minutes (most answers expire), visit them again: on 0.8.36
+    the revisit should start loading at once (an expired *allowed* answer is used once with a 30 s TTL while a
+    fresh one is fetched). `/Library/PaxGuard/runtime/bin/python3.12 /Library/PaxGuard/bin/pax_guard.py ask
+    '{"cmd":"dns.status"}' | python3 -m json.tool | grep -E 'stale_served|prefetched|hedged|latency_ms|handshakes'`
+    shows the counts and each upstream's usual answer time (`via_curl` should be false everywhere).
+34. **Protection unchanged**: a known restricted test site and a site on your Blocked sites still answer
+    `0.0.0.0` (`dig @127.0.0.1 <name> +short`), immediately and after waiting 30-60 minutes; add a site to
+    Blocked sites and `dig` it straight away: `0.0.0.0` at once (the cache never answers for a blocked name).
+    `dig @127.0.0.1 www.google.com` still CNAMEs to forcesafesearch.google.com and `www.youtube.com` to
+    restrict(moderate).youtube.com (unless the YouTube switch is off). Turn the extra family layer on: lookups
+    still work (slower is fine), restricted names still blocked.
+35. **Sleep and network change**: browse, close the lid for 10 minutes, open it and load a page at once: it
+    should load within about half a second of normal (0.8.35 could hang ~2.5 s per name on a dead kept-alive
+    connection). Switch Wi-Fi network (or tether to a phone) and load a page: same. `log show --last 5m
+    --predicate 'process == "Python"' | grep -i "network change"` shows the change.
+36. **Quad9 blocked**: as an administrator, `sudo pfctl -a com.apple/250.org.paxpeace.pax -sr` to see the
+    rules, then temporarily block 9.9.9.9 and 149.112.112.112 port 853 in a second test anchor (or unplug
+    the router's upstream for Quad9 if you can). Pages should still load with about 0.3-0.5 s extra on the
+    first lookup (Cloudflare's security resolver takes over), never unfiltered: restricted names still
+    `0.0.0.0`. Remove the test rule.
+37. **CPU**: Activity Monitor › CPU, filter "Python" (pax-guard): idle Mac, should stay near 0 % with short
+    blips every 30 s (0.8.35 used ~1-2 s of CPU every 30 s rebuilding its /etc/hosts list). Note the value.
+    Optional: `python3 tools/dns-bench.py browse` from a checkout on the same Mac (needs no root; it runs its
+    own copy of the forwarder on a high port) and keep the JSON.
+
 ## iPhone / iPad
 
 0. (v0.8.6) Use a Mac that has **never had the old helper**: no `~/Library/Application Support/Pax/venv`,

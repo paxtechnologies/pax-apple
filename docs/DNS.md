@@ -61,6 +61,103 @@ blocks some mixed-content platforms by policy that Pax deliberately leaves open 
 networks, an internet archive and dynamic-DNS services), and catches some restricted and proxy names the
 lists don't know yet. The numbers are kept with the release notes for the maintainer.
 
+## Speed (v0.8.36)
+
+Ruben (29 Oct 2026): "browsing the internet with Pax on feels quite slow". The Mac's path is: app →
+mDNSResponder (honours `/etc/hosts`, caches by TTL) → pax-guard's forwarder on 127.0.0.1:53 → Pax's
+decision (~0.1 ms per name, measured on the full 1.36 M-entry lists) → Quad9 over DNS-over-TLS, then
+Cloudflare's security resolver over DoH, then the family chain. **api.paxpeace.com and dns2 are not on the
+Mac's lookup path** (they serve the iPhone/iPad DoH, which runs this same engine, so it gets the same
+changes when the servers update).
+
+**What was slow (measured 29 Oct 2026 from a cloud host, `tools/dns-bench.py`; a home line in London adds
+its own round trips but the ratios hold):**
+
+1. **A new TLS handshake for nearly every lookup in a burst.** One query per DoT connection at a time; a
+   page asking 20-50 names opened 20-50 TLS connections to Quad9 (cold ~32-42 ms vs ~7 ms on a kept-alive
+   one), and only 8 were kept. Quad9 closes an idle connection after ~10 s (measured: reused after 3 s,
+   closed by 12 s), so after any pause the pooled sockets were all dead.
+2. **Dead pooled sockets demoted Quad9.** After a pause, a retry took *another* dead socket from the pool,
+   then the second address's, so Quad9 "failed" and was marked unhealthy; Cloudflare's security resolver
+   (here ~57 ms warm vs Quad9 ~7 ms) then answered everything until the next minute's health check. In the
+   12-page benchmark Quad9 answered only 166 of 960 upstream lookups on 0.8.35 (Cloudflare 794); 0.8.36:
+   Quad9 all of them.
+3. **A silent connection cost 2.5 s per name** (after sleep or a network change: no FIN, no answer, the full
+   per-address timeout, then the next address), and a Quad9 outage 5 s (2 addresses × 2.5 s) before the
+   next resolver was asked.
+4. **No serve-stale or prefetch.** Many CDN and ad-tech names have TTLs of 20-300 s, so a site revisited
+   after a few minutes paid full upstream round trips for every name again. The cache was also emptied
+   whenever the lists or the user's blocks changed (pack updates every ~6 h).
+5. **The /etc/hosts rebuild blocked DNS.** Every 30 s pax-guard worked out its ~176,000-name hosts list
+   (~1.8 s of Python, 5.8 % of the time); it shares the interpreter with the forwarder, so lookups answered
+   during it took a median 36.6 ms instead of 10.3 ms (fake 10 ms upstream).
+
+Not causes (checked): the decision itself (~0.1 ms), the canary (~1 ms every 3 min), EDNS/UDP size,
+SafeSearch rewrites, logging (no per-query logging or fsync), pf (rules only match resolver/VPN ports).
+Not verifiable from the sandbox: whether a 6.7 MB `/etc/hosts` slows mDNSResponder itself (HARDWARE_TEST
+37), and whether Python's certificate store on a given Mac pushes DoH to the `curl` fallback (`via_curl`
+in `dns.status`).
+
+**What 0.8.36 changes (guard/dns_forwarder.py, guard/guard_config.py; nothing about what is blocked):**
+
+* **Pipelined, kept-alive DoT** (`_DotConn`): queries share at most `DOT_MAX_CONNS` (2) connections per
+  address, many in flight on each (RFC 7766; Quad9 answers out of order, matched by id *and* question). One
+  I/O thread per connection does every read and write. A connection idle past `DOT_IDLE_MAX` (8 s) is
+  replaced, not reused; one that sends nothing back by the timeout is dropped at once. One thread opens a
+  connection at a time per address, the others wait and pipeline on it.
+* **Keep-warm**: while the Mac has looked anything up in the last 2 minutes, one tiny query
+  (`example.com`) every 6 s keeps the first upstream's connection open.
+* **Hedged requests inside the chain**: upstreams are still asked in order; the next one is *also* asked when
+  the current one hasn't answered within its usual time plus four deviations (0.25-0.8 s, 0.4 s before any
+  measurement), or at once when it fails or answers SERVFAIL/REFUSED. The first good answer wins. The chain
+  is the one the query already had (Pax's route: Quad9 → Cloudflare security → family chain; family route:
+  family resolvers only), so no query reaches a resolver it couldn't reach before, only sooner. The whole
+  chain gets 4 s, then SERVFAIL (never unfiltered).
+* **Serve-stale (RFC 8767) and prefetch**, for allowed answers only: every lookup is decided first with the
+  lists in use, and only then may the cache answer, so a blocked name is never answered from the cache. An
+  expired NOERROR answer (addresses, or "no IPv6") up to 1 hour old is used once with a 30 s TTL while a fresh
+  one is fetched; NXDOMAIN and failures never are. **Never on the family route** (extra family layer or the
+  automatic fallback), where the upstream also decides content. A name asked at least twice is refreshed in
+  the last 10 % of its TTL.
+* **The cache survives list changes**: pack updates and the user's block/exception changes keep allowed
+  answers (decide() runs first anyway); SafeSearch rewrites are dropped on a pack change, and the whole cache
+  still empties when the route changes (family layer, YouTube switch, fallback on/off). Cache 10,000 → 20,000
+  entries on the Mac.
+* **One upstream query per name at a time** (identical lookups in flight wait for the first), answers echo
+  the asker's letter case, 64 worker threads instead of 32.
+* **Network change**: pax-guard drops every kept-alive upstream connection when the network changes.
+* **Warm-up**: after the lists load, ~30 everyday names (Apple, Google fonts/CDNs, BBC, gov.uk, Wikipedia,
+  Microsoft login, Pax's own) are looked up once through the normal path. Nothing about the user is stored.
+* **/etc/hosts**: the list is worked out again only when its inputs change (`hosts_domains` remembers the
+  last answer for the same inputs): 1.74 s → 0.013 s of CPU per cycle.
+* `dns.status` shows each upstream's `latency_ms`, TLS `handshakes`, `via_curl`, and the counts
+  `stale_served`, `prefetched`, `coalesced`, `hedged`.
+
+**Before/after** (same cloud host, real Quad9/Cloudflare, real lists, 12 pages / 213 names, A+AAAA asked
+together; "page wait" = the slowest lookup of the page; `browse` mode):
+
+Two rounds each (round 2 first; round 1, run without keep-warm for 0.8.36, in brackets). Medians / p90, ms.
+
+| Pass | page wait 0.8.35 | page wait 0.8.36 | lookup 0.8.35 | lookup 0.8.36 |
+|---|---|---|---|---|
+| cold, 12 s between pages | 143 / 185 (181 / 312) | 111 / 150 (100 / 376) | 91 / 138 (105 / 174) | 33 / 63 (39 / 72) |
+| revisit 30 min later | 121 / 217 (197 / 248) | 13 / 22 (11 / 14) | 68 / 102 (91 / 145) | 14 / 22 (8 / 12) |
+| warm, straight away | 128 / 201 (129 / 209) | 10 / 12 (9 / 13) | 17 / 113 (10 / 102) | 9 / 12 (7 / 12) |
+
+Sum of the 12 page waits: cold 1,632 → 1,310 ms, revisit 1,676 → 163 ms, warm 1,677 → 102 ms. Quad9 answered
+591 of 973 upstream lookups on 0.8.35 (166 of 960 in round 1; the rest fell to Cloudflare after Quad9 was
+wrongly marked down) and all 984 on 0.8.36, over 8 TLS handshakes in the whole run (30 without keep-warm).
+No timeouts in any run. The cold page wait is mostly Quad9 resolving names nobody had asked it for recently,
+which no client-side change can remove.
+
+Fake-upstream fault cases (`faults` mode): first lookup on a dead kept-alive connection 2,561 ms → 462 ms;
+Quad9 down (2 addresses timing out) 5,060 ms → 462 ms. Hosts work (`gil` mode): 1.74 s → 0.013 s CPU per
+30 s cycle; lookups during it median 36.6 ms → 12.8 ms.
+
+Limits: Python's standard library has no HTTP/2, so Cloudflare/CleanBrowsing/AdGuard DoH stay HTTP/1.1
+keep-alive (now never reusing a connection idle past 25 s); the numbers are from a cloud host, not a London
+home line; the 6.7 MB /etc/hosts itself is untouched.
+
 The text below describes 0.8.0-0.8.17, where the family-filter chain was the only upstream.
 
 Per query, in order:
