@@ -1,2 +1,2 @@
-mode=apply
+mode=submit
 other_sets=keep

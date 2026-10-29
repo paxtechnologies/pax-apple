@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Pax for iPhone and iPad: write the App Store listing for version 1.2.0 from pax-ios/appstore/
 # (text, screenshots, review notes, build) with the App Store Connect API, then read it all back.
-# Nothing here submits for App Review. Runs only on ios/onetap-v1.2, when a push changes
-# pax-ios/appstore-metadata.txt (mode=apply|read, other_sets=keep|clear).
+# mode=apply|read never submit. mode=submit (ci/asc_submit.py) checks the listing and build, then
+# sends the version to App Review, released automatically once approved. Runs only on
+# ios/onetap-v1.2, when a push changes pax-ios/appstore-metadata.txt (mode=apply|read|submit,
+# other_sets=keep|clear).
 # Uses the same repo secret as ios-upload: ASC_KEY_P8 (key ID and issuer ID are not secret).
 name: ios-metadata
 on:
@@ -67,7 +69,7 @@ jobs:
           set +x
           export MODE=$(sed -n 's/^mode=//p' appstore-metadata.txt | tr -d ' \r')
           export OTHER_SETS=$(sed -n 's/^other_sets=//p' appstore-metadata.txt | tr -d ' \r')
-          python3 ci/asc_metadata.py
+          if [ "$MODE" = "submit" ]; then python3 -u ci/asc_submit.py; else python3 ci/asc_metadata.py; fi
       - name: Delete the API key
         if: always()
         run: rm -rf "$RUNNER_TEMP/asc" && echo "key files removed"
