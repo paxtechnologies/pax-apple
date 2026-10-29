@@ -16,6 +16,12 @@ import PaxCore
 //      and never clicks, types into, moves or reads the dialog.
 // Both only on a Mac Pax protects, for a Standard account. Every install still goes through
 // installs.start and pax-guard's checks.
+// v0.8.36 (Ruben, 29 Oct 2026): the same dialog with System Settings in front ("Privacy & Security is
+// trying to modify your system settings") gets a calm explanation instead: "Changing a privacy setting
+// needs an administrator." / "On this Mac, ask someone you trust to type their password." [OK], naming
+// the app that wants the permission when Pax can tell. It only explains: no permission is granted,
+// requested or changed, the privacy database isn't read or touched. Rules: PaxCore/PrivacyPrompts.swift
+// (V0836Tests).
 
 @MainActor
 final class InstallHelpersModel {
@@ -41,6 +47,9 @@ final class InstallHelpersModel {
     private var panel: NSPanel?
     private var panelDialog: Int?
     private var pidInfo: [pid_t: (bundle: String?, path: String?)] = [:]
+    // v0.8.36: the privacy note's own rate limit, and apps recently opened or used (to name the requester).
+    private var lastPrivacyShown: Date?
+    private var recentApps: [String: (name: String?, at: Date, pid: pid_t)] = [:]
 
     private var observers: [NSObjectProtocol] = []
 
@@ -68,7 +77,20 @@ final class InstallHelpersModel {
                                             queue: .main) { note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             let bundle = app?.bundleIdentifier
-            Task { @MainActor in InstallHelpersModel.shared.appActivated(bundle) }
+            let name = app?.localizedName
+            let pid = app?.processIdentifier ?? 0
+            Task { @MainActor in
+                InstallHelpersModel.shared.appActivated(bundle)
+                InstallHelpersModel.shared.noteRecent(bundle, name: name, pid: pid)
+            }
+        })
+        observers.append(center.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil,
+                                            queue: .main) { note in
+            let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            let bundle = app?.bundleIdentifier
+            let name = app?.localizedName
+            let pid = app?.processIdentifier ?? 0
+            Task { @MainActor in InstallHelpersModel.shared.noteRecent(bundle, name: name, pid: pid) }
         })
         appActivated(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
         // Disks already mounted when Pax opens.
@@ -192,6 +214,26 @@ final class InstallHelpersModel {
         previousApp = bundle
     }
 
+    /// v0.8.36: an app the person opened or brought forward (Apple's apps and Pax are filtered later).
+    private func noteRecent(_ bundle: String?, name: String?, pid: pid_t) {
+        guard let b = bundle, !b.isEmpty, pid > 0 else { return }
+        recentApps[b] = (name, Date(), pid)
+        if recentApps.count > 30 {
+            let cutoff = Date().addingTimeInterval(-PrivacyPromptHelper.requesterWindow)
+            recentApps = recentApps.filter { $0.value.at >= cutoff }
+        }
+    }
+
+    private func requesterName(now: Date) -> String? {
+        let recent = recentApps.map { entry -> PrivacyPromptHelper.RecentApp in
+            let b = entry.key, v = entry.value
+            let app = NSRunningApplication(processIdentifier: v.pid)
+            let running = app != nil && app?.isTerminated == false && app?.bundleIdentifier == b
+            return .init(bundleID: b, name: app?.localizedName ?? v.name, at: v.at, running: running)
+        }
+        return PrivacyPromptHelper.requesterName(recent, now: now, paxBundleID: Bundle.main.bundleIdentifier)
+    }
+
     private func lookForDialog() {
         guard isProtected(), !isAdmin else { closePanel(); return }
         let windows = currentWindows()
@@ -201,6 +243,19 @@ final class InstallHelpersModel {
         }
         guard let dialog, panel == nil else { return }
         let now = Date()
+        // v0.8.36: System Settings asking (a privacy permission): the calm note, never the install panel.
+        let behind = PrivacyPromptHelper.appBehindDialog(windows, paxBundleID: Bundle.main.bundleIdentifier)
+        if PrivacyPromptHelper.isSettingsContext(previousApp: previousApp, behindDialog: behind) {
+            guard PrivacyPromptHelper.shouldShow(dialog: dialog, now: now, lastShown: lastPrivacyShown,
+                                                 shownWindows: shownWindows, protected: true, isAdmin: isAdmin,
+                                                 settingsContext: true)
+            else { return }
+            lastPrivacyShown = now
+            shownWindows.insert(dialog.number)
+            if shownWindows.count > 50 { shownWindows = [dialog.number] }
+            showPrivacyPanel(beside: dialog, appName: requesterName(now: now))
+            return
+        }
         guard AdminPromptHelper.shouldShow(dialog: dialog, now: now, lastShown: lastShown,
                                            shownWindows: shownWindows, protected: true, isAdmin: isAdmin,
                                            previousApp: previousApp,
@@ -229,6 +284,7 @@ final class InstallHelpersModel {
             let owner = w[kCGWindowOwnerName as String] as? String
             var bundle: String?
             var path: String?
+            let layer = (w[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0
             if owner == nil || owner == "SecurityAgent" {
                 if pidInfo[pid] == nil { pidInfo[pid] = Self.describe(pid) }
                 seenPids.insert(pid)
@@ -239,7 +295,7 @@ final class InstallHelpersModel {
             let alpha = (w[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1
             out.append(.init(number: number, ownerName: owner, ownerBundleID: bundle, ownerPath: path,
                              bounds: HelperRect(x: num("X"), y: num("Y"), width: num("Width"), height: num("Height")),
-                             alpha: alpha))
+                             alpha: alpha, layer: layer, ownerPID: pid))
         }
         if pidInfo.count > 200 { pidInfo = pidInfo.filter { seenPids.contains($0.key) } }
         return out
@@ -254,7 +310,23 @@ final class InstallHelpersModel {
     }
 
     private func showPanel(beside dialog: AdminPromptHelper.WindowInfo) {
-        let size = NSSize(width: 300, height: 128)
+        let view = NSHostingView(rootView: AdminHelperPanelView(
+            open: { InstallHelpersModel.shared.openPax() },
+            notNow: { InstallHelpersModel.shared.closePanel() }))
+        presentPanel(view, size: NSSize(width: 300, height: 128), beside: dialog)
+    }
+
+    /// v0.8.36: "Changing a privacy setting needs an administrator." [OK]. Explains only.
+    private func showPrivacyPanel(beside dialog: AdminPromptHelper.WindowInfo, appName: String?) {
+        let view = NSHostingView(rootView: PrivacyHelperPanelView(
+            appName: appName, ok: { InstallHelpersModel.shared.closePanel() }))
+        let fit = view.fittingSize
+        let size = NSSize(width: PrivacyHelperPanelView.width,
+                          height: max(fit.height, appName == nil ? 120 : 144))
+        presentPanel(view, size: size, beside: dialog)
+    }
+
+    private func presentPanel(_ content: NSView, size: NSSize, beside dialog: AdminPromptHelper.WindowInfo) {
         guard let primary = NSScreen.screens.first else { return }
         let primaryHeight = primary.frame.height
         // Window-server rect (top-left origin) → the screen it's on, in the same coordinates.
@@ -277,9 +349,7 @@ final class InstallHelpersModel {
         p.hasShadow = true
         p.isMovableByWindowBackground = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        p.contentView = NSHostingView(rootView: AdminHelperPanelView(
-            open: { InstallHelpersModel.shared.openPax() },
-            notNow: { InstallHelpersModel.shared.closePanel() }))
+        p.contentView = content
         if NSApp.isHidden {
             // Started hidden at login: show only the panel, not Pax's window.
             PaxActivation.orderOutMainWindows()
@@ -351,6 +421,35 @@ struct AdminHelperPanelView: View {
         }
         .padding(16)
         .frame(width: 300, height: 128)
+        .background(RoundedRectangle(cornerRadius: Theme.smallRadius).fill(Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: Theme.smallRadius).stroke(Theme.border))
+    }
+}
+
+/// v0.8.36: [<App> wants a privacy permission.] / "Changing a privacy setting needs an administrator." /
+/// "On this Mac, ask someone you trust to type their password." [OK]
+struct PrivacyHelperPanelView: View {
+    static let width: CGFloat = 320
+    let appName: String?
+    let ok: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let appName {
+                Text(PrivacyPromptHelper.requesterLine(appName)).font(Theme.body(12))
+                    .foregroundStyle(Theme.mutedText).lineLimit(1)
+            }
+            Text(PrivacyPromptHelper.title).font(Theme.body(14, weight: .medium))
+                .foregroundStyle(Theme.primaryText).fixedSize(horizontal: false, vertical: true)
+            Text(PrivacyPromptHelper.body).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button(PrivacyPromptHelper.okButton, action: ok).buttonStyle(PrimaryButtonStyle(accent: true))
+            }
+        }
+        .padding(16)
+        .frame(width: Self.width, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Theme.smallRadius).fill(Theme.card))
         .overlay(RoundedRectangle(cornerRadius: Theme.smallRadius).stroke(Theme.border))
     }

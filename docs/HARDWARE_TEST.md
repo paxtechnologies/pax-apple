@@ -254,8 +254,8 @@ Use a protected Mac with a **Standard** everyday account. Before each step make 
    an install (auth)`.
 20. **Rate limit / no loops**: cancel the dialog, quit Pax, trigger the dialog again within 30 s: Pax is not
    started again until 30 s have passed. Leave a dialog open and quit Pax: Pax is not relaunched for that same
-   dialog. Unlock a System Settings pane with Pax not running: Pax may start but no panel shows (not an install
-   context); note what happens.
+   dialog. Unlock a System Settings pane with Pax not running: Pax may start; no install panel shows (not an
+   install context). From 0.8.36 the calm privacy note shows instead (v0.8.36 step 28).
 21. **App updaters**: an app using Sparkle (e.g. an older version of a Sparkle-updated app) or Squirrel
    (an Electron app: Slack, Discord) runs its updater while Pax isn't running → Pax starts hidden, posts
    "<App> has an update ready" and shows the Home card. An update already downloaded to
@@ -280,6 +280,37 @@ Use a protected Mac with a **Standard** everyday account. Before each step make 
    notarised) open its .dmg / Open With › Pax / drop on Pax → "Install Swoop?" installs it (no PAX-MAC-023); a
    newer Swoop updates it. A copy of Pax.app (any bundle named Pax.app, or bundle ID org.paxpeace.* /
    org.paxmobile.*) still gives PAX-MAC-023 "Pax doesn't change this app."
+
+### v0.8.36: a calm note for System Settings' privacy administrator prompts
+
+Use a protected Mac with a **Standard** everyday account (and, for step 31, an administrator account). Pax
+only reads the window list (owner, pid, layer, bounds); it never asks for Screen Recording.
+
+26. **Privacy permission, Pax running**: open an app that asks for a privacy permission (e.g. Swoop for
+   Accessibility, or any app for Screen Recording / Input Monitoring / Full Disk Access). Follow macOS's
+   "Open System Settings", switch the app on in Privacy & Security. When macOS shows "Privacy & Security is
+   trying to modify your system settings" asking for an administrator, a small floating Pax panel appears
+   beside it: "Swoop wants a privacy permission." (when Pax can tell) / "Changing a privacy setting needs an
+   administrator." / "On this Mac, ask someone you trust to type their password." [OK]. The dialog keeps
+   focus (typing goes to it); OK closes the panel; the panel also closes when the dialog goes. No "Open Pax",
+   no install panel. Try Accessibility, Full Disk Access, Input Monitoring and Screen Recording on macOS 12
+   (System Preferences), 13, 14, 15, 26 and 27; note any version where nothing shows.
+27. **Naming**: open Firefox, then a second app (e.g. Swoop) that asks for a permission → the panel names
+   the second app. With no third-party app opened or used in the last 5 minutes (go straight to System
+   Settings › Privacy & Security and switch on an existing entry) → no app line, just the two sentences.
+   Quit the app before switching it on → no app line. Note any case where it names the wrong app.
+28. **Pax not running**: quit Pax (⌘Q), then repeat step 26. pax-guard starts Pax (log `opened Pax for an
+   install (auth)`, at most every 30 s) and the privacy panel appears, **not** "Installing or updating an
+   app?". Also on macOS 26 (owner names hidden without Screen Recording).
+29. **Rate limit / once per dialog**: cancel the dialog and switch the permission on again within 2 minutes:
+   no second panel until 2 minutes have passed. Leaving one dialog up never shows the panel twice.
+30. **Other System Settings prompts** (Users & Groups, Network, Date & Time unlock): the same calm panel
+   appears (Pax can't see which pane asked; the wording still says "a privacy setting"). Record whether that
+   reads acceptably; nothing else happens.
+31. **Unchanged**: as the administrator, steps 26–28 show nothing. As the Standard user, Finder drag to
+   Applications and a third-party updater still show "Installing or updating an app?" with Open Pax (v0.8.34
+   / v0.8.35 steps); Installer.app (.pkg) and Keychain Access dialogs still show nothing. Nothing in Privacy &
+   Security changes because of Pax (`tccutil` is never run; the permission stays off after Cancel).
 
 ## iPhone / iPad
 

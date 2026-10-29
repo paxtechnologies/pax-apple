@@ -210,10 +210,14 @@ public enum AdminPromptHelper {
         public let ownerPath: String?
         public let bounds: HelperRect
         public let alpha: Double
+        /// v0.8.36: window layer (0 = ordinary app windows) and owner pid, for the app behind the dialog.
+        public let layer: Int
+        public let ownerPID: Int32?
         public init(number: Int, ownerName: String?, ownerBundleID: String?, ownerPath: String?,
-                    bounds: HelperRect, alpha: Double) {
+                    bounds: HelperRect, alpha: Double, layer: Int = 0, ownerPID: Int32? = nil) {
             self.number = number; self.ownerName = ownerName; self.ownerBundleID = ownerBundleID
             self.ownerPath = ownerPath; self.bounds = bounds; self.alpha = alpha
+            self.layer = layer; self.ownerPID = ownerPID
         }
     }
 
@@ -235,6 +239,8 @@ public enum AdminPromptHelper {
     /// The app the person was using just before the dialog: Finder (dragging to Applications)
     /// or a third-party app (its updater). Apple's other apps (System Settings, Installer,
     /// Safari, Keychain Access...) ask for an administrator for other reasons; so does Pax itself.
+    /// (v0.8.36: System Settings gets its own calm note instead, PrivacyPromptHelper; this rule is
+    /// unchanged.)
     public static func isInstallContext(_ bundleID: String?) -> Bool {
         guard let b = bundleID?.lowercased(), !b.isEmpty else { return false }
         if b == "com.apple.finder" { return true }

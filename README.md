@@ -653,6 +653,13 @@ its signed update channel and logs it (`PAX-GUARD-018`). Apps from Pax's own dev
 itself (e.g. Swoop) now install like any other notarised app. Details:
 [docs/APP_INSTALLS.md](docs/APP_INSTALLS.md).
 
+**Privacy permission prompts (v0.8.36).** On a protected Mac with a Standard account, when System Settings
+asks for an administrator to change a privacy permission (Accessibility, Full Disk Access, Input Monitoring,
+Screen Recording...), Pax shows a small note beside macOS's dialog: "Changing a privacy setting needs an
+administrator. On this Mac, ask someone you trust to type their password." [OK], naming the app that wants the
+permission when it can tell. It only explains: Pax never grants or changes permissions or touches the privacy
+database. Administrators see nothing. Details: [docs/APP_INSTALLS.md](docs/APP_INSTALLS.md).
+
 **Profile** (`make_profile.py --self-lock`, System scope, no removal password: once you're Standard,
 removing a System profile needs an administrator, and Apple's schema says a manually installed profile
 with `PayloadRemovalDisallowed` and no removal password "requires admin auth"):
