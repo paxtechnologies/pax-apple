@@ -1,0 +1,6 @@
+status: success
+workflow: Build DMG #549
+run: https://github.com/paxtechnologies/pax-apple/actions/runs/40959811526
+commit: 12d4dcb8ecbfab3d563cf94cb6a5bd1f7e3121b0
+ref: refs/tags/v0.8.36
+finished: 2026-10-29T21:53:51Z
