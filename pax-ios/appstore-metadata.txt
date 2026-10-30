@@ -1,2 +1,2 @@
-mode=submit
+mode=signing
 other_sets=keep
