@@ -204,13 +204,49 @@ final class PaxAPI {
 
     // MARK: blocked apps (BlockedApps.swift, /workspace/BLOCKED_APPS_SERVER.md)
 
-    /// GET /v1/apps: the account's blocked apps with any removal waiting. A server without the list
-    /// answers 404: then blocked apps stay blocked and nothing is offered to remove them.
-    func apps() async throws -> AppsViewInfo { try await send("GET", "/v1/apps", nil) }
+    /// GET /v1/apps: the account's one blocked-apps list (1.3: Mac and iPhone, each app with its
+    /// `source`), with any removal waiting. Conditional: with the last ETag, an unchanged list is a
+    /// bodiless 304. A server without the list answers 404/405 (`.noList`): then blocked apps stay
+    /// blocked and nothing is offered to remove them, exactly as in 1.2. Called only from
+    /// AppsRefresher (an actor), so the request and the decoding never run on the main thread.
+    func fetchApps(etag: String?) async throws -> AppsFetch {
+        var req = URLRequest(url: base.appendingPathComponent("/v1/apps"))
+        req.httpMethod = "GET"
+        req.timeoutInterval = 20
+        // Our own If-None-Match, so URLSession must not answer from its cache (it would turn a 304
+        // into a 200 with an old body).
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        guard let t = token else { throw AppsFetchError.signedOut }
+        req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization")
+        if let e = etag, !e.isEmpty { req.setValue(e, forHTTPHeaderField: "If-None-Match") }
+        let pair: (Data, URLResponse)
+        do { pair = try await URLSession.shared.data(for: req) }
+        catch {
+            throw PaxAPIError(status: 0, code: "offline",
+                              message: "Pax couldn't reach its server. Check your connection and try again.")
+        }
+        let (data, resp) = pair
+        let http = resp as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
+        switch status {
+        case 304: return .notModified
+        case 404, 405: return .noList
+        case 401: throw AppsFetchError.signedOut
+        case 200..<300:
+            let view = try JSONDecoder().decode(AppsViewInfo.self, from: data)
+            return .list(view, etag: http?.value(forHTTPHeaderField: "ETag"))
+        default: throw PaxAPI.error(status: status, data: data)
+        }
+    }
 
-    /// Adding is instant (more protection).
-    func addApp(bundleID: String, name: String) async throws {
-        let _: Empty = try await send("POST", "/v1/apps", ["bundle_id": bundleID, "name": String(name.prefix(80))])
+    /// Adding is instant (more protection). 1.3: says where it was added ("iphone") and, on a
+    /// device this app set up, its device record. A device set up from a Mac sends no device ID:
+    /// it has no record of its own.
+    func addApp(bundleID: String, name: String, deviceID: String? = nil) async throws {
+        var body: [String: Any] = ["bundle_id": bundleID, "name": String(name.prefix(80)), "source": "iphone"]
+        if let d = deviceID, !d.isEmpty { body["device_id"] = d }
+        let _: Empty = try await send("POST", "/v1/apps", body)
     }
 
     /// A request, never a removal: the person you trust is emailed first (503: nothing starts), then
@@ -334,3 +370,5 @@ final class PaxAPI {
                            reason: obj?["reason"] as? String)
     }
 }
+
+extension PaxAPI: AppsFetching {}

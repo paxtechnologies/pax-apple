@@ -447,6 +447,28 @@ enum PaxCopy {
         + "Please try again."
     static let blockedAppsSignInFirst = "Sign in to Pax again to remove an app. It stays blocked until then."
 
+    // 1.3: one blocked-apps list for Mac and iPhone (AppsSync)
+    static func blockedAppsAdded(_ source: AppSource, isPad: Bool) -> String {
+        switch source {
+        case .mac: return "Added on your Mac"
+        case .iphone: return isPad ? "Added on iPhone or iPad" : "Added on iPhone"
+        }
+    }
+    static func blockedAppsMacIntro(isPad: Bool) -> String {
+        "One list for your Mac and this \(device(isPad: isPad)). Add an app here, even one that isn't installed yet, "
+            + "and it won't open."
+    }
+    static let blockedAppsMacFooter = "Adding an app is instant. Apps added on your Mac are removed from Pax on that Mac. "
+        + "Removing any app takes your turn-off wait."
+    static func blockedAppsMacScreenTimeNote(isPad: Bool) -> String {
+        "The first time you add an app here, Pax asks for Screen Time access, just once, so it can close apps on this "
+            + "\(device(isPad: isPad)). Your Mac's set-up stays in charge."
+    }
+    static let blockedAppsOnMac = "From the Mac"
+    static func blockedAppsListOnly(isPad: Bool) -> String {
+        "It's on your blocked apps list. Pax can close it on this \(device(isPad: isPad)) once Screen Time access is allowed for Pax."
+    }
+
     // MARK: account
 
     static let accountTitle = "Account"
@@ -549,6 +571,9 @@ enum PaxCopy {
             blockedAppsAdd, blockedAppsNone, blockedAppsLookupFailed, blockedAppsFooter(serverHasList: true),
             blockedAppsFooter(serverHasList: false), blockedAppsCategoryHint, blockedAppsRemoveTitle("Baidu"),
             blockedAppsRemoveFailed, blockedAppsSignInFirst,
+            blockedAppsAdded(.mac, isPad: isPad), blockedAppsAdded(.iphone, isPad: isPad), blockedAppsMacIntro(isPad: isPad),
+            blockedAppsMacFooter, blockedAppsMacScreenTimeNote(isPad: isPad), blockedAppsOnMac,
+            blockedAppsListOnly(isPad: isPad),
         ]
         out += [AppBlockRules.Problem.notAnApp, .pax, .apple, .passwordManager, .alreadyBlocked, .full]
             .map { blockedAppsProblem($0, isPad: isPad) }

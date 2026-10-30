@@ -4,8 +4,10 @@
 //     Screen Time isn't locked, and two actions: Blocked sites and Settings.
 //   * Settings: everything else, as one-line rows in two groups, with Turn off Pax last.
 // The same rule for each variant: a device set up from a Mac only shows that set-up and adds to it
-// (no Screen Time, no DNS of this app's own, no apps or blocked apps, no computer set-up); a child's device has
-// YouTube Restricted Mode always on.
+// (no Screen Time lock, no DNS of this app's own, no apps to keep closed, no computer set-up); a
+// child's device has YouTube Restricted Mode always on. 1.3: a device set up from a Mac also shows
+// Blocked apps (the account's one list, AppsSync) once the server keeps that list; on a server
+// without it (404), as in 1.2, it doesn't.
 import Foundation
 
 enum SettingsItem: String, CaseIterable, Equatable {
@@ -40,9 +42,12 @@ enum HomeLayout {
         !macSetUp && StrongerList.nudge(p)
     }
 
-    static func protection(macSetUp: Bool) -> [SettingsItem] {
-        macSetUp ? [.blockedSites, .youtube]
-                 : [.lockScreenTime, .encryptedDNS, .appsToClose, .blockedApps, .blockedSites, .youtube]
+    static func protection(macSetUp: Bool, appsList: Bool = false) -> [SettingsItem] {
+        if macSetUp {
+            return AppsAccess.shows(macSetUp: true, serverHasList: appsList)
+                ? [.blockedApps, .blockedSites, .youtube] : [.blockedSites, .youtube]
+        }
+        return [.lockScreenTime, .encryptedDNS, .appsToClose, .blockedApps, .blockedSites, .youtube]
     }
 
     static func yourAccount(macSetUp: Bool) -> [SettingsItem] {
@@ -54,7 +59,7 @@ enum HomeLayout {
     /// off from Pax on that Mac).
     static let last: [SettingsItem] = [.turnOff]
 
-    static func all(macSetUp: Bool) -> [SettingsItem] {
-        protection(macSetUp: macSetUp) + yourAccount(macSetUp: macSetUp) + last
+    static func all(macSetUp: Bool, appsList: Bool = false) -> [SettingsItem] {
+        protection(macSetUp: macSetUp, appsList: appsList) + yourAccount(macSetUp: macSetUp) + last
     }
 }

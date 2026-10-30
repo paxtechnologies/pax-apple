@@ -16,6 +16,8 @@
 //                            turn-off waiting ("Turning off, available in …" + Cancel)
 //   -PaxShotApps YES         with a Home: Blocked apps is open; -PaxShotAppSearch <text> fills the search
 //   -PaxShotAppsRemoving YES with -PaxShotApps: as if the server kept the list, one removal waiting
+//   (1.3) -PaxShotAppsSynced YES with -PaxShotApps: the one list for Mac and iPhone, labelled by where
+//                            each app was added (with -PaxShotMac: as a device set up from a Mac sees it)
 // None of this is compiled into Release, so the App Store build has no hidden mode.
 #if DEBUG
 import Foundation
@@ -37,6 +39,17 @@ enum ScreenshotMode {
     static var apps: Bool { args.bool(forKey: "PaxShotApps") }
     static var appSearch: String { args.string(forKey: "PaxShotAppSearch") ?? "" }
     static var appsRemoving: Bool { args.bool(forKey: "PaxShotAppsRemoving") }
+    static var appsSynced: Bool { args.bool(forKey: "PaxShotAppsSynced") }
+
+    /// 1.3: the account's one list as GET /v1/apps would give it (in memory only).
+    static func sampleAppsView(_ p: PaxPolicy) -> AppsViewInfo? {
+        guard appsSynced else { return nil }
+        let now = Int(Date().timeIntervalSince1970)
+        var apps = [BlockedAppInfo(bundle_id: "com.burbn.instagram", name: "Instagram", source: "mac"),
+                    BlockedAppInfo(bundle_id: "com.toyopagroup.picaboo", name: "Snapchat", source: "mac")]
+        apps += p.blockedApps.map { BlockedAppInfo(bundle_id: $0.bundleID, name: $0.name, source: "iphone") }
+        return AppsViewInfo(now: now, apps: apps, apps_version: 1)
+    }
 
     /// Today's servers (0.8.31 / 0.8.32): on, no switch. With -PaxShotYouTube: as a server with the wait.
     static func sampleYouTube(_ p: PaxPolicy) -> YouTubeRow {
@@ -90,6 +103,10 @@ enum ScreenshotMode {
         p.waitDays = 30
         p.blockedDomains = ["reddit.com"]
         p.trustedEmail = "friend@example.com"
+        if appsSynced {
+            p.blockedApps = [BlockedApp(bundleID: "com.baidu.BaiduMobile", name: "Baidu")]
+            p.phoneAppsAuthAsked = true
+        }
         return p
     }
 

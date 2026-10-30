@@ -184,7 +184,7 @@ struct SettingsView: View {
         NavigationView {
             PaxPage {
                 SectionTitle(PaxCopy.settingsTitle)
-                group(PaxCopy.settingsProtection, HomeLayout.protection(macSetUp: mac))
+                group(PaxCopy.settingsProtection, HomeLayout.protection(macSetUp: mac, appsList: model.appsServerList))
                 group(PaxCopy.settingsAccount, HomeLayout.yourAccount(macSetUp: mac))
                 RowGroup {
                     ForEach(HomeLayout.last) { item in row(item) }
@@ -199,6 +199,7 @@ struct SettingsView: View {
         }
         .navigationViewStyle(.stack)
         .onReceive(tick) { now = $0 }
+        .onAppear { model.loadAppsCacheIfNeeded() }           // local cache only, no network
         .task { await model.refreshYouTube() }
         .familyActivityPicker(isPresented: $pickerShown, selection: $moreApps)
         .onChange(of: pickerShown) { shown in
@@ -248,7 +249,7 @@ struct SettingsView: View {
                                                + model.selection.categoryTokens.count)) { pickerShown = true }
         case .blockedApps:
             NavRow(title: PaxCopy.rowBlockedApps, symbol: "xmark.app",
-                   value: PaxCopy.rowAppsValue(p.blockedApps.count)) { open = .blockedApps }
+                   value: PaxCopy.rowAppsValue(model.appRows.count)) { open = .blockedApps }
         case .blockedSites:
             NavRow(title: PaxCopy.homeSites, symbol: "nosign",
                    value: PaxCopy.sitesCount(p.blockedDomains.count)) { open = .blockedSites }
@@ -499,11 +500,14 @@ struct SitesView: View {
     }
 }
 
-// MARK: - Blocked apps (by bundle ID, installed or not)
+// MARK: - Blocked apps (by bundle ID, installed or not; one list for Mac and iPhone)
 
 /// Block an app, even one that isn't installed: a short curated search, or an App Store link /
-/// bundle ID. Adding is instant. Removing one takes the turn-off wait on the server ("Removing,
-/// available in …" + Cancel), and only where the server keeps the list; otherwise it stays blocked.
+/// bundle ID. Adding is instant. 1.3: the account's one list (AppsSync), each app labelled by where
+/// it was added, shown at once from the cache and refreshed on pull. Removing one takes the
+/// turn-off wait on the server ("Removing, available in …" + Cancel), and only where the server
+/// keeps the list; otherwise it stays blocked. On a device set up from a Mac, apps added on the Mac
+/// are read-only here (removed from Pax on that Mac).
 struct BlockedAppsView: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -511,31 +515,37 @@ struct BlockedAppsView: View {
     @State private var other = ""
     @State private var alsoSites = true
     @State private var problem: String?
-    @State private var removing: BlockedApp?
+    @State private var removing: AppRow?
     @State private var now = Date()
     private let tick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
     private var p: PaxPolicy { model.policy }
+    private var mac: Bool { p.macSetUp && !p.isActive }
 
-    private func isBlocked(_ bundleID: String) -> Bool {
-        p.blockedApps.contains { $0.bundleID.lowercased() == bundleID.lowercased() }
+    private func isBlocked(_ bundleID: String, in rows: [AppRow]) -> Bool {
+        rows.contains { $0.id == AppsSync.key(bundleID) }
     }
 
     var body: some View {
+        let rows = model.appRows
         NavigationView {
             PaxPage {
                 SectionTitle(PaxCopy.blockedAppsTitle)
-                BodyText(PaxCopy.blockedAppsIntro(isPad: model.isPad))
+                BodyText(mac ? PaxCopy.blockedAppsMacIntro(isPad: model.isPad) : PaxCopy.blockedAppsIntro(isPad: model.isPad))
                 RowGroup {
-                    if p.blockedApps.isEmpty {
+                    if rows.isEmpty {
                         BodyText(PaxCopy.blockedAppsNone).padding(.vertical, 15)
                     } else {
-                        ForEach(Array(p.blockedApps.enumerated()), id: \.offset) { i, a in
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { i, a in
                             if i > 0 { RowDivider() }
                             appRow(a)
                         }
                     }
                 }
-                BodyText(PaxCopy.blockedAppsFooter(serverHasList: model.appsServerList), small: true)
+                BodyText(mac ? PaxCopy.blockedAppsMacFooter : PaxCopy.blockedAppsFooter(serverHasList: model.appsServerList),
+                         small: true)
+                if mac && !p.phoneAppsAuthAsked && !model.authorized {
+                    BodyText(PaxCopy.blockedAppsMacScreenTimeNote(isPad: model.isPad), small: true)
+                }
                 PaxCard {
                     TextField(PaxCopy.blockedAppsSearch, text: $search)
                         .textInputAutocapitalization(.never)
@@ -548,7 +558,7 @@ struct BlockedAppsView: View {
                             .font(PaxFont.body(16, relativeTo: .callout)).foregroundStyle(Palette.ink)
                     }
                     .tint(Palette.accent)
-                    ForEach(AppCatalog.search(search)) { a in catalogRow(a) }
+                    ForEach(AppCatalog.search(search)) { a in catalogRow(a, rows: rows) }
                 }
                 PaxCard {
                     Text(PaxCopy.blockedAppsOtherTitle)
@@ -573,19 +583,20 @@ struct BlockedAppsView: View {
                         .disabled(other.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
-                BodyText(PaxCopy.blockedAppsCategoryHint, small: true)
+                if !mac { BodyText(PaxCopy.blockedAppsCategoryHint, small: true) }
                 MessageText(text: problem ?? model.message)
             }
             .disabled(model.busy)
             .overlay { if model.busy { ProgressView().controlSize(.large) } }
+            .refreshable { await model.refreshApps() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
         .navigationViewStyle(.stack)
         .onReceive(tick) { now = $0 }
-        .task { await model.refreshApps() }
         .onAppear {
+            model.loadAppsCacheIfNeeded()          // the cached list, at once; no network here
             #if DEBUG
             if ScreenshotMode.apps { search = ScreenshotMode.appSearch }
             #endif
@@ -604,7 +615,7 @@ struct BlockedAppsView: View {
         }
     }
 
-    private func catalogRow(_ a: CatalogApp) -> some View {
+    private func catalogRow(_ a: CatalogApp, rows: [AppRow]) -> some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(a.name).font(PaxFont.body(17, weight: .medium)).foregroundStyle(Palette.ink)
@@ -613,7 +624,7 @@ struct BlockedAppsView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            if isBlocked(a.bundleID) {
+            if isBlocked(a.bundleID, in: rows) {
                 Text(PaxCopy.blockedAppsAlreadyBlocked)
                     .font(PaxFont.body(15, weight: .medium)).foregroundStyle(Palette.good)
             } else {
@@ -627,21 +638,28 @@ struct BlockedAppsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func appRow(_ a: BlockedApp) -> some View {
+    private func appRow(_ a: AppRow) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(a.name).font(PaxFont.body(17, weight: .medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                if let pr = AppRemoval.pending(a.bundleID, in: p) {
+                if let src = a.source {
+                    Text(PaxCopy.blockedAppsAdded(src, isPad: model.isPad))
+                        .font(PaxFont.body(13, relativeTo: .caption)).foregroundStyle(Palette.body)
+                }
+                if let pr = a.pending {
                     let left = AppRemoval.remaining(pr, serverOffset: model.serverOffset, now: now)
                     Text(left > 60 ? PaxCopy.sitesRemoving(TurnOffRules.describe(remaining: left)) : PaxCopy.sitesRemovingSoon)
                         .font(PaxFont.body(14, relativeTo: .footnote)).foregroundStyle(Palette.caution)
                 }
             }
             Spacer(minLength: 8)
-            if AppRemoval.pending(a.bundleID, in: p) != nil {
+            if a.pending != nil {
                 Button(PaxCopy.sitesCancel) { Task { await model.cancelAppRemoval(a.bundleID) } }
                     .font(PaxFont.body(15, weight: .semibold)).foregroundStyle(Palette.accent)
-            } else if model.appsServerList {
+            } else if a.macOnly {
+                Text(PaxCopy.blockedAppsOnMac)
+                    .font(PaxFont.body(14, relativeTo: .footnote)).foregroundStyle(Palette.body)
+            } else if model.appsServerList && a.removable {
                 Button(PaxCopy.sitesRemove) {
                     if model.signedIn { removing = a } else { model.message = PaxCopy.blockedAppsSignInFirst }
                 }

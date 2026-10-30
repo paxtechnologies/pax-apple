@@ -148,6 +148,9 @@ jobs:
             shoot "$U" "$P" 17-mac-settings -PaxShotMac YES -PaxShotSettings YES
             shoot "$U" "$P" 18-apps-add -PaxShotHome YES -PaxShotApps YES -PaxShotAppSearch bai
             shoot "$U" "$P" 19-apps-removing -PaxShotHome YES -PaxShotApps YES -PaxShotAppsRemoving YES
+            # 1.3: one blocked-apps list for Mac and iPhone, labelled by where each app was added.
+            shoot "$U" "$P" 20-apps-one-list -PaxShotHome YES -PaxShotApps YES -PaxShotAppsSynced YES
+            shoot "$U" "$P" 21-mac-apps-one-list -PaxShotMac YES -PaxShotApps YES -PaxShotAppsSynced YES
             xcrun simctl ui "$U" appearance dark
             shoot "$U" "$P" 5-home-dark -PaxShotHome YES
             xcrun simctl shutdown "$U" || true

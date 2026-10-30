@@ -33,6 +33,24 @@ enum PaxRestrictions {
     static func clearAll() { store.clearAllSettings() }
 }
 
+/// 1.3, a device set up from a Mac: the apps added on the phone, applied by the phone's own Screen
+/// Time layer (.individual, asked for once; AppsAccess.shouldAskScreenTime). Its own named store,
+/// so it never touches or competes with the Mac's profile or with `PaxRestrictions.store`: it sets
+/// only `blockedApplications`, never a web filter, DNS or anything else, and is never cleared
+/// wholesale. An app leaves it only after the server's turn-off wait (AppRemoval.reconcile).
+/// Hardware test T6 (work/PLAN.md §9.5).
+enum PhoneAppLayer {
+    static let storeName = "pax.phone-apps"
+    static let store = ManagedSettingsStore(named: ManagedSettingsStore.Name(storeName))
+
+    static func apply(_ policy: PaxPolicy) {
+        guard policy.macSetUp, !policy.isActive else { return }
+        let ids = AppBlockRules.phoneLayerBundleIDs(policy)
+        store.application.blockedApplications =
+            ids.isEmpty ? nil : Set(ids.map { Application(bundleIdentifier: $0) })
+    }
+}
+
 /// The apps and sites the person picked to shield (X, Bluesky, browsers). Opaque tokens only:
 /// Pax can't read which apps they are, and nothing leaves the device.
 enum PaxSelection {

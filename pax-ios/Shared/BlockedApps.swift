@@ -21,6 +21,9 @@
 // that (/workspace/BLOCKED_APPS_SERVER.md); until it has one (GET /v1/apps answers 404), blocked
 // apps simply stay blocked: there is no removal on the device alone.
 //
+// 1.3: the account's one list for Mac and iPhone, labels and the background refresh are in
+// AppsSync.swift.
+//
 // Never blocked, whatever is typed: Pax itself, Apple's own apps (some keep the phone working) and
 // password managers (the same lists as Pax for Mac, profile/app_blocks.py).
 import Foundation
@@ -121,7 +124,14 @@ enum AppBlockRules {
         }
     }
 
-    static func problem(_ bundleID: String, policy: PaxPolicy) -> Problem? {
+    /// Never blocked, whatever is saved: Pax, Apple's own apps, password managers.
+    static func isProtected(_ bundleID: String) -> Bool {
+        let l = bundleID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return neverBlockPrefixes.contains(where: { l.hasPrefix($0) }) || passwordManagers.contains(l)
+    }
+
+    /// `listed`: apps already on the account's one list (1.3), e.g. ones added on the Mac.
+    static func problem(_ bundleID: String, policy: PaxPolicy, listed: [String] = []) -> Problem? {
         let b = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isBundleID(b) else { return .notAnApp }
         let l = b.lowercased()
@@ -129,7 +139,8 @@ enum AppBlockRules {
         if l.hasPrefix("com.apple.") { return .apple }
         if passwordManagers.contains(l) { return .passwordManager }
         if Pax.bypassAppBundleIDs.contains(where: { $0.lowercased() == l })
-            || policy.blockedApps.contains(where: { $0.bundleID.lowercased() == l }) { return .alreadyBlocked }
+            || policy.blockedApps.contains(where: { $0.bundleID.lowercased() == l })
+            || listed.contains(where: { $0.lowercased() == l }) { return .alreadyBlocked }
         if policy.blockedApps.count >= maxCustomApps { return .full }
         return nil
     }
@@ -144,6 +155,16 @@ enum AppBlockRules {
             out.append(a.bundleID)
         }
         return Array(out.prefix(50))
+    }
+
+    /// 1.3, a device set up from a Mac: only the apps added on the phone, for the phone's own layer
+    /// (PhoneAppLayer). The Mac's profile already closes Pax's untrusted browsers and its own apps.
+    static func phoneLayerBundleIDs(_ policy: PaxPolicy) -> [String] {
+        var out: [String] = []
+        for a in policy.blockedApps where !isProtected(a.bundleID) && !out.contains(a.bundleID) {
+            out.append(a.bundleID)
+        }
+        return Array(out.prefix(maxCustomApps))
     }
 }
 
@@ -165,16 +186,21 @@ enum AppEntry: Equatable {
     }
 }
 
-/// GET /v1/apps on a server with a blocked-apps list (BLOCKED_APPS_SERVER.md).
-struct BlockedAppInfo: Decodable, Equatable {
+/// GET /v1/apps on a server with a blocked-apps list. Codable so the last answer can be kept as
+/// a cache (AppsSync.swift). 1.3: each app says where it was added (`source` "mac" | "iphone",
+/// optional `device_id`), and the list carries `apps_version` (also sent as its ETag).
+struct BlockedAppInfo: Codable, Equatable {
     let bundle_id: String
     var name: String? = nil
     var pending_removal: BlocklistRequestInfo? = nil
+    var source: String? = nil
+    var device_id: String? = nil
 }
 
-struct AppsViewInfo: Decodable, Equatable {
+struct AppsViewInfo: Codable, Equatable {
     let now: Int
     let apps: [BlockedAppInfo]
+    var apps_version: Int? = nil
 }
 
 /// POST /v1/apps/remove: 202 {"request": …, "list": …}.

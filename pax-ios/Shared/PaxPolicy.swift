@@ -69,6 +69,10 @@ struct PaxPolicy: Codable, Equatable {
     var blockedApps: [BlockedApp] = []
     /// 1.2: app removals waiting on the server.
     var pendingAppRemovals: [PendingAppRemoval] = []
+    /// 1.3, a device set up from a Mac: Screen Time (.individual) was asked for, once, when the
+    /// person first added an app there (PhoneAppLayer). Written before asking, so it's never asked
+    /// again: a second request after approval lifts the delete block.
+    var phoneAppsAuthAsked = false
 
     /// Every release key hash this device accepts for its main record.
     var acceptedReleaseHashes: [String] { [releaseKeyHash, pendingReleaseKeyHash].compactMap { $0 }.filter { !$0.isEmpty } }
@@ -81,7 +85,7 @@ struct PaxPolicy: Codable, Equatable {
         case isActive, setUpFinished, audience, accountEmail, setUpAt, waitDays, blockedDomains,
              trustedEmail, passcodeEscrowed, deviceID, releaseKeyHash, dnsInstalled, dnsSeenOn,
              dnsOffSince, dnsAlertSent, accessAlertSent, accountID, pendingReleaseKeyHash, displayName,
-             pendingSiteRemovals, macSetUp, macDeviceID, blockedApps, pendingAppRemovals
+             pendingSiteRemovals, macSetUp, macDeviceID, blockedApps, pendingAppRemovals, phoneAppsAuthAsked
     }
 
     init(from decoder: Decoder) throws {
@@ -118,6 +122,7 @@ struct PaxPolicy: Codable, Equatable {
         macDeviceID = o(.macDeviceID)
         blockedApps = v(.blockedApps, [BlockedApp]())
         pendingAppRemovals = v(.pendingAppRemovals, [PendingAppRemoval]())
+        phoneAppsAuthAsked = v(.phoneAppsAuthAsked, false)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -146,6 +151,7 @@ struct PaxPolicy: Codable, Equatable {
         try c.encodeIfPresent(macDeviceID, forKey: .macDeviceID)
         try c.encode(blockedApps, forKey: .blockedApps)
         try c.encode(pendingAppRemovals, forKey: .pendingAppRemovals)
+        try c.encode(phoneAppsAuthAsked, forKey: .phoneAppsAuthAsked)
     }
 
     static let key = "pax.policy.v1"

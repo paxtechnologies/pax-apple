@@ -13,7 +13,7 @@
 import Foundation
 
 /// The parts of the server's blocklist view the app reads (GET /v1/blocklist).
-struct BlocklistRequestInfo: Decodable, Equatable {
+struct BlocklistRequestInfo: Codable, Equatable {
     let request_id: String
     let action: String
     let domain: String?

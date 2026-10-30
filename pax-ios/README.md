@@ -41,6 +41,19 @@ isn't installed yet can be blocked; its websites can be added to your blocked si
 needs the server's blocked-apps list (`/v1/apps`) and takes the turn-off wait; without it they stay
 blocked.
 
+**One blocked-apps list for Mac and iPhone** (1.3, branch `ios/v1.3`, `Shared/AppsSync.swift`): an
+account has one list on the Pax server (`GET /v1/apps`, each app with `source` "mac" | "iphone").
+Every device shows the server's list merged with its own, labelled "Added on your Mac" / "Added on
+iPhone"; merging only ever adds. Apps blocked before the server had a list are sent to it once
+(`POST /v1/apps`). Removal is only ever the server's turn-off wait (`POST /v1/apps/remove`, cancel via
+`/v1/blocklist/requests/{id}/cancel`); nothing comes off a device before the server's clock is past it.
+A device set up from a Mac shows the list too: the Mac's apps are read-only there (removed from Pax on
+that Mac), and apps added on the phone are applied by the phone's own Screen Time layer (`.individual`,
+asked for once, the first time an app is added there) in its own named Managed Settings store, so the
+Mac's profile stays in charge. The list shows at once from a small App Group cache and is refreshed in
+the background with `If-None-Match`/304, on foreground or pull to refresh only. A server without
+`/v1/apps` (404) keeps the earlier behaviour exactly.
+
 Turning it off works like on a Mac: you ask, your trusted person (if you have one) is emailed
 first, the wait you chose runs on the Pax server, then everything is removed and the Screen Time
 passcode is shown. The first hour after set-up has no wait. If anything fails, Pax stays on.

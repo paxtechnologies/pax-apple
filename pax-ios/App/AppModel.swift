@@ -12,6 +12,9 @@
 // Also in 1.2: the child path on its own routes (server 0.8.32, ChildSetup), removing your own
 // blocked sites through the server's turn-off wait (SiteRemoval), and joining a set-up made from
 // a Mac without adding anything that clashes with it (StrictSync).
+//
+// 1.3: one blocked-apps list for Mac and iPhone (AppsSync). Shown from the App Group cache, read on
+// first use (never at launch); refreshed in the background with ETag on foreground or pull only.
 import Foundation
 import SwiftUI
 import FamilyControls
@@ -47,8 +50,15 @@ final class AppModel: ObservableObject {
     /// The server keeps a blocked-apps list (GET /v1/apps answered), so removing one can take the
     /// turn-off wait. false: blocked apps stay blocked and no removal is offered.
     @Published var appsServerList = false
+    /// 1.3: the account's one blocked-apps list as the server (or the cache) last gave it.
+    @Published var appsView: AppsViewInfo?
 
     let api = PaxAPI()
+    private lazy var appsStore = AppsCacheStore()
+    private lazy var appsRefresher = AppsRefresher(fetcher: api, store: appsStore)
+    private var appsCacheLoaded = false
+    private var appsRefreshTask: Task<Void, Never>?
+    private var appsPushTask: Task<Void, Never>?
 
     private static let pendingPasscodeKey = "pending-screen-time-passcode"
     private static let pendingEscrowKey = "pending-escrow-secret"
@@ -63,6 +73,8 @@ final class AppModel: ObservableObject {
             serverOffset = 0
             youtube = ScreenshotMode.sampleYouTube(policy)
             appsServerList = ScreenshotMode.appsRemoving
+            if let v = ScreenshotMode.sampleAppsView(policy) { appsServerList = true; appsView = v }
+            appsCacheLoaded = true
         }
         #endif
     }
@@ -91,6 +103,7 @@ final class AppModel: ObservableObject {
             // Set up from a Mac: nothing of this app's own to re-apply or check on the device.
             guard !checking else { return }
             checking = true; defer { checking = false }
+            startAppsRefresh()          // background, not awaited
             let probe = await ProtectionCheck.run()
             filteredHere = StrictSync.filteredHere(probe: probe, ownDNSConfigured: false)
             await refreshAccount()
@@ -101,12 +114,12 @@ final class AppModel: ObservableObject {
         guard policy.isActive, !checking else { return }
         checking = true; defer { checking = false }
         PaxRestrictions.apply(policy, selection: selection)      // self-heal
+        startAppsRefresh()          // background, not awaited
         await checkAccess()
         await checkDNS()
         await refreshStatus()
         await refreshAccount()
         await refreshSites()
-        await refreshApps()
         await refreshYouTube()
     }
 
@@ -358,6 +371,7 @@ final class AppModel: ObservableObject {
         policy.displayName = nil
         policy.save()
         existing = nil
+        forgetAppsList()
     }
 
     // MARK: set-up: Screen Time, wait, escrow, settings
@@ -639,21 +653,85 @@ final class AppModel: ObservableObject {
         }
     }
 
-    // MARK: blocked apps (by bundle ID, installed or not; BlockedApps.swift)
+    // MARK: blocked apps: one list for Mac and iPhone (BlockedApps.swift, AppsSync.swift)
 
-    /// Instant: saved, applied (blockedApplications), its websites added to your blocked sites if
-    /// asked, and put on the server's list when it has one. Returns a calm problem, or nil.
+    /// Set up from a Mac and joined by this app (StrictSync).
+    private var macHere: Bool { policy.macSetUp && !policy.isActive }
+
+    /// The one list as Blocked apps shows it: the server's (or the cache's) merged with this
+    /// device's, labelled by where each app was added. Without a server list: the 1.2 list.
+    var appRows: [AppRow] {
+        AppsSync.rows(local: policy.blockedApps, pending: policy.pendingAppRemovals, server: appsView,
+                      serverHasList: appsServerList, macSetUp: macHere)
+    }
+
+    /// Reads the cached list from the App Group, once, when a screen first needs it (Settings,
+    /// Blocked apps), never at launch. Synchronous and local: no network.
+    func loadAppsCacheIfNeeded() {
+        guard !appsCacheLoaded else { return }
+        appsCacheLoaded = true
+        let c = appsStore.load()
+        if c.hasList == true {
+            appsServerList = true
+            appsView = c.view
+        }
+    }
+
+    /// Starts a background refresh of the list (on foreground or pull to refresh only; never on a
+    /// timer). Not awaited by anything on the launch path; overlapping calls share one request.
+    func startAppsRefresh() {
+        #if DEBUG
+        if ScreenshotMode.any { return }
+        #endif
+        guard api.signedIn, appsRefreshTask == nil else { return }
+        appsRefreshTask = Task { [weak self] in
+            await self?.refreshApps()
+            self?.appsRefreshTask = nil
+        }
+    }
+
+    /// Applies the person's blocked apps where this device applies them: Pax's own store on a
+    /// device this app set up, the phone's own layer on one set up from a Mac (only once Screen
+    /// Time was allowed there).
+    private func applyApps() {
+        if policy.isActive {
+            PaxRestrictions.apply(policy, selection: selection)
+        } else if macHere, authorized {
+            PhoneAppLayer.apply(policy)
+        }
+    }
+
+    /// Instant: saved, applied, its websites added to your blocked sites if asked, and put on the
+    /// server's list when it has one. Returns a calm problem or note, or nil.
     func blockApp(bundleID raw: String, name: String, domains: [String]) async -> String? {
         let bundleID = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let problem = AppBlockRules.problem(bundleID, policy: policy) {
+        loadAppsCacheIfNeeded()
+        // A device set up from a Mac adds apps only where the server keeps the one list.
+        guard !macHere || appsServerList else { return nil }
+        if let problem = AppBlockRules.problem(bundleID, policy: policy, listed: AppsSync.listedIDs(appRows)) {
             return PaxCopy.blockedAppsProblem(problem, isPad: isPad)
         }
         policy.blockedApps.append(BlockedApp(bundleID: bundleID, name: name))
         policy.save()
-        if policy.isActive { PaxRestrictions.apply(policy, selection: selection) }   // adding is instant
+        var note: String?
+        if macHere {
+            // The phone's own Screen Time layer: asked for once, the first time an app is added
+            // here, and never again (written down first; a second request lifts the delete block).
+            if AppsAccess.shouldAskScreenTime(macSetUp: true, alreadyAsked: policy.phoneAppsAuthAsked,
+                                              approved: authorized) {
+                policy.phoneAppsAuthAsked = true
+                policy.save()
+                do { try await AuthorizationCenter.shared.requestAuthorization(for: .individual) } catch {}
+            }
+            if authorized { PhoneAppLayer.apply(policy) } else { note = PaxCopy.blockedAppsListOnly(isPad: isPad) }
+        } else if policy.isActive {
+            PaxRestrictions.apply(policy, selection: selection)        // adding is instant
+        }
         for d in domains where !policy.blockedDomains.contains(d) { await addSite(d) }
-        if appsServerList, api.signedIn { try? await api.addApp(bundleID: bundleID, name: name) }
-        return nil
+        if appsServerList, api.signedIn {
+            try? await api.addApp(bundleID: bundleID, name: name, deviceID: policy.isActive ? policy.deviceID : nil)
+        }
+        return note
     }
 
     /// "Another app": an App Store link (looked up with Apple's iTunes Lookup API) or a bundle ID.
@@ -678,34 +756,90 @@ final class AppModel: ObservableObject {
         return await blockApp(bundleID: bundleID, name: name, domains: alsoSites ? (known?.domains ?? []) : [])
     }
 
-    /// Reads the server's blocked-apps list. 404: the server has none (removal not offered). An
-    /// app comes off this device only when the server no longer lists it and the server's clock is
-    /// past its wait (AppRemoval.reconcile). Other errors change nothing.
+    /// Reads the server's list in the background (AppsRefresher: ETag, off the main thread).
+    /// 404: the server has none, so the 1.2 behaviour (no removal, nothing new on a Mac set-up).
+    /// Otherwise merge, never subtract: apps on the list this device doesn't block yet are added;
+    /// an app comes off only when the server no longer lists it and the server's clock is past its
+    /// wait (AppRemoval.reconcile); apps blocked here that the server lacks are sent to it.
+    /// Other errors change nothing.
     func refreshApps() async {
+        #if DEBUG
+        if ScreenshotMode.any { return }
+        #endif
         guard api.signedIn else { return }
-        let view: AppsViewInfo
-        do { view = try await api.apps() }
-        catch let e as PaxAPIError where e.status == 404 || e.status == 405 { appsServerList = false; return }
-        catch { return }
-        appsServerList = true
-        serverOffset = Double(view.now) - Date().timeIntervalSince1970
-        // Apps blocked before the server had a list: put them on it, so removing one takes the wait.
-        let listed = Set(view.apps.map { $0.bundle_id })
-        for a in policy.blockedApps where !listed.contains(a.bundleID)
-            && !policy.pendingAppRemovals.contains(where: { $0.bundleID == a.bundleID }) {
-            try? await api.addApp(bundleID: a.bundleID, name: a.name)
-        }
-        let r = AppRemoval.reconcile(local: policy.pendingAppRemovals, blocked: policy.blockedApps, server: view)
-        var p = policy
-        if AppRemoval.apply(r, to: &p) {
-            policy = p
-            policy.save()
-            if policy.isActive { PaxRestrictions.apply(policy, selection: selection) }
+        loadAppsCacheIfNeeded()
+        switch await appsRefresher.refresh() {
+        case .signedOut:
+            signedOutHere()
+        case .failed:
+            break
+        case .noList:
+            appsServerList = false
+            appsView = nil
+        case .list(let view, let fresh):
+            appsServerList = true
+            appsView = view
+            if fresh { serverOffset = Double(view.now) - Date().timeIntervalSince1970 }
+            mergeAppsList(view)
         }
     }
 
+    private func mergeAppsList(_ view: AppsViewInfo) {
+        var p = policy
+        p.blockedApps += AppsSync.toAdopt(local: p.blockedApps, server: view, macSetUp: macHere)
+        let r = AppRemoval.reconcile(local: p.pendingAppRemovals, blocked: p.blockedApps, server: view)
+        _ = AppRemoval.apply(r, to: &p)
+        if p != policy {
+            policy = p
+            policy.save()
+            applyApps()
+        } else if macHere, authorized, !policy.blockedApps.isEmpty {
+            PhoneAppLayer.apply(policy)                                  // self-heal, local only
+        }
+        pushMissingApps(view)
+    }
+
+    /// Sends the apps blocked here that the server's list doesn't have: once for apps blocked
+    /// before the server had a list (the backfill), then only an add whose send failed. In the
+    /// background; never repeated in a loop (the next foreground looks again).
+    private func pushMissingApps(_ view: AppsViewInfo) {
+        let store = appsStore
+        let cache = store.load()
+        let list = AppsSync.toPush(local: policy.blockedApps, pending: policy.pendingAppRemovals, server: view,
+                                   refused: Set(cache.refused.map(AppsSync.key)))
+        if list.isEmpty {
+            if !cache.backfilled { store.update { $0.backfilled = true } }
+            return
+        }
+        guard appsPushTask == nil, api.signedIn else { return }
+        let api = self.api
+        let device = policy.isActive ? policy.deviceID : nil
+        appsPushTask = Task { [weak self] in
+            var refused: [String] = []
+            var allSent = true
+            for a in list {
+                do { try await api.addApp(bundleID: a.bundleID, name: a.name, deviceID: device) }
+                catch let e as PaxAPIError where e.status == 422 { refused.append(AppsSync.key(a.bundleID)) }
+                catch { allSent = false }
+            }
+            store.update { c in
+                c.refused = Array(Set(c.refused + refused)).sorted()
+                if allSent { c.backfilled = true }
+            }
+            self?.appsPushTask = nil
+        }
+    }
+
+    /// Signed out of this account here: its list isn't shown any more.
+    private func forgetAppsList() {
+        appsStore.save(AppsCache())
+        appsServerList = false
+        appsView = nil
+    }
+
     /// Asks the server to remove a blocked app. Never on the device alone: the person you trust is
-    /// emailed first (503: nothing starts), then the turn-off wait.
+    /// emailed first (503: nothing starts), then the turn-off wait. On a device set up from a Mac,
+    /// only apps added on the phone (the Mac's come off from Pax on that Mac).
     func requestAppRemoval(_ bundleID: String) async {
         guard AppRemoval.canRemove(bundleID, policy: policy, serverHasList: appsServerList) else { return }
         guard api.signedIn else { signedIn = false; message = PaxCopy.blockedAppsSignInFirst; return }
@@ -716,7 +850,7 @@ final class AppModel: ObservableObject {
             do { r = try await api.requestAppRemoval(bundleID: bundleID) }
             catch let e as PaxAPIError where e.status == 404 {
                 let name = policy.blockedApps.first { $0.bundleID == bundleID }?.name ?? bundleID
-                try await api.addApp(bundleID: bundleID, name: name)
+                try await api.addApp(bundleID: bundleID, name: name, deviceID: policy.isActive ? policy.deviceID : nil)
                 r = try await api.requestAppRemoval(bundleID: bundleID)
             }
             guard let rec = AppRemoval.record(from: r, bundleID: bundleID) else { message = PaxCopy.blockedAppsRemoveFailed; return }
@@ -724,6 +858,10 @@ final class AppModel: ObservableObject {
             policy.pendingAppRemovals.append(rec)
             policy.save()
             serverOffset = Double(r.list.now) - Date().timeIntervalSince1970
+            // The answer carries the list as it is now: keep it (its ETag is unknown, so the next
+            // read is a full one).
+            appsView = r.list
+            appsStore.update { c in c.hasList = true; c.view = r.list; c.etag = nil }
         } catch let e as PaxAPIError where e.status == 409 {
             await refreshApps()
         } catch let e as PaxAPIError {
@@ -734,12 +872,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Keeps the app blocked: the waiting removal is cancelled on the server (POST
+    /// /v1/blocklist/requests/{id}/cancel), whichever device started it.
     func cancelAppRemoval(_ bundleID: String) async {
-        guard let p = AppRemoval.pending(bundleID, in: policy) else { return }
+        let k = AppsSync.key(bundleID)
+        guard let p = appRows.first(where: { $0.id == k })?.pending ?? AppRemoval.pending(bundleID, in: policy) else { return }
         let ok = await run { _ = try await self.api.cancelBlocklistRequest(id: p.requestID) }
         if ok {
-            policy.pendingAppRemovals.removeAll { $0.bundleID == bundleID }
+            policy.pendingAppRemovals.removeAll { AppsSync.key($0.bundleID) == k }
             policy.save()
+            appsStore.update { $0.etag = nil }
         }
         await refreshApps()
     }
@@ -882,6 +1024,7 @@ final class AppModel: ObservableObject {
             if !policy.isActive { policy.deviceID = nil }
             policy.save()
             account = nil
+            forgetAppsList()
             return .deleted
         case .notAvailable, .signedOut:
             return .emailRequest(deletionMail())
