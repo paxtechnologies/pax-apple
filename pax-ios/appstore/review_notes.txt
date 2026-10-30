@@ -1,10 +1,10 @@
 Pax keeps adult and explicit content off the person's own iPhone or iPad, or a child's device set up by a parent together with the child. It is free and open source (GPL-3.0): https://github.com/paxtechnologies/pax-apple. No ads, no purchases, no tracking, and Pax never stores browsing history.
 
 SIGN-IN: NO DEMO ACCOUNT NEEDED
-Anyone can create a Pax account in the app with an email address they can read. Pax emails a 6-digit code to that address (valid 15 minutes; "Send again" sends a new one). There is no password. If a code is slow to arrive, please check spam or contact us at hello@paxpeace.com / {contact_phone} and we will help straight away.
+Anyone can create a Pax account in the app with an email address they can read. Pax emails a 6-digit code to that address (valid 15 minutes). There is no password. If a code is slow to arrive, please check spam or contact us at hello@paxpeace.com / {contact_phone} and we will help straight away.
 
 SCREEN TIME (FAMILY CONTROLS, INDIVIDUAL AUTHORIZATION)
-Pax uses the Family Controls entitlement with AuthorizationCenter.requestAuthorization(for: .individual). The person approves Pax once for the device they are holding, with Face ID or their passcode. Pax then uses ManagedSettings to turn on the web content filter for adult websites (plus sites the person adds) and to stop Pax itself being deleted while it is on. Optional: apps the person chooses to keep closed (FamilyActivityPicker) and apps they name in Blocked apps. A DeviceActivity monitor extension re-applies the same settings during the day. The shield extensions show a calm "Close" screen only.
+Family Controls (Distribution) is granted for org.paxpeace.pax and its three extensions (.shield-configuration, .shield-action, .monitor); the app and each extension are signed with com.apple.developer.family-controls. Pax calls AuthorizationCenter.requestAuthorization(for: .individual). The person approves Pax once for the device they are holding, with Face ID or their passcode. Pax then uses ManagedSettings to turn on the web content filter for adult websites (plus sites the person adds) and to stop Pax itself being deleted while it is on. Optional: apps the person chooses to keep closed (FamilyActivityPicker) and apps they name in Blocked apps. A DeviceActivity monitor extension re-applies the same settings during the day. The shield extensions show a calm "Close" screen only.
 
 THE TURN-OFF WAIT
 The person chooses a turn-off wait in advance (7 days for a new account, up to 1 year). Settings > Turn off Pax > "Ask to turn off" > "Start the wait" starts it on our server; "Keep Pax on" cancels it. When the wait ends, Pax removes its settings and its authorization.
@@ -16,10 +16,10 @@ CHILD ACCOUNTS (PARENT-VERIFIED)
 On the child's device, together with the child: Welcome > "Setting up for a child?" > the parent's own email (and, optionally, the child's first name) > the 6-digit code sent to the parent > Screen Time approval on that device > Done. The child gets their own Pax account with a 30-day turn-off wait, and every email about it goes to the parent.
 
 ENCRYPTED DNS (OPTIONAL)
-Settings > Encrypted DNS adds an encrypted DNS setting (NEDNSSettingsManager) for our filter at dns.paxpeace.com. iOS adds it switched off; the app shows the steps to switch it on in Settings > General > VPN & Device Management > DNS. Lookups are filtered and never logged. No VPN and no configuration profile.
+Settings > Encrypted DNS adds an encrypted DNS setting (NEDNSSettingsManager) for our filter at dns.paxpeace.com. iOS adds it switched off; the app shows the steps to switch it on in Settings > General > VPN & Device Management > DNS. No VPN and no configuration profile.
 
 LOCK SCREEN TIME (OPTIONAL)
-Home shows a "Lock Screen Time" card. Pax can make up a Screen Time passcode that the person types into Settings themselves; Pax keeps it encrypted on our server and shows it again only when the turn-off wait ends. We suggest skipping it on a review device.
+Home shows a "Lock Screen Time" card. Pax can make up a Screen Time passcode that the person types into Settings themselves; Pax keeps it encrypted on our server and shows it again only when the turn-off wait ends.
 
 HOW TO TEST (about 5 minutes, real device; Family Controls does not run in the Simulator)
 1. Open Pax and tap "Turn Pax on".
@@ -28,14 +28,11 @@ HOW TO TEST (about 5 minutes, real device; Family Controls does not run in the S
 4. "Pax is on" appears; tap Done.
 5. In Safari, open an adult website: it is blocked. Long-press Pax on the Home Screen: it can't be deleted while Pax is on.
 6. Home > Blocked sites: add any site (e.g. example.com); it is blocked straight away.
-7. Settings (gear): see Protection (Lock Screen Time, Encrypted DNS, Apps to keep closed, Blocked apps, Blocked sites) and Your account (Someone you trust, Turn-off wait, Account).
+7. Settings (gear) lists Protection and Your account options.
 8. Settings > Turn off Pax: "Ask to turn off" > "Start the wait" shows the time left; "Keep Pax on" cancels it.
 Child path: on a second device, follow CHILD ACCOUNTS above.
 
 ACCOUNT DELETION
 Settings > Account > Delete my account. The account is deleted on our server. If Pax is still on a device, the app explains it must be turned off first.
-
-PRIVACY
-https://paxpeace.com/privacy
 
 Contact: {contact_name}, hello@paxpeace.com, {contact_phone}.

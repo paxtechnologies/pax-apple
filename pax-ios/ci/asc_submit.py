@@ -92,6 +92,12 @@ def main():
     need(newest is not None and newest["attributes"]["version"] == build,
          f"build {build} is the newest valid build of {ver} (newest valid: {newest and newest['attributes']['version']})")
     attached = (call("GET", f"/v1/appStoreVersions/{vid}/build") or {}).get("data")
+    if newest is not None and newest["attributes"]["version"] == build and \
+            (not attached or attached["attributes"].get("version") != build) and not problems:
+        print(f"attaching build {build} to {ver} (was {attached and attached['attributes'].get('version')})")
+        call("PATCH", f"/v1/appStoreVersions/{vid}/relationships/build",
+             {"data": {"type": "builds", "id": newest["id"]}})
+        attached = (call("GET", f"/v1/appStoreVersions/{vid}/build") or {}).get("data")
     need(bool(attached) and attached["attributes"].get("version") == build,
          f"build {build} attached to {ver} (attached: {attached and attached['attributes'].get('version')})")
     if attached:
@@ -157,6 +163,21 @@ def main():
         a = rd["attributes"]
         need(all(a.get(k) for k in ("contactFirstName", "contactLastName", "contactPhone", "contactEmail")),
              "review contact fields present")
+        name = " ".join(x for x in (a.get("contactFirstName"), a.get("contactLastName")) if x)
+        ph = (a.get("contactPhone") or "").replace(" ", "")
+        if ph.startswith("+44") and len(ph) == 13:
+            ph = f"+44 {ph[3:7]} {ph[7:]}"
+        if name and ph:
+            want = m.text("review_notes.txt").replace("{contact_name}", name).replace("{contact_phone}", ph)
+            if len(want) > 4000:
+                need(False, f"review notes from the repo fit 4000 chars (len {len(want)})")
+            elif want != (a.get("notes") or ""):
+                call("PATCH", f"/v1/appStoreReviewDetails/{rd['id']}", {"data": {"type": "appStoreReviewDetails",
+                     "id": rd["id"], "attributes": {"notes": want}}})
+                a = call("GET", f"/v1/appStoreReviewDetails/{rd['id']}")["data"]["attributes"]
+                need(a.get("notes") == want, f"review notes updated from the repo (len {len(want)})")
+            else:
+                print(f"review notes already match the repo (len {len(want)})")
         need(len(a.get("notes") or "") > 0, f"review notes present (len {len(a.get('notes') or '')})")
         need(a.get("demoAccountRequired") is False, f"demoAccountRequired={a.get('demoAccountRequired')}")
     else:
@@ -169,6 +190,7 @@ def main():
     # ---- existing review submissions
     subs = call("GET", f"/v1/reviewSubmissions?filter[app]={app}&filter[platform]=IOS&limit=50")
     open_sub = None
+    returned = None
     for s in subs["data"]:
         a = s["attributes"]
         print(f"review submission {s['id']} state={a.get('state')} submitted={a.get('submittedDate')}")
@@ -176,7 +198,9 @@ def main():
         st = s["attributes"].get("state")
         if st in ("WAITING_FOR_REVIEW", "IN_REVIEW", "CANCELING", "COMPLETING"):
             raise SystemExit(f"::error::review submission {s['id']} is {st}; not touching it")
-        if st == "UNRESOLVED_ISSUES":
+        if st == "UNRESOLVED_ISSUES" and returned is None:
+            returned = s  # resubmitted below, after the release type is set
+        elif st == "UNRESOLVED_ISSUES":
             print(f"cancelling review submission {s['id']} (returned with unresolved issues, not in review)")
             call("PATCH", f"/v1/reviewSubmissions/{s['id']}",
                  {"data": {"type": "reviewSubmissions", "id": s["id"], "attributes": {"canceled": True}}})
@@ -198,6 +222,29 @@ def main():
         raise SystemExit(1)
 
     # ---- submission
+    if returned is not None:
+        sid = returned["id"]
+        items = call("GET", f"/v1/reviewSubmissions/{sid}/items?limit=50&include=appStoreVersion")["data"]
+        ours = [it for it in items if (((it.get("relationships") or {}).get("appStoreVersion") or {}).get("data") or {}).get("id") == vid]
+        print(f"review submission {sid} was returned (UNRESOLVED_ISSUES); items: "
+              + ", ".join(f"{it['id'][:12]}… {it['attributes'].get('state')}" for it in items))
+        try:
+            if not ours:
+                raise ApiError("version is not an item of the returned submission")
+            call("PATCH", f"/v1/reviewSubmissions/{sid}",
+                 {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"submitted": True}}})
+            print(f"resubmitted review submission {sid}")
+            return read_back(sid, vid, ver)
+        except ApiError as e:
+            print(f"resubmitting {sid} was refused, so cancelling it and making a new one:\n{e}")
+            call("PATCH", f"/v1/reviewSubmissions/{sid}",
+                 {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"canceled": True}}})
+            for _ in range(30):
+                st2 = call("GET", f"/v1/reviewSubmissions/{sid}")["data"]["attributes"].get("state")
+                if st2 not in ("CANCELING", "UNRESOLVED_ISSUES"):
+                    break
+                time.sleep(10)
+            print(f"  now {st2}")
     if open_sub:
         sid = open_sub["id"]
         print(f"reusing review submission {sid}")
@@ -222,8 +269,10 @@ def main():
     call("PATCH", f"/v1/reviewSubmissions/{sid}",
          {"data": {"type": "reviewSubmissions", "id": sid, "attributes": {"submitted": True}}})
     print("submitted")
+    read_back(sid, vid, ver)
 
-    # ---- read back
+
+def read_back(sid, vid, ver):
     for _ in range(12):
         s = call("GET", f"/v1/reviewSubmissions/{sid}")["data"]["attributes"]
         v2 = call("GET", f"/v1/appStoreVersions/{vid}")["data"]["attributes"]

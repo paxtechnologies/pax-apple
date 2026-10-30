@@ -29,7 +29,7 @@ jobs:
       ASC_ISSUER_ID: a8055883-0c57-4d82-ae26-a8b35e6f087d
       APP_ID: '6825390558'
       VERSION: 1.2.0
-      BUILD: '6'
+      BUILD: '7'
     steps:
       - uses: actions/checkout@v4
       - name: Write the API key (temp, deleted at the end)

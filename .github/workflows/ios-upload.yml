@@ -209,6 +209,17 @@ jobs:
           done
           codesign -dv "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier' || true
 
+      # Family Controls needs App Store profiles made from the bundle IDs' Family Controls
+      # (Distribution) capability. Check the capability on all four bundle IDs, then delete their
+      # App Store profiles so the export below makes fresh ones (profiles only; never certificates).
+      - name: Fresh App Store profiles (Family Controls Distribution on all four bundle IDs)
+        env:
+          ASC_KEY_ID: 8G4S3TUCV5
+          ASC_ISSUER_ID: a8055883-0c57-4d82-ae26-a8b35e6f087d
+        run: |
+          set +x
+          KEY="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8" python3 ci/asc_profiles.py refresh
+
       - name: Export (app-store-connect)
         env:
           ASC_KEY_ID: 8G4S3TUCV5
@@ -243,6 +254,8 @@ jobs:
             codesign -dv "$b" 2>&1 | grep -E '^(Authority|TeamIdentifier)=' | head -2
             codesign -d --entitlements :- "$b" 2>/dev/null | grep -q 'com.apple.developer.family-controls' || { echo "::error::$b lost Family Controls"; exit 1; }
           done
+          # Each embedded profile must be an App Store profile for that bundle that includes Family Controls.
+          python3 ci/asc_profiles.py check "$RUNNER_TEMP/ipa"
 
       - name: Validate (always) and upload (unless a dry run)
         env:
