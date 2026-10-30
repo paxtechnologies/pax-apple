@@ -46,13 +46,20 @@ def main():
                 continue
             bids[b["id"]] = ident
             print(f"{ident} id={b['id']} platform={a.get('platform')} seedId={a.get('seedId')}")
-            caps = get(f"/v1/bundleIds/{b['id']}/bundleIdCapabilities?limit=50")["data"]
+            caps = get(f"/v1/bundleIds/{b['id']}/bundleIdCapabilities")["data"]
             for c in caps:
                 ca = c["attributes"]
                 st = json.dumps(ca.get("settings")) if ca.get("settings") else ""
                 print(f"   cap {ca.get('capabilityType')} {st}")
     print("\n== profiles")
     profs = get("/v1/profiles?limit=200&include=bundleId,certificates")
+    seen = {p["id"] for p in profs["data"]}
+    for bid in bids:
+        for p in get(f"/v1/bundleIds/{bid}/profiles?limit=50")["data"]:
+            if p["id"] not in seen:
+                p.setdefault("relationships", {})["bundleId"] = {"data": {"id": bid}}
+                profs["data"].append(p); seen.add(p["id"])
+    print(f"{len(profs['data'])} profiles")
     for p in profs["data"]:
         a = p["attributes"]
         bid = ((p.get("relationships") or {}).get("bundleId") or {}).get("data") or {}
