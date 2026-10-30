@@ -1,16 +1,16 @@
-# Filter workflow: 2026.1029.0335 (published)
+# Filter workflow: 2026.1030.0335 (published)
 
-Built against the last published lists 2026.1028.0332.
+Built against the last published lists 2026.1029.0335.
 
 | set | n | reference blocks | this pack | last pack |
 |---|---|---|---|---|
-| held-out restricted | 400 | 71.0% | 86.2% | 86.2% |
+| held-out restricted | 400 | 72.0% | 82.2% | 82.2% |
 | web proxies (hand-kept set, live names) | 69 | 91.3% | 87.0% | 87.0% |
-| web proxies (fresh held-out sample) | 66 | 86.4% | 77.3% | 77.3% |
+| web proxies (fresh held-out sample) | 67 | 86.6% | 79.1% | 79.1% |
 | ordinary sites (blocked, reference open) | 250 | - | 5 | 5 |
 
 Everyday UK sites blocked: 0. Known-good blocked: 0. New blocks in the Tranco top 10k: 0 (held back: 0).
-Homepage-checked additions tonight: 147 restricted, 15 proxies.
-Proxy discovery tonight: links 2309, project sites 675, curated 2604, chrome ranked 4779, majestic 766, new registrations 1250, ranked 2052, vpn category 6027, certificates 787, lookalikes 3000.
+Homepage-checked additions tonight: 164 restricted, 14 proxies.
+Proxy discovery tonight: links 1918, project sites 1001, curated 2602, chrome ranked 4698, majestic 769, new registrations 1239, ranked 2053, vpn category 6027, certificates 514, lookalikes 3000.
 
 Site names in latest.json are encoded (gzip + base64 JSON), never plain text.
