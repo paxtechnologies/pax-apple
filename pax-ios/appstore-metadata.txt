@@ -1,2 +1,2 @@
-mode=submit
+mode=read
 other_sets=keep
