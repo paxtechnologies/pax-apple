@@ -66,6 +66,9 @@ struct PaxDeviceRecord: Codable, Identifiable, Equatable {
     /// v0.8.37: a phone with this name was plugged in and recognised, and this set-up's profile
     /// wasn't on it (usually a set-up that never finished). Home says so.
     var notOnPhone: Bool?
+    /// v0.8.38: a plugged-in phone was matched to this record by its protection profile's
+    /// identifier. Until then a restored record says "Not confirmed" (PhoneConfirmation).
+    var confirmedOnPhone: Bool?
 
     static let defaultsKey = "pax.devices"
     /// v0.8.37: server device IDs removed from the list on this Mac, so the account's list
@@ -220,6 +223,9 @@ final class SetupModel: ObservableObject {
         didSet { UserDefaults.standard.set(selectedDevice, forKey: "pax.selectedDevice") }
     }
     @Published var phoneStatus: [String: EscrowClient.DeviceStatus] = [:]
+    /// v0.8.38: every iPhone and iPad on the account (hidden ones too), from the last
+    /// GET /v1/devices; PhoneConfirmation.isUnambiguous counts them.
+    @Published var accountPhones: [PhoneReconnect.ServerPhone] = []
     @Published var phoneStatusFetchedAt = Date()
     @Published var revealedPhonePassword: [String: String] = [:]
     /// v0.8.26: when the phones' server status was last fetched successfully, whether the
@@ -543,7 +549,8 @@ final class SetupModel: ObservableObject {
                 recognised = .otherAccount(name: device.name, isIPad: isIPad)
                 log.append("✗ PAX-IOS-014 the phone's Pax set-up isn't on this account")
             case .recognised(let deviceID, let key):
-                let id = linkRecognised(device, deviceID: deviceID, inspection: inspection, server: server ?? [])
+                let id = linkRecognised(device, deviceID: deviceID, by: key, inspection: inspection,
+                                        server: server ?? [])
                 log.append("✓ Recognised: already protected by Pax (matched by \(key.rawValue))")
                 recognised = .linked(recordID: id, name: device.name, isIPad: isIPad)
                 await refreshPhones(quiet: true)
@@ -560,7 +567,8 @@ final class SetupModel: ObservableObject {
     }
 
     /// Links the recognised phone to its server device on this Mac; returns its record id.
-    private func linkRecognised(_ device: ConnectedDevice, deviceID: String, inspection: PhoneReconnect.Inspection,
+    private func linkRecognised(_ device: ConnectedDevice, deviceID: String, by key: PhoneReconnect.MatchKey,
+                                inspection: PhoneReconnect.Inspection,
                                 server: [PhoneReconnect.ServerPhone]) -> String {
         var rec = deviceRecords.first(where: { $0.escrowID == deviceID })
             ?? PaxDeviceRecord(id: device.ecid, name: device.name, isIPad: device.deviceType.hasPrefix("iPad"),
@@ -573,6 +581,8 @@ final class SetupModel: ObservableObject {
         rec.profileIdentifier = server.first(where: { $0.deviceID == deviceID })?.profileIdentifier
             ?? rec.profileIdentifier
         rec.notOnPhone = nil
+        // v0.8.38: only the profile identifier confirms which set-up this phone is.
+        if key == .profileIdentifier { rec.confirmedOnPhone = true }
         // A "Setting up" record left by the failed attempt on this same phone goes.
         deviceRecords.removeAll { $0.id == rec.id || ($0.id == device.ecid && $0.escrowID == nil) }
         deviceRecords.append(rec)
@@ -923,9 +933,41 @@ final class SetupModel: ObservableObject {
         if selectedDevice == id { selectedDevice = "mac" }
     }
 
+    /// v0.8.38: a phone brought back from the account counts as this phone only once a
+    /// plugged-in phone was matched to it, or when it is unambiguous (PhoneConfirmation).
+    func isConfirmed(_ rec: PaxDeviceRecord) -> Bool {
+        let unambiguous = rec.escrowID.map {
+            PhoneConfirmation.isUnambiguous(deviceID: $0, account: accountPhones,
+                                            checkingIn: phoneStatus[rec.id]?.checking_in)
+        } ?? false
+        return PhoneConfirmation.isConfirmed(restored: rec.restored == true, matchedOnPhone: rec.confirmedOnPhone == true,
+                                             notOnPhone: rec.notOnPhone == true, unambiguous: unambiguous)
+    }
+
+    /// v0.8.38: Home says "Not confirmed" in place of "Protected" / trial day for this record.
+    func showsNotConfirmed(_ rec: PaxDeviceRecord, at now: Date = Date()) -> Bool {
+        rec.status == .protected && PhoneConfirmation.showsNotConfirmed(phoneState(rec, at: now), confirmed: isConfirmed(rec))
+    }
+
+    /// v0.8.38: records 0.8.37 already matched to a plugged-in phone keep that match.
+    private func carryOver0837Matches() -> Bool {
+        var changed = false
+        for i in deviceRecords.indices where deviceRecords[i].restored == true && deviceRecords[i].confirmedOnPhone == nil {
+            let r = deviceRecords[i]
+            let siblings = deviceRecords.filter { $0.id != r.id && $0.name == r.name && $0.escrowID != nil }
+            if PhoneConfirmation.wasMatchedBefore(notOnPhone: r.notOnPhone == true,
+                                                 sameNameSiblingsNotOnPhone: siblings.map { $0.notOnPhone == true }) {
+                deviceRecords[i].confirmedOnPhone = true
+                changed = true
+            }
+        }
+        return changed
+    }
+
     /// v0.8.37: two or more unconfirmed set-ups with this record's name on the account.
+    /// v0.8.38: never on a confirmed one.
     func hasDuplicateName(_ rec: PaxDeviceRecord) -> Bool {
-        guard rec.notOnPhone != true else { return false }
+        guard rec.notOnPhone != true, !isConfirmed(rec) else { return false }
         return deviceRecords.filter {
             $0.name == rec.name && $0.escrowID != nil && $0.notOnPhone != true
                 && !(phoneStatus[$0.id].map(PhoneStatus.isReleased) ?? false)
@@ -975,7 +1017,7 @@ final class SetupModel: ObservableObject {
             let server = try await coordinator.escrow.devices()
                 .filter { $0.platform != "mac" && $0.platform != "macos" }
                 .sorted { $0.installed_at > $1.installed_at }
-            var changed = false
+            var changed = carryOver0837Matches()
             for i in deviceRecords.indices where deviceRecords[i].escrowID == nil {
                 let taken = Set(deviceRecords.compactMap(\.escrowID))
                 let free = server.filter { !taken.contains($0.device_id) }
@@ -1013,6 +1055,7 @@ final class SetupModel: ObservableObject {
                 if let id = rec.escrowID, let st = server.first(where: { $0.device_id == id }) { map[rec.id] = st }
             }
             phoneStatus = map
+            accountPhones = server.map { PhoneReconnect.ServerPhone($0) }
             phoneStatusFetchedAt = Date()
             phoneStatusCheckedAt = phoneStatusFetchedAt
             phoneStatusFailed = false

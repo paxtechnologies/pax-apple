@@ -395,6 +395,22 @@ phone's protection: if anything offers to erase, remove or "set up again" a prot
     27 and on 17-26, and Clean). Afterwards, delete the app's preferences again and relaunch: the phone comes
     straight back (its record is now linked to its server device at set-up).
 
+### v0.8.38: "Not confirmed" until the phone is plugged in
+
+47. **Not confirmed, then matched**: on Ruben's account (one real "RDN" plus the 0.8.36 leftovers), delete
+    the app's preferences as in step 38 and open the 0.8.38 DMG. Every "RDN" in the sidebar reads *Not
+    confirmed* (grey dot), none reads *Protected*; each Home says "Not confirmed" / "There's more than one RDN
+    on your account. Plug it in and choose Add iPhone or iPad to check which one it is. Nothing will be
+    installed again." The Turn off card is still there on each (turn-off wait, *In an emergency*, Device
+    details › Status "Not confirmed"); nothing offers removal of protection. Plug the real phone in › *Add
+    iPhone or iPad* › *Use this iPhone* › recognised (step 40) › *Open RDN*: that one now shows its real status
+    (*Protected*, or the turn-off wait / trial day if running) in the sidebar and on Home. The other two stay
+    *Not confirmed* with "This set-up isn't on the RDN that was plugged in…" and *Remove from list* (hides on
+    this Mac only; relaunch: still hidden; the real one stays *Protected*). Start a turn-off wait on the real
+    phone and cancel it: the wait shows and works as before. On an account with exactly one USB-set-up phone
+    that is checking in, the restored phone shows *Protected* straight away without plugging in.
+
+
 ## iPhone / iPad
 
 0. (v0.8.6) Use a Mac that has **never had the old helper**: no `~/Library/Application Support/Pax/venv`,

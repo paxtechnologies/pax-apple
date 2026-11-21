@@ -206,6 +206,34 @@ plugged in…" and *Remove from list*, which hides them on this Mac only; the se
 retire anything Pax is still on). Before a phone is plugged in, two or more such set-ups show "There's more
 than one <name> on your account…".
 
+**2b. "Not confirmed" until a phone is matched (v0.8.38).** Ruben, 21 Nov 2026 (Pax 0.8.37): after a reinstall
+Home listed three iPhones all called "RDN", each "Protected"; two were 0.8.36 set-ups that stored a password and
+never installed. The server can't tell them apart: they are ordinary unreleased devices, and *checking in* is the
+account's one DNS address, shared by all its iPhones and iPads. So a phone brought back from the account
+(`restored`) shows **Not confirmed** instead of *Protected* (and instead of the trial-day headline) until it is
+confirmed (`PhoneConfirmation`):
+
+- a plugged-in phone was matched to it **by its protection profile identifier** (`org.paxpeace.pax.ios.<uuid>`;
+  recorded as `confirmedOnPhone`; a name-only match on a very old server doesn't count), or
+- it is **unambiguous**: the only unreleased USB-set-up iPhone/iPad on the whole account (hidden ones count) and
+  the server says `checking_in == true`. A unique name alone isn't enough, because checking in can't vouch for one
+  phone of two, and a set-up that never finished can have a unique name.
+
+Phones set up from this copy of the app are confirmed at set-up. Records 0.8.37 already matched carry over (0.8.37
+marked every other same-named set-up "not on this phone"; nothing else sets that mark). A turn-off wait, *Turned
+off* and *Not checking in* are server facts about that set-up and always show as they are. Only the headline
+changes: the What's blocked and Turn off cards (turn-off wait, emergency, support code, Support ID, Device details)
+are exactly as for any phone, and no new removal is offered.
+
+| State | Headline / sidebar | Line under it |
+|---|---|---|
+| restored, not matched, no other with its name | Not confirmed | "Pax hasn't matched <name> to an iPhone yet. Plug it in and choose Add iPhone or iPad to check. Nothing will be installed again." |
+| restored, not matched, two or more with its name | Not confirmed | "There's more than one <name> on your account. Plug it in and choose Add iPhone or iPad to check which one it is. Nothing will be installed again." |
+| matched by profile identifier (or unambiguous) | its real status (Protected, trial day, turn-off wait, Turned off, Not checking in) | as before |
+| a same-named set-up whose profile wasn't on the plugged-in phone | Not confirmed | "This set-up isn't on the <name> that was plugged in. It may be from a set-up that didn't finish. Removing it here only hides it on this Mac." · *Remove from list* |
+
+Device details › Status reads "Not confirmed" for the same records.
+
 **3. Never a second install.** Right before the password is stored (Keep my data), set-up reads the phone
 again: a Pax profile already there stops with `PAX-IOS-015` (shown as the recognised screen, not an error);
 a phone that was supervised before this set-up began and doesn't know this run's certificate stops with

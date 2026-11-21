@@ -389,8 +389,6 @@ struct PhoneHome: View {
                 NoteRow(icon: "info.circle", text: PhoneReconnect.notOnPhoneLine(name: rec.name))
                 Button(PhoneStatus.removeButton) { removeMessage = PhoneStatus.removeMessageQuiet; confirmRemove = true }
                     .buttonStyle(SecondaryButtonStyle())
-            } else if model.hasDuplicateName(rec) {
-                NoteRow(icon: "info.circle", text: PhoneReconnect.duplicateNameLine(name: rec.name))
             }
             if rec.status != .protected {
                 HStack(spacing: 10) {
@@ -411,6 +409,9 @@ struct PhoneHome: View {
                             turnedOffLines(s)
                         case .notCheckingIn(let lastSeen):
                             notCheckingInLines(lastSeen)
+                        // v0.8.38: a phone from the account that no plugged-in phone was matched to.
+                        case _ where PhoneConfirmation.showsNotConfirmed(state, confirmed: model.isConfirmed(rec)):
+                            notConfirmedLines(s, now: ctx.date)
                         default:
                             if let home = PhoneStatus.homeStatus(state) {
                                 StatusHeadline(status: home,
@@ -484,6 +485,27 @@ struct PhoneHome: View {
             }
         }
         removeButtons(message: PhoneStatus.removeMessageOff, prominent: true)
+    }
+
+    /// v0.8.38 Not confirmed: brought back from the account, not matched to a phone yet. Only
+    /// the headline changes; the turn-off card below is the same as for any phone.
+    @ViewBuilder private func notConfirmedLines(_ s: EscrowClient.DeviceStatus, now: Date) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(Theme.border).frame(width: 11, height: 11)
+            Text(PhoneConfirmation.headline).font(Theme.heading(30)).foregroundStyle(Theme.primaryText)
+        }
+        // A set-up that wasn't on the phone already has its note above.
+        if rec.notOnPhone != true {
+            Text(model.hasDuplicateName(rec) ? PhoneReconnect.duplicateNameLine(name: rec.name)
+                 : PhoneConfirmation.line(name: rec.name, isIPad: rec.isIPad))
+                .font(Theme.body(14)).foregroundStyle(Theme.mutedText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if TrialDay.isActive(s.trial, now: now) {
+            TrialDayLines(trial: s.trial, now: now) { confirmEndTrial = true }
+        } else if s.in_grace_period {
+            Text(TurnOffWait.firstHour).font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+        }
     }
 
     /// v0.8.26 Not checking in: no Pax DNS traffic for 48 hours or more.
@@ -613,6 +635,7 @@ struct PhoneDetailsList: View {
         VStack(alignment: .leading, spacing: 10) {
             // v0.8.26: the server's state, not the set-up record's.
             detail("Status", rec.status != .protected ? "Setting up"
+                   : model.showsNotConfirmed(rec) ? PhoneConfirmation.detailsValue     // v0.8.38
                    : model.phoneState(rec).map(PhoneStatus.sidebarLabel) ?? "Protected")
             if let w = model.phoneStatus[rec.id]?.wait_seconds {          // v0.8.16
                 detail(TurnOffWait.label, TurnOffWait.duration(seconds: w))

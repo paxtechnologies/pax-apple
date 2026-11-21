@@ -95,6 +95,8 @@ enum DeviceState: Equatable {
     case protected, pending, notSetUp
     /// v0.8.26 (iPhone/iPad, from the server): a turn-off wait, Pax off, or gone quiet.
     case turningOff, turnedOff, notCheckingIn
+    /// v0.8.38: brought back from the account and not matched to a phone yet.
+    case notConfirmed
 
     var label: String {
         switch self {
@@ -104,6 +106,7 @@ enum DeviceState: Equatable {
         case .turningOff: return PhoneStatus.sidebarLabel(.turningOff(secondsLeft: 0, notifying: false))
         case .turnedOff: return PhoneStatus.sidebarLabel(.turnedOff)
         case .notCheckingIn: return PhoneStatus.sidebarLabel(.notCheckingIn(lastSeen: nil))
+        case .notConfirmed: return PhoneConfirmation.sidebarLabel
         }
     }
 }
@@ -130,6 +133,7 @@ extension SetupModel {
     /// v0.8.26: from the server once it has answered (never from the set-up record alone).
     func state(of rec: PaxDeviceRecord) -> DeviceState {
         guard rec.status == .protected else { return .pending }
+        if showsNotConfirmed(rec) { return .notConfirmed }
         switch phoneState(rec) {
         case .turnedOff?: return .turnedOff
         case .turningOff?: return .turningOff
