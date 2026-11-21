@@ -670,6 +670,21 @@ refreshed before they expire, a slow resolver is backed up by the next one in th
 YouTube rules, the family-filter fallback and fail-closed SERVFAIL are unchanged. Details and measurements:
 [docs/DNS.md](docs/DNS.md#speed-v0836).
 
+**iPhones come back after a reinstall (v0.8.37).** Pax for Mac used to keep its list of iPhones and iPads
+only in its preferences, so deleting and reinstalling the app lost them (the Mac itself came back in 0.8.34).
+Now the app rebuilds the list from the Pax account (`GET /v1/devices`: phones set up with a Pax protection
+profile that Pax is still on; turned-off and App Store app phones are left out), each with its usual Home:
+status, turn-off wait, emergency, verified support release and the account's blocked sites. Plugging a phone
+in reads it first (`pax_device.py inspect`, read-only). A phone that already has Pax's protection profile is
+recognised by that profile's identifier (unique per set-up; the server has always kept it) and shown as
+"This iPhone is already protected by Pax": nothing is installed and no second removal password is stored.
+A phone protected under another account says so and offers nothing. A phone supervised by an earlier set-up
+whose key this Mac doesn't hold now stops before the password step with `PAX-IOS-013` instead of the raw
+"must be installed using a device management tool" error. What a reinstall can't bring back: anything
+inside the phone's locked profile (its blocked apps, the Safari web-filter list typed at set-up, the DNS
+choice, the restrictions) was already fixed at set-up, because Pax destroys its supervision key right after
+installing; that is unchanged. Details: [docs/HOME_AND_SETTINGS.md](docs/HOME_AND_SETTINGS.md).
+
 **Profile** (`make_profile.py --self-lock`, System scope, no removal password: once you're Standard,
 removing a System profile needs an administrator, and Apple's schema says a manually installed profile
 with `PayloadRemovalDisallowed` and no removal password "requires admin auth"):

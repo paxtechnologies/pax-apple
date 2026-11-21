@@ -57,8 +57,28 @@ struct PaxDeviceRecord: Codable, Identifiable, Equatable {
     var blockedAppNames: [String]?
     /// The server's device_id, found after set-up.
     var escrowID: String?
+    /// v0.8.37: the protection profile's identifier (unique per set-up; the server keeps it
+    /// too). How a plugged-in phone is matched to this record (PhoneReconnect).
+    var profileIdentifier: String?
+    /// v0.8.37: brought back from the Pax account after this app was reinstalled (or signed
+    /// in again), not set up from this copy of the app.
+    var restored: Bool?
+    /// v0.8.37: a phone with this name was plugged in and recognised, and this set-up's profile
+    /// wasn't on it (usually a set-up that never finished). Home says so.
+    var notOnPhone: Bool?
 
     static let defaultsKey = "pax.devices"
+    /// v0.8.37: server device IDs removed from the list on this Mac, so the account's list
+    /// doesn't bring them back. Cleared for a phone when it is plugged in and recognised.
+    static let hiddenKey = "pax.devices.hidden"
+
+    static func hidden(_ defaults: UserDefaults = .standard) -> Set<String> {
+        Set(defaults.stringArray(forKey: hiddenKey) ?? [])
+    }
+
+    static func setHidden(_ ids: Set<String>, _ defaults: UserDefaults = .standard) {
+        defaults.set(ids.sorted(), forKey: hiddenKey)
+    }
 
     static func load(_ defaults: UserDefaults = .standard) -> [PaxDeviceRecord] {
         if let data = defaults.data(forKey: defaultsKey),
@@ -75,6 +95,16 @@ struct PaxDeviceRecord: Codable, Identifiable, Equatable {
         if let data = try? JSONEncoder().encode(list) { defaults.set(data, forKey: defaultsKey) }
         defaults.set(list.filter { $0.status == .protected }.map(\.name), forKey: "pax.iphone.names")
     }
+}
+
+/// v0.8.37: a plugged-in phone that Pax already protects (PhoneReconnect).
+enum RecognisedPhone: Equatable {
+    /// Linked to its record (id) on this account: shown calmly, then Home.
+    case linked(recordID: String, name: String, isIPad: Bool)
+    /// Pax protects it, but this Mac isn't signed in yet: the email code signs in.
+    case needsSignIn(name: String, isIPad: Bool)
+    /// Pax protects it under another account: said plainly, nothing offered.
+    case otherAccount(name: String, isIPad: Bool)
 }
 
 /// Where a Keep-my-data run is. The UI shows on-phone instructions for each.
@@ -173,6 +203,15 @@ final class SetupModel: ObservableObject {
     @Published var supervised = false
     @Published var protecting = false
     @Published var profilePendingUser = false
+    /// v0.8.37: the phone was already supervised when Keep my data started.
+    @Published var supervisedBeforeSetUp = false
+    /// v0.8.37: reading the plugged-in phone before set-up ("Use this iPhone").
+    @Published var checkingPhone = false
+    /// v0.8.37: the plugged-in phone is already protected by Pax.
+    @Published var recognised: RecognisedPhone?
+    /// v0.8.37: sign in (email + code) from the "already protected" screen.
+    @Published var signInEmail = ""
+    @Published var signInCode = EmailCodeState()
 
     // v0.7.0 device switcher
     @Published var deviceRecords: [PaxDeviceRecord] = PaxDeviceRecord.load()
@@ -323,8 +362,13 @@ final class SetupModel: ObservableObject {
                 try await work()
             } catch {
                 let coded = PaxErrorClassifier.classify(error)
-                failure = coded
                 log.append("✗ \(coded.code) \(coded.technical)")
+                if coded.code == "PAX-IOS-015", let device = selected {
+                    // v0.8.37: already protected by Pax. Not a failure: show it calmly.
+                    _ = await recognise(device)
+                } else {
+                    failure = coded
+                }
             }
             busy = false
         }
@@ -453,6 +497,162 @@ final class SetupModel: ObservableObject {
     // MARK: Lock it in
 
     /// The single "Protect my iPhone" button: checks, then the right method.
+    // MARK: v0.8.37 a phone Pax already protects
+
+    /// "Use this iPhone": read the phone first (read-only). A phone Pax already protects is
+    /// recognised instead of set up again; anything else carries on as before. When the phone
+    /// can't be read yet (not trusted, no helper) set-up carries on too: the same check runs
+    /// again right before anything is stored or installed, and stops there (fail closed).
+    func useSelectedPhone() {
+        stopSearching()
+        recognised = nil
+        guard let device = selected, device.udid != nil,
+              coordinator.keepData?.helper.isAvailable() == true else { next(); return }
+        checkingPhone = true
+        Task { [weak self] in
+            guard let self else { return }
+            let inspection = try? await self.coordinator.inspectPhone(device)
+            if let inspection, inspection.hasPaxProtection {
+                _ = await self.recognise(device, inspection: inspection)
+            } else {
+                self.next()
+            }
+            self.checkingPhone = false
+        }
+    }
+
+    /// Matches a plugged-in phone to the signed-in account (PhoneReconnect.match) and links it.
+    @discardableResult
+    func recognise(_ device: ConnectedDevice, inspection given: PhoneReconnect.Inspection? = nil) async
+        -> PhoneReconnect.Match? {
+        let isIPad = device.deviceType.hasPrefix("iPad")
+        do {
+            let inspection: PhoneReconnect.Inspection
+            if let given { inspection = given } else { inspection = try await coordinator.inspectPhone(device) }
+            var server: [PhoneReconnect.ServerPhone]? = nil
+            if hasAccount {
+                server = try await coordinator.escrow.devices().map { PhoneReconnect.ServerPhone($0) }
+            }
+            let match = PhoneReconnect.match(inspection, phoneName: device.name, server: server)
+            switch match {
+            case .notProtected:
+                recognised = nil
+            case .needsSignIn:
+                recognised = .needsSignIn(name: device.name, isIPad: isIPad)
+            case .otherAccount:
+                recognised = .otherAccount(name: device.name, isIPad: isIPad)
+                log.append("✗ PAX-IOS-014 the phone's Pax set-up isn't on this account")
+            case .recognised(let deviceID, let key):
+                let id = linkRecognised(device, deviceID: deviceID, inspection: inspection, server: server ?? [])
+                log.append("✓ Recognised: already protected by Pax (matched by \(key.rawValue))")
+                recognised = .linked(recordID: id, name: device.name, isIPad: isIPad)
+                await refreshPhones(quiet: true)
+            }
+            failure = nil
+            return match
+        } catch {
+            failure = PaxErrorClassifier.classify(error)
+            lastAction = { [weak self] in
+                Task { _ = await self?.recognise(device) }
+            }
+            return nil
+        }
+    }
+
+    /// Links the recognised phone to its server device on this Mac; returns its record id.
+    private func linkRecognised(_ device: ConnectedDevice, deviceID: String, inspection: PhoneReconnect.Inspection,
+                                server: [PhoneReconnect.ServerPhone]) -> String {
+        var rec = deviceRecords.first(where: { $0.escrowID == deviceID })
+            ?? PaxDeviceRecord(id: device.ecid, name: device.name, isIPad: device.deviceType.hasPrefix("iPad"),
+                               status: .protected)
+        rec.name = device.name
+        rec.isIPad = device.deviceType.hasPrefix("iPad")
+        rec.iosVersion = inspection.iosVersion ?? device.firmwareVersion
+        rec.status = .protected
+        rec.escrowID = deviceID
+        rec.profileIdentifier = server.first(where: { $0.deviceID == deviceID })?.profileIdentifier
+            ?? rec.profileIdentifier
+        rec.notOnPhone = nil
+        // A "Setting up" record left by the failed attempt on this same phone goes.
+        deviceRecords.removeAll { $0.id == rec.id || ($0.id == device.ecid && $0.escrowID == nil) }
+        deviceRecords.append(rec)
+        let others = Set(PhoneReconnect.notOnThisPhone(recognised: deviceID, inspection: inspection,
+                                                       phoneName: device.name, server: server))
+        for i in deviceRecords.indices {
+            if let e = deviceRecords[i].escrowID, others.contains(e) { deviceRecords[i].notOnPhone = true }
+        }
+        PaxDeviceRecord.save(deviceRecords)
+        var hidden = PaxDeviceRecord.hidden()
+        if hidden.remove(deviceID) != nil { PaxDeviceRecord.setHidden(hidden) }
+        selectedDevice = rec.id
+        return rec.id
+    }
+
+    /// From the "already protected" screen: open the phone's page on Home.
+    func openRecognised() {
+        if case .linked(let id, _, _) = recognised { selectedDevice = id }
+        recognised = nil
+        step = .connect
+        screen = .home
+    }
+
+    /// Leave the "already protected" screen without doing anything.
+    func closeRecognised() {
+        recognised = nil
+        step = .connect
+        screen = deviceRecords.isEmpty ? .welcome : .home
+    }
+
+    /// Sign in from the "already protected" screen (email, then the 6-digit code), then match
+    /// the phone again. The same calls set-up uses; nothing on the phone changes.
+    func signInForRecognised() {
+        guard let device = selected else { return }
+        run { [self] in
+            let email = signInEmail
+            guard EmailCodeState.looksLikeEmail(email) else {
+                signInCode.problem = EmailCodeCopy.enterEmail
+                return
+            }
+            if !signInCode.awaitingCode(for: email) {
+                do {
+                    try await coordinator.escrow.startEmailCode(email: email)
+                    signInCode.didSend(to: email, at: Date())
+                } catch let error where EmailCodeCopy.message(for: error, checking: false) != nil {
+                    signInCode.problem = EmailCodeCopy.message(for: error, checking: false)
+                }
+                return
+            }
+            guard signInCode.codeComplete else {
+                signInCode.problem = EmailCodeCopy.enterCode
+                return
+            }
+            do {
+                let account = try await coordinator.escrow.verifyEmailCode(
+                    email: email, code: signInCode.code, label: ProcessInfo.processInfo.hostName)
+                coordinator.escrow.token = account.token
+                try? tokenStore.save(account.token)
+                signInCode.finish()
+            } catch let error where EmailCodeCopy.message(for: error, checking: true) != nil {
+                signInCode.problem = EmailCodeCopy.message(for: error, checking: true)
+                return
+            }
+            _ = await recognise(device)
+        }
+    }
+
+    func resendSignInCode() {
+        guard !busy, signInCode.secondsUntilResend(now: Date()) == 0 else { return }
+        let email = signInEmail
+        run { [self] in
+            do {
+                try await coordinator.escrow.startEmailCode(email: email)
+                signInCode.didSend(to: email, at: Date())
+            } catch let error where EmailCodeCopy.message(for: error, checking: false) != nil {
+                signInCode.problem = EmailCodeCopy.message(for: error, checking: false)
+            }
+        }
+    }
+
     func startProtecting() {
         failure = nil
         if let device = selected { upsertRecord(device, status: .pending) }
@@ -543,6 +743,19 @@ final class SetupModel: ObservableObject {
                 identity = newIdentity
                 keepDataMethod = outcome.method
                 if outcome.alreadySupervised {
+                    // v0.8.37: supervised before this set-up began. If Pax already protects it,
+                    // recognise it; if this run can't install on it (PAX-IOS-013), stop now,
+                    // before any password is stored.
+                    supervisedBeforeSetUp = true
+                    do {
+                        let status = try await coordinator.supervisionStatus(device, identity: newIdentity)
+                        try await coordinator.refuseIfAlreadyProtected(device, status: status, supervisedBeforeSetUp: true)
+                    } catch {
+                        // This run's key was never used: destroy it now, as after any set-up.
+                        coordinator.identities.destroyPrivateKey(newIdentity)
+                        identity = nil
+                        throw error
+                    }
                     keepDataPhase = .supervised
                     supervised = true
                 } else {
@@ -621,7 +834,8 @@ final class SetupModel: ObservableObject {
         run { [self] in
             do {
                 let outcome = try await coordinator.lockAndEscrow(
-                    device, identity: identity, config: config, progress: progressSink)
+                    device, identity: identity, config: config, supervisedBeforeSetUp: supervisedBeforeSetUp,
+                    progress: progressSink)
                 self.identity = nil  // private key already destroyed by lockAndEscrow
                 protecting = false
                 if outcome == .pendingUser {
@@ -651,6 +865,13 @@ final class SetupModel: ObservableObject {
 
     private func finish(_ device: ConnectedDevice) {
         upsertRecord(device, status: .protected)
+        // v0.8.37: link the record to its server device now (not by name later).
+        if let done = coordinator.lastEscrowed,
+           let i = deviceRecords.firstIndex(where: { $0.id == device.ecid }) {
+            deviceRecords[i].escrowID = done.deviceID
+            deviceRecords[i].profileIdentifier = done.profileIdentifier
+            PaxDeviceRecord.save(deviceRecords)
+        }
         selectedDevice = device.ecid
         step = .done
         Task { await refreshPhones() }
@@ -691,9 +912,24 @@ final class SetupModel: ObservableObject {
     }
 
     func forgetRecord(_ id: String) {
+        // v0.8.37: the account's list won't bring it back on this Mac.
+        if let e = deviceRecords.first(where: { $0.id == id })?.escrowID {
+            var hidden = PaxDeviceRecord.hidden()
+            hidden.insert(e)
+            PaxDeviceRecord.setHidden(hidden)
+        }
         deviceRecords.removeAll { $0.id == id }
         PaxDeviceRecord.save(deviceRecords)
         if selectedDevice == id { selectedDevice = "mac" }
+    }
+
+    /// v0.8.37: two or more unconfirmed set-ups with this record's name on the account.
+    func hasDuplicateName(_ rec: PaxDeviceRecord) -> Bool {
+        guard rec.notOnPhone != true else { return false }
+        return deviceRecords.filter {
+            $0.name == rec.name && $0.escrowID != nil && $0.notOnPhone != true
+                && !(phoneStatus[$0.id].map(PhoneStatus.isReleased) ?? false)
+        }.count > 1
     }
 
     /// iPhones and iPads this Mac has protected (shown on Home).
@@ -727,8 +963,11 @@ final class SetupModel: ObservableObject {
     /// the app opens or becomes active, when Home appears, after an action, and from
     /// "Refresh status" (at most once every 10 s). No timer. `quiet`: a failure keeps the
     /// last known status and shows "couldn't reach Pax" under it instead of an error card.
+    ///
+    /// v0.8.37: also brings back the account's iPhones and iPads this Mac has no record of
+    /// (after the app was reinstalled, or signed in again): PhoneReconnect.phonesToRestore.
     func refreshPhones(quiet: Bool = false) async {
-        guard hasAccount, !deviceRecords.isEmpty else { return }
+        guard hasAccount else { return }
         if quiet && phoneStatusRefreshing { return }      // one at a time for the automatic ones
         phoneStatusRefreshing = true
         defer { phoneStatusRefreshing = false }
@@ -738,10 +977,35 @@ final class SetupModel: ObservableObject {
                 .sorted { $0.installed_at > $1.installed_at }
             var changed = false
             for i in deviceRecords.indices where deviceRecords[i].escrowID == nil {
-                if let match = server.first(where: { $0.name == deviceRecords[i].name }) {
+                let taken = Set(deviceRecords.compactMap(\.escrowID))
+                let free = server.filter { !taken.contains($0.device_id) }
+                // v0.8.37: by the profile's identifier when this Mac knows it, else by name (as before).
+                let pid = deviceRecords[i].profileIdentifier?.lowercased()
+                let byProfile = pid.flatMap { p in free.first(where: { $0.profile_identifier?.lowercased() == p }) }
+                let match = byProfile ?? free.first(where: { $0.name == deviceRecords[i].name })
+                if let match {
                     deviceRecords[i].escrowID = match.device_id
+                    if deviceRecords[i].profileIdentifier == nil {
+                        deviceRecords[i].profileIdentifier = match.profile_identifier
+                    }
                     changed = true
                 }
+            }
+            // v0.8.37: the account's phones this Mac has no record of come back, linked by ID.
+            let restore = PhoneReconnect.phonesToRestore(
+                server: server.map { PhoneReconnect.ServerPhone($0) },
+                linkedDeviceIDs: Set(deviceRecords.compactMap(\.escrowID)),
+                hiddenDeviceIDs: PaxDeviceRecord.hidden())
+            for phone in restore {
+                var rec = PaxDeviceRecord(id: PhoneReconnect.restoredRecordID(phone.deviceID), name: phone.name,
+                                          isIPad: phone.isIPad, status: .protected)
+                rec.escrowID = phone.deviceID
+                rec.profileIdentifier = phone.profileIdentifier
+                rec.restored = true
+                rec.blocksXMedia = true            // v0.8.13+: always (older set-ups show no legacy note)
+                rec.blocksBlueskyMedia = true
+                deviceRecords.append(rec)
+                changed = true
             }
             if changed { PaxDeviceRecord.save(deviceRecords) }
             var map: [String: EscrowClient.DeviceStatus] = [:]

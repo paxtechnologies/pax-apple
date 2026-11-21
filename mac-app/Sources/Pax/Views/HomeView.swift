@@ -337,6 +337,11 @@ struct WhatsBlockedCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
+            } else {
+                // v0.8.37: brought back from the account (or an older record): the names were
+                // only ever on the Mac that set it up; the apps stay blocked on the phone.
+                row(icon: "app.badge", title: "Apps", count: PhoneReconnect.restoredAppsLine,
+                    addTitle: nil, add: {}, seeAll: nil)
             }
         }
     }
@@ -379,6 +384,14 @@ struct PhoneHome: View {
     private var statusCard: some View {
         Card {
             HomeStepLabel(n: 1, title: HomeLayout.statusTitle)
+            // v0.8.37: set-ups that share a name (usually one that never finished).
+            if rec.notOnPhone == true {
+                NoteRow(icon: "info.circle", text: PhoneReconnect.notOnPhoneLine(name: rec.name))
+                Button(PhoneStatus.removeButton) { removeMessage = PhoneStatus.removeMessageQuiet; confirmRemove = true }
+                    .buttonStyle(SecondaryButtonStyle())
+            } else if model.hasDuplicateName(rec) {
+                NoteRow(icon: "info.circle", text: PhoneReconnect.duplicateNameLine(name: rec.name))
+            }
             if rec.status != .protected {
                 HStack(spacing: 10) {
                     Circle().fill(Theme.mutedText).frame(width: 11, height: 11)

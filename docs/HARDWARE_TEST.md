@@ -347,6 +347,54 @@ extra family layer off unless a step says so). `dig` ships with macOS. Write dow
     Optional: `python3 tools/dns-bench.py browse` from a checkout on the same Mac (needs no root; it runs its
     own copy of the forwarder on a high port) and keep the JSON.
 
+### v0.8.37: the iPhone comes back after Pax for Mac is reinstalled
+
+Use a Mac and an iPhone (iOS 27 if you can; iOS 17-26 too) that Pax for Mac already protects with the key on
+the Pax server, plus a second Pax account (another email) for step 43. Nothing here may remove or weaken the
+phone's protection: if anything offers to erase, remove or "set up again" a protected phone, that's a fail.
+
+38. **List comes back**: note the phone's Support ID on its Home. Quit Pax, drag Pax.app to the Bin and
+    delete its preferences (`defaults delete org.paxpeace.Pax` or a cleaner app), install the 0.8.37 DMG and
+    open it. If the Mac's account token survived (Keychain), the phone appears in the sidebar within a few
+    seconds with its real status (Protected / turn-off wait / Turned off) and the same Support ID. If the
+    token is gone too, use any sign-in (the Mac's own turn-off wait step or Settings) with the same email
+    and code: the phone appears after that. Turned-off phones and App Store app phones don't appear.
+39. **Usual settings**: on the restored phone's Home: Status, *Refresh status*, Blocked sites (add one:
+    blocked on the phone at once), Apps reads "Chosen at set-up · kept on the phone", **Request a change /
+    turn-off wait** (start it, check the partner email, cancel it), *In an emergency*, verified support
+    release switch and Support ID. All behave as on a phone this Mac set up itself.
+40. **Plug in, recognised**: plug the phone in, unlock, Trust if asked, sidebar › *Add iPhone or iPad* ›
+    *Use this iPhone*. Within a few seconds: "This iPhone is already protected by Pax" / "Nothing on it was
+    changed. It's back on Home with its usual settings." and *Open <name>*. No back-up, restore, restart,
+    erase or Find My step runs; Settings › General › VPN & Device Management on the phone still shows the one
+    Pax profile; the account (Pax server) has **no new device** (no new Support ID, no partner email).
+    Rename the phone first (Settings › General › About › Name) and repeat: still recognised (by the profile,
+    not the name), and Home shows the new name.
+41. **Old failed attempts**: on an account that has an extra same-named set-up from a 0.8.36 retry (Ruben's
+    case: "Already supervised… PAX-IOS-010"), before plugging in Home shows "There's more than one <name> on
+    your account…". After step 40 the extra one says "This set-up isn't on the <name> that was plugged in…"
+    with *Remove from list*; removing it hides it on this Mac only (the server still lists it, nothing is
+    turned off, no email) and it doesn't come back after a relaunch.
+42. **Not signed in**: on a Mac with no Pax account (fresh user account, or remove the Keychain item
+    "Pax" for api.paxpeace.com) plug the protected phone in › *Use this iPhone*: "This iPhone is already
+    protected by Pax" / "Sign in with the Pax account you set it up with…", an email field and *Send code*.
+    Sign in with the right account: the screen changes to the recognised one (step 40).
+43. **Another account**: signed in to the second account, plug the phone in › *Use this iPhone*: "This
+    iPhone is protected by Pax with another account" / "Its protection stays on…" and only *Done*. No
+    erase, no set-up, no error card, nothing new on either account.
+44. **Never a second install**: if the phone can't be read at *Use this iPhone* (tap *Don't Trust* the first
+    time, then Trust when Keep my data asks), carry on to *Lock it in* › *Protect*: the run reaches "Already
+    supervised", then stops calmly with the recognised screen (PAX-IOS-015 in Copy details) **before** the
+    password step: the server shows no new device.
+45. **Supervised, no Pax on it**: a phone that Pax turned off and whose Pax profile was removed (still
+    supervised by Pax's old key): *Use this iPhone* goes on to set-up as normal; *Lock it in* stops after
+    "Already supervised" with PAX-IOS-013 ("This iPhone is managed by an earlier set-up…"), no raw
+    "ProfileError"/"DMCFatalError" text anywhere (Details included), no new device on the server, and *Erase
+    and set up fresh instead* is offered. Clean set-up then works as before.
+46. **New set-ups unchanged**: an iPhone Pax never touched sets up exactly as in 0.8.36 (Keep my data on iOS
+    27 and on 17-26, and Clean). Afterwards, delete the app's preferences again and relaunch: the phone comes
+    straight back (its record is now linked to its server device at set-up).
+
 ## iPhone / iPad
 
 0. (v0.8.6) Use a Mac that has **never had the old helper**: no `~/Library/Application Support/Pax/venv`,

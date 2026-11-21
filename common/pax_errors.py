@@ -226,6 +226,20 @@ CODES: list[PaxCode] = [
             "Unlock the iPhone and keep it plugged in, then try again. You can also type an app's ID.",
             "pax_device.py apps (v0.8.7): installation_proxy Lookup failed (not paired, locked, "
             "disconnected)."),
+    PaxCode("PAX-IOS-013", "This iPhone is managed by an earlier set-up, so it didn't take new settings.",
+            "Nothing on it was changed. If Pax already protects it, it stays protected and shows on Home.",
+            "v0.8.37: MCInstall refused the profile (DMCFatalError 'The profile must be installed using a "
+            "device management tool'): the phone is supervised by an identity whose key this Mac doesn't "
+            "hold (Pax destroys its own key after set-up). pax_device.py install-profile maps it, and set-up "
+            "now checks for it before the removal password is stored."),
+    PaxCode("PAX-IOS-014", "This iPhone is protected by Pax with a different account.",
+            "Its protection stays on. Sign in with the account it was set up with, or email hello@paxpeace.com.",
+            "v0.8.37 recognise: the phone has a Pax protection profile (org.paxpeace.pax.ios.*) that matches "
+            "none of the signed-in account's iPhone/iPad devices (GET /v1/devices profile_identifier)."),
+    PaxCode("PAX-IOS-015", "This iPhone is already protected by Pax.",
+            "Nothing was changed. It's on Home with its usual settings.",
+            "v0.8.37: a Pax protection profile is already installed on the phone, so set-up stops before "
+            "the removal password is stored or anything is installed (no second escrow record)."),
     # ---------------------------------------------------------------- GUARD
     PaxCode("PAX-GUARD-001", "Pax's background protection files are missing.",
             "Download Pax again from paxpeace.com and replace the copy in Applications.",

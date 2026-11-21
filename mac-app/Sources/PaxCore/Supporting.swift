@@ -278,6 +278,8 @@ public final class DemoHelperRunner: CommandRunner, @unchecked Sendable {
             reply = #"{"ok":true,"installed":true,"method":"silent"}"#
         case "profiles":
             reply = #"{"ok":true,"identifiers":[]}"#
+        case "inspect":     // v0.8.37: a phone Pax hasn't protected yet
+            reply = #"{"ok":true,"supervised":false,"organization":null,"pax_supervised":false,"pax_profiles":[],"other_profiles":0,"ios":"\#(iosVersion)"}"#
         default:
             reply = #"{"ok":false,"code":"unknown","error":"unknown command"}"#
         }

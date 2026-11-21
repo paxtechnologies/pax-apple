@@ -121,6 +121,8 @@ extension SetupModel {
     }
 
     func addPhone() {
+        recognised = nil                 // v0.8.37
+        supervisedBeforeSetUp = false
         step = .connect
         screen = .iphone
     }
@@ -329,6 +331,15 @@ struct PhoneFlowView: View {
 
     var body: some View {
         PageColumn {
+            if let r = model.recognised {
+                RecognisedPhoneView(state: r)          // v0.8.37: already protected by Pax
+            } else {
+                steps
+            }
+        }
+    }
+
+    @ViewBuilder private var steps: some View {
             if model.step != .done {
                 StepProgress(titles: SetupStep.numbered.map(\.title),
                              current: SetupStep.numbered.firstIndex(of: model.step) ?? 0)
@@ -349,6 +360,52 @@ struct PhoneFlowView: View {
                 if !model.lockInStarted { BackLink { model.back() } }
             case .done:
                 PhoneDoneStep()
+            }
+    }
+}
+
+/// v0.8.37: the plugged-in phone is already protected by Pax. Calm, one button, and nothing
+/// that could remove or weaken its protection (no erase, no "set up again").
+private struct RecognisedPhoneView: View {
+    @EnvironmentObject var model: SetupModel
+    let state: RecognisedPhone
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            switch state {
+            case .linked(_, let name, let isIPad):
+                StepHeader(eyebrow: "", title: PhoneReconnect.recognisedTitle(isIPad: isIPad),
+                           subtitle: PhoneReconnect.recognisedLine)
+                Button(PhoneReconnect.openButton(name: name)) { model.openRecognised() }
+                    .buttonStyle(PrimaryButtonStyle(accent: true, large: true))
+            case .needsSignIn(_, let isIPad):
+                StepHeader(eyebrow: "", title: PhoneReconnect.recognisedTitle(isIPad: isIPad),
+                           subtitle: PhoneReconnect.signInLine)
+                Card {
+                    TextField("Email", text: $model.signInEmail)
+                        .textFieldStyle(.roundedBorder).font(Theme.body(14))
+                        .onSubmit { model.signInForRecognised() }
+                    if model.signInCode.awaitingCode(for: model.signInEmail) {
+                        EmailCodeEntry(state: $model.signInCode, busy: model.busy,
+                                       resend: { model.resendSignInCode() },
+                                       submit: { model.signInForRecognised() })
+                    }
+                    if let problem = model.signInCode.problem { EmailCodeProblem(text: problem) }
+                    Button(model.signInCode.awaitingCode(for: model.signInEmail) ? "Sign in" : "Send code") {
+                        model.signInForRecognised()
+                    }
+                    .buttonStyle(PrimaryButtonStyle(accent: true))
+                    .disabled(model.busy)
+                }
+                BackLink { model.closeRecognised() }
+            case .otherAccount(_, let isIPad):
+                StepHeader(eyebrow: "", title: PhoneReconnect.otherAccountTitle(isIPad: isIPad),
+                           subtitle: PhoneReconnect.otherAccountLine)
+                Button("Done") { model.closeRecognised() }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+            if let failure = model.failure {
+                ErrorCard(error: failure, retry: { model.retry() }, details: { model.supportDetails(failure) })
             }
         }
     }
@@ -381,12 +438,19 @@ private struct ConnectStep: View {
             if let failure = model.failure {
                 ErrorCard(error: failure, retry: { model.retry() }, details: { model.supportDetails(failure) })
             }
+            if model.checkingPhone {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking your \(model.selected?.deviceType.hasPrefix("iPad") == true ? "iPad" : "iPhone")…")
+                        .font(Theme.body(13)).foregroundStyle(Theme.mutedText)
+                }
+            }
+            // v0.8.37: reads the phone first, so one Pax already protects is recognised.
             Button("Use this \(model.selected?.deviceType.hasPrefix("iPad") == true ? "iPad" : "iPhone")") {
-                model.stopSearching()
-                model.next()
+                model.useSelectedPhone()
             }
             .buttonStyle(PrimaryButtonStyle(accent: true, large: true))
-            .disabled(model.selected == nil)
+            .disabled(model.selected == nil || model.checkingPhone)
         }
         .onAppear { if model.devices.isEmpty { model.startSearching() } }
         .onDisappear { model.stopSearching() }
@@ -449,7 +513,9 @@ private struct PhoneLockInStep: View {
             }
             if let failure = model.failure {
                 ErrorCard(error: failure, retry: { model.retry() }, details: { model.supportDetails(failure) })
-                if model.config.mode == .keepData && model.cleanAvailable && !model.supervised {
+                // v0.8.37: never offered for a phone Pax protects (PAX-IOS-014/015).
+                if model.config.mode == .keepData && model.cleanAvailable && !model.supervised
+                    && !["PAX-IOS-014", "PAX-IOS-015"].contains(failure.code) {
                     Button("Erase and set up fresh instead") { model.fallBackToClean() }
                         .buttonStyle(.link).font(Theme.body(12))
                 }
