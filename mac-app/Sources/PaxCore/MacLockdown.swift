@@ -1112,6 +1112,10 @@ extension EscrowClient {
         /// with no traffic; nil: unknown or an older server).
         public let last_seen: String?
         public let checking_in: Bool?
+        /// v0.8.37: the protection profile's identifier, unique per set-up (the server has always
+        /// kept it and sends it in every device status). How a plugged-in iPhone is matched to its
+        /// record after the Mac app was reinstalled (PhoneReconnect). nil from pax-guard.
+        public let profile_identifier: String?
 
         /// v0.8.18: {"active", "until", "ended_at"}. `active` is as of when it was read;
         /// the app also checks `until` against the clock for its countdown.

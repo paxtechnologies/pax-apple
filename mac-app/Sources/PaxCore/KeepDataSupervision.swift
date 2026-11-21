@@ -387,4 +387,10 @@ public struct KeepDataSupervisor: Sendable {
     public func profileIdentifiers(udid: String) async throws -> [String] {
         try await helper.call("profiles", udid: udid)["identifiers"] as? [String] ?? []
     }
+
+    /// v0.8.37: read-only look at the phone before any set-up step (supervised, by whom, and
+    /// which Pax protection profiles are on it). Changes nothing on the phone.
+    public func inspect(udid: String) async throws -> PhoneReconnect.Inspection {
+        PhoneReconnect.Inspection(json: try await helper.call("inspect", udid: udid))
+    }
 }

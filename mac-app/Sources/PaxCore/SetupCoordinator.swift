@@ -119,6 +119,9 @@ public final class SetupCoordinator: @unchecked Sendable {
     /// v0.8.8: is Pax's DNS filter answering at this base? Checked before a profile that
     /// points at it is locked onto a phone. Replaceable in tests.
     public var dnsHealth: @Sendable (String) async -> Bool = { await PaxDNS.isHealthy(base: $0) }
+    /// v0.8.37: the server device and profile identifier of the last phone whose password was
+    /// stored, so the app can link its record straight away instead of guessing by name later.
+    public private(set) var lastEscrowed: (deviceID: String, profileIdentifier: String)?
 
     public init(devices: DeviceService, keepData: KeepDataSupervisor? = nil,
                 identities: SupervisionIdentityStore, profiles: ProfileGenerator, escrow: EscrowClient) {
@@ -185,6 +188,37 @@ public final class SetupCoordinator: @unchecked Sendable {
             progress(.finished("Settings restored. The iPhone is restarting."))
         }
         return (identity, outcome)
+    }
+
+    /// v0.8.37: read the plugged-in phone before set-up touches it (PhoneReconnect).
+    public func inspectPhone(_ device: ConnectedDevice) async throws -> PhoneReconnect.Inspection {
+        try await keepDataSupervisor().inspect(udid: Self.udid(device))
+    }
+
+    /// v0.8.37: supervision as the phone reports it, for this run's certificate (read-only).
+    public func supervisionStatus(_ device: ConnectedDevice, identity: SupervisionIdentity) async throws -> SupervisionStatus {
+        try await keepDataSupervisor().status(udid: Self.udid(device), identity: identity)
+    }
+
+    /// v0.8.37, run right before anything is stored or installed (Keep my data):
+    ///  - Pax's protection profile is already on the phone -> PAX-IOS-015. Installing again could
+    ///    only fail (its key was destroyed after the first set-up) and would leave a second,
+    ///    useless password on the account.
+    ///  - the phone was supervised before this set-up began and doesn't know this run's
+    ///    certificate -> PAX-IOS-013: it will refuse the profile (DMCFatalError), so stop now,
+    ///    before a password is stored.
+    /// Read-only; fails closed (a read that fails stops set-up before escrow).
+    public func refuseIfAlreadyProtected(_ device: ConnectedDevice, status: SupervisionStatus,
+                                         supervisedBeforeSetUp: Bool) async throws {
+        let inspection = try await keepDataSupervisor().inspect(udid: Self.udid(device))
+        if inspection.hasPaxProtection {
+            throw PaxError("PAX-IOS-015", technical: "a Pax protection profile is already on the phone; "
+                           + "stopped before the password was stored")
+        }
+        if supervisedBeforeSetUp && !status.hostCertificateRegistered {
+            throw PaxError("PAX-IOS-013", technical: "supervised before set-up by another identity; "
+                           + "stopped before the password was stored")
+        }
     }
 
     public func keepDataConnect(_ device: ConnectedDevice) async throws -> PhoneConnectState {
@@ -264,14 +298,21 @@ public final class SetupCoordinator: @unchecked Sendable {
     /// Returns `.pendingUser` when the profile was sent as a download and the user
     /// must tap Install in Settings (then call `verifyProfileInstalled`).
     @discardableResult
+    /// v0.8.37 `supervisedBeforeSetUp`: Keep my data found the phone already supervised
+    /// (SeedRestoreOutcome.alreadySupervised), so it can't be this run's supervision.
     public func lockAndEscrow(_ device: ConnectedDevice, identity: SupervisionIdentity,
-                              config: SetupConfiguration,
+                              config: SetupConfiguration, supervisedBeforeSetUp: Bool = false,
                               progress: @escaping @Sendable (SetupStepEvent) -> Void) async throws -> ProfileInstallOutcome {
         defer { identities.destroyPrivateKey(identity) }
 
         progress(.started("Confirming the iPhone is supervised"))
-        _ = try await confirmSupervised(device, identity: identity, mode: config.mode)
+        let supervision = try await confirmSupervised(device, identity: identity, mode: config.mode)
         progress(.finished("Supervision confirmed"))
+        if config.mode == .keepData {
+            // v0.8.37: never a second install (or a second stored password) on a protected phone.
+            try await refuseIfAlreadyProtected(device, status: supervision,
+                                               supervisedBeforeSetUp: supervisedBeforeSetUp)
+        }
 
         progress(.started("Creating your protection profile"))
         var userToken: String? = nil
@@ -292,13 +333,14 @@ public final class SetupCoordinator: @unchecked Sendable {
         guard let profile = generated else { throw SetupError.profileNotVerified }
 
         progress(.started("Handing the removal password to Pax escrow"))
-        _ = try await escrow.registerDevice(name: device.name, platform: "ios",
+        let registered = try await escrow.registerDevice(name: device.name, platform: "ios",
                                             profileIdentifier: profile.profileIdentifier,
                                             removalPassword: profile.removalPassword,
                                             supportRelease: config.supportRelease,
                                             // v0.8.18: a trial day, counted from this phone's first one.
                                             trial: TrialDay.setUpDefault,
                                             hardwareID: TrialDay.hardwareID(device.ecid))
+        lastEscrowed = (registered.device_id, profile.profileIdentifier)
         progress(.finished("Password escrowed. You will not see it."))
 
         progress(.started("Installing protection on \(device.name)"))

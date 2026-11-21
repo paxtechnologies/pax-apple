@@ -208,6 +208,18 @@ public enum PaxErrorCatalog {
                      message: "Pax couldn't read the apps on your iPhone.",
                      action: "Unlock the iPhone and keep it plugged in, then try again. You can also type an app's ID.",
                      cause: "pax_device.py apps (v0.8.7): installation_proxy Lookup failed (not paired, locked, disconnected)."),
+        PaxErrorInfo(code: "PAX-IOS-013",
+                     message: "This iPhone is managed by an earlier set-up, so it didn't take new settings.",
+                     action: "Nothing on it was changed. If Pax already protects it, it stays protected and shows on Home.",
+                     cause: "v0.8.37: MCInstall refused the profile (DMCFatalError 'The profile must be installed using a device management tool'): the phone is supervised by an identity whose key this Mac doesn't hold (Pax destroys its own key after set-up). pax_device.py install-profile maps it, and set-up now checks for it before the removal password is stored."),
+        PaxErrorInfo(code: "PAX-IOS-014",
+                     message: "This iPhone is protected by Pax with a different account.",
+                     action: "Its protection stays on. Sign in with the account it was set up with, or email hello@paxpeace.com.",
+                     cause: "v0.8.37 recognise: the phone has a Pax protection profile (org.paxpeace.pax.ios.*) that matches none of the signed-in account's iPhone/iPad devices (GET /v1/devices profile_identifier)."),
+        PaxErrorInfo(code: "PAX-IOS-015",
+                     message: "This iPhone is already protected by Pax.",
+                     action: "Nothing was changed. It's on Home with its usual settings.",
+                     cause: "v0.8.37: a Pax protection profile is already installed on the phone, so set-up stops before the removal password is stored or anything is installed (no second escrow record)."),
         PaxErrorInfo(code: "PAX-GUARD-001",
                      message: "Pax's background protection files are missing.",
                      action: "Download Pax again from paxpeace.com and replace the copy in Applications.",
@@ -574,7 +586,10 @@ public enum PaxErrorClassifier {
     public static func classify(_ error: Error) -> PaxError {
         if let e = error as? PaxError { return e }
         let text = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
-        return PaxError(code(for: error, text: text), technical: text)
+        let c = code(for: error, text: text)
+        // v0.8.37: never the raw MCInstall/DMC text, not even in the Details list.
+        if c == "PAX-IOS-013" { return PaxError(c, technical: "the iPhone refused new settings (managed by an earlier set-up)") }
+        return PaxError(c, technical: text)
     }
 
     static func code(for error: Error, text: String) -> String {
@@ -601,6 +616,7 @@ public enum PaxErrorClassifier {
             }
         case let e as HelperFailure:
             if let c = PaxErrorCatalog.code(in: e.message) { return c }
+            if e.code == "needs_supervisor" || PhoneReconnect.needsSupervisor(e.message) { return "PAX-IOS-013" }
             return e.code == "backup_incomplete" ? "PAX-IOS-009" : "PAX-IOS-010"
         case let e as EscrowClient.APIError:
             if e.code == "restricted_site" { return PaxError.restrictedSiteCode }

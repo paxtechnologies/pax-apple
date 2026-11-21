@@ -32,6 +32,11 @@ Subcommands
                                      with --allow-manual falls back to InstallProfile,
                                      which the user finishes in Settings
   profiles   --udid U                installed profile identifiers
+  inspect    --udid U                (v0.8.37) read-only, before any set-up step: supervised?
+                                     by whom (organisation)? which Pax iPhone/iPad protection
+                                     profiles are installed? Never changes the phone. Lets the
+                                     app recognise a phone Pax already protects (after the Mac
+                                     app was reinstalled) instead of trying a second install.
   apps       --udid U [--icons-dir D] (v0.8.7) the user's installed apps for the set-up
                                      picker: bundle ID, name, version, whether Pax blocks it
                                      anyway or never can; with --icons-dir each home-screen
@@ -503,6 +508,63 @@ def _keybag_pem(cert_der: bytes, key_der: bytes) -> bytes:
                                 serialization.NoEncryption()))
 
 
+# v0.8.37: a supervised iPhone refuses a profile from anyone but its supervisor with
+# MCInstall's DMCFatalError "The profile must be installed using a device management tool".
+# Pax's own supervision key is destroyed after the first set-up (by design), so this is
+# what a second install on a phone Pax already supervises looks like. It is reported as
+# PAX-IOS-013 with a calm sentence; the raw error never reaches the screen.
+NEEDS_SUPERVISOR_MARKERS = ("must be installed using a device management tool", "dmcfatalerror")
+NEEDS_SUPERVISOR_MESSAGE = ("PAX-IOS-013: this iPhone is supervised by a set-up whose key this Mac "
+                            "doesn't hold, so it refused new settings. Nothing on it was changed.")
+
+
+def needs_supervisor(text: str) -> bool:
+    t = (text or "").lower()
+    return any(m in t for m in NEEDS_SUPERVISOR_MARKERS)
+
+
+# Profile identifiers of Pax's iPhone/iPad protection profile (profile/make_profile.py:
+# f"{PAX_ID_PREFIX}.{platform}.{uuid}"). The App Store app's records use
+# org.paxpeace.pax.appstore.*, which is not a profile on the phone.
+PAX_PHONE_PROFILE_PREFIXES = ("org.paxpeace.pax.ios.", "org.paxpeace.pax.ipados.")
+
+
+def is_pax_phone_profile(identifier: Any) -> bool:
+    return isinstance(identifier, str) and identifier.lower().startswith(PAX_PHONE_PROFILE_PREFIXES)
+
+
+def profile_identifiers(listing: Optional[dict[str, Any]]) -> list[str]:
+    listing = listing or {}
+    return list(listing.get("OrderedIdentifiers") or (listing.get("ProfileMetadata") or {}).keys())
+
+
+def summarize_inspection(cfg: Optional[dict[str, Any]], listing: Optional[dict[str, Any]]) -> dict:
+    """What `inspect` reports. Only Pax's own profile identifiers leave the helper (the
+    phone's other profiles are the user's business): a count stands in for the rest."""
+    ids = profile_identifiers(listing)
+    pax = [i for i in ids if is_pax_phone_profile(i)]
+    org = (cfg or {}).get("OrganizationName")
+    supervised = seed.reads_supervised(cfg)
+    return {"supervised": supervised,
+            "organization": org if isinstance(org, str) else None,
+            "pax_supervised": supervised and isinstance(org, str) and org.strip().lower().startswith("pax"),
+            "pax_profiles": pax,
+            "other_profiles": len(ids) - len(pax)}
+
+
+async def cmd_inspect(a) -> dict:
+    from pymobiledevice3.services.mobile_config import MobileConfigService
+    ld = await require_paired(a.udid)
+    try:
+        async with MobileConfigService(ld) as mc:
+            cfg = await mc.get_cloud_configuration()
+            listing = await mc.get_profile_list()
+        version = await get_value(ld, None, "ProductVersion")
+    finally:
+        await _close(ld)
+    return {**summarize_inspection(cfg, listing), "ios": version}
+
+
 async def cmd_install_profile(a) -> dict:
     from pymobiledevice3.services.mobile_config import MobileConfigService
     profile = sys.stdin.buffer.read()
@@ -532,9 +594,16 @@ async def cmd_install_profile(a) -> dict:
             except Exception as exc:  # noqa: BLE001
                 silent_error = f"{type(exc).__name__}: {exc}"[:300]
                 if not a.allow_manual:
+                    if needs_supervisor(silent_error):
+                        raise HelperError(NEEDS_SUPERVISOR_MESSAGE, "needs_supervisor") from None
                     raise HelperError(f"Silent install failed: {silent_error}", "silent_failed") from exc
-            async with MobileConfigService(ld) as mc:
-                await mc.install_profile(profile)
+            try:
+                async with MobileConfigService(ld) as mc:
+                    await mc.install_profile(profile)
+            except Exception as exc:  # noqa: BLE001
+                if needs_supervisor(f"{type(exc).__name__}: {exc}") or needs_supervisor(silent_error):
+                    raise HelperError(NEEDS_SUPERVISOR_MESSAGE, "needs_supervisor") from None
+                raise
             return {"installed": False, "method": "manual", "pending_user": True,
                     "silent_error": silent_error}
         finally:
@@ -555,8 +624,7 @@ async def cmd_profiles(a) -> dict:
             listing = await mc.get_profile_list()
     finally:
         await _close(ld)
-    ids = list((listing or {}).get("OrderedIdentifiers") or (listing or {}).get("ProfileMetadata", {}).keys())
-    return {"identifiers": ids}
+    return {"identifiers": profile_identifiers(listing)}
 
 
 # v0.8.7: the set-up app picker. Only what the picker shows is asked for, so the
@@ -754,6 +822,7 @@ COMMANDS = {
     "seed-restore": cmd_seed_restore, "connect": cmd_connect,
     "live-configure": cmd_live_configure, "status": cmd_status,
     "install-profile": cmd_install_profile, "profiles": cmd_profiles, "apps": cmd_apps,
+    "inspect": cmd_inspect,
     "selftest": cmd_selftest,
 }
 
@@ -789,6 +858,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--key", required=True)
     p.add_argument("--allow-manual", action="store_true")
     p = sub.add_parser("profiles")
+    p.add_argument("--udid", required=True)
+    p = sub.add_parser("inspect")
     p.add_argument("--udid", required=True)
     p = sub.add_parser("apps")
     p.add_argument("--udid", required=True)

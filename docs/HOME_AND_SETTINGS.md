@@ -163,3 +163,69 @@ Order (PaxCore `AppSettingsLayout.sections`):
 * Mac "Your Mac is ready": no longer asks again for the backup already confirmed on "Lock it in".
 * The Mac (3 steps) and iPhone (4 steps: plug in, choose, wait, lock it in) flows keep every step protection
   depends on, so no step was merged away.
+
+## iPhones and iPads after Pax for Mac is reinstalled (v0.8.37)
+
+Ruben's case (21 Nov 2026, Pax 0.8.36, macOS 27.0.1, iOS 27.0.1): Pax.app was uninstalled and the DMG
+installed again. The Mac came back (GuardReconnect, 0.8.34) but the protected iPhone didn't show anywhere,
+because the phone records lived only in the app's preferences (`pax.devices`). Set-up again said "Already
+supervised. Skipping to protection.", stored a second removal password on the server, then failed with
+`PAX-IOS-010` and the raw MCInstall error "The profile must be installed using a device management tool"
+(DMCFatalError): the phone is supervised by Pax's first key, destroyed after the first set-up by design.
+
+**1. The list comes back from the account.** Whenever the phones' status is fetched (app opens or becomes
+active, Home, *Refresh status*), any of the account's devices that this Mac has no record of is added
+(`PhoneReconnect.phonesToRestore`): platform not `mac`/`macos`, a Pax iPhone/iPad profile identifier
+(`org.paxpeace.pax.ios.*` / `.ipados.*`; App Store app records `org.paxpeace.pax.appstore.*` are left out),
+not released (Home already leaves turned-off phones out; retired ones the server never lists), and not
+removed from the list on this Mac (`pax.devices.hidden`). Each is linked to its server `device_id`
+(`escrowID`), so every normal control works: status, *Refresh status*, Blocked sites (account-wide), turn-off
+wait (*Request a change*, cancel, reveal), *In an emergency*, support code, verified support release and
+Support ID, trial day. The Apps row reads "Chosen at set-up · kept on the phone" (their names were only ever
+on the Mac that set it up). New set-ups now link the record to its server device and profile identifier at
+once, instead of by name later.
+
+**2. Plugging in reads the phone first.** *Use this iPhone* runs `pax_device.py inspect` (read-only:
+supervised, organisation, Pax profile identifiers, a count of the others). With Pax's profile on it:
+
+| Matching (`PhoneReconnect.match`) | What the user sees |
+|---|---|
+| profile identifier on the phone = a device's `profile_identifier` on the signed-in account | "This iPhone is already protected by Pax" / "Nothing on it was changed. It's back on Home with its usual settings." · *Open <name>* |
+| not signed in | same title, "Sign in with the Pax account you set it up with to see it here. Its protection stays on." · email + 6-digit code, then matched again |
+| no device on the account has that identifier | "This iPhone is protected by Pax with another account" / "Its protection stays on. To see it here, open Pax on the Mac it was set up with, or email hello@paxpeace.com." · *Done* |
+
+The identifier is the most reliable key: it is generated per set-up (UUID), lives in the locked profile on
+the phone, and the server has stored it since v0.1 and sends it in every device status, so no server change
+was needed. The name is used only if the server sends no identifiers at all (very old servers), and only when
+exactly one unreleased phone has that name. No screen offers erase, removal or "set up again" for a phone
+Pax protects (`PAX-IOS-014` / `PAX-IOS-015` hide *Erase and set up fresh instead*).
+
+Other same-named, unreleased set-ups on the account whose profile isn't on the plugged-in phone (usually
+attempts that stored a password and then failed, like Ruben's) get "This set-up isn't on the <name> that was
+plugged in…" and *Remove from list*, which hides them on this Mac only; the server keeps them (it refuses to
+retire anything Pax is still on). Before a phone is plugged in, two or more such set-ups show "There's more
+than one <name> on your account…".
+
+**3. Never a second install.** Right before the password is stored (Keep my data), set-up reads the phone
+again: a Pax profile already there stops with `PAX-IOS-015` (shown as the recognised screen, not an error);
+a phone that was supervised before this set-up began and doesn't know this run's certificate stops with
+`PAX-IOS-013`. Either way nothing is stored or installed and this run's unused key is destroyed. If the
+phone still refuses at install, `pax_device.py install-profile` reports `PAX-IOS-013` with a calm sentence;
+the raw ProfileError/DMCFatalError text never reaches the screen or the Details list.
+
+**What can't change on a phone after set-up (any phone, not only after a reinstall).** These live in the
+locked protection profile; changing them needs a new profile installed silently, which needs the
+supervision key Pax destroys right after installing (so a manual install is refused with the DMC error):
+
+| Setting | Where it lives | Today |
+|---|---|---|
+| Blocked apps (the user's, plus remote-AI apps always) | profile `com.apple.applicationaccess` `blockedAppBundleIDs` | fixed at set-up ("chosen at set-up"); same before and after a reinstall |
+| Sites typed at set-up in Apple's web filter (Safari/WebKit second layer) | profile `com.apple.webcontent-filter` `DenyListURLs` | fixed; the DNS blocked-sites list (all apps) still changes any time |
+| DNS: Pax filter vs CleanBrowsing directly, Family vs Core | profile `com.apple.dnsSettings.managed` | fixed |
+| YouTube Restricted Mode, direct-CleanBrowsing phones only | profile DNS `OnDemandRules` | fixed (on Pax's filter it's an account setting and still works) |
+| No erase / no VPN / no Private Relay / no profile installs | profile restrictions | fixed (protection) |
+
+Everything else (blocked sites, YouTube on Pax's filter, X/Bluesky media, status, turn-off wait, emergency,
+support release, trial day) is on the server and works after a reinstall. No key workaround is attempted.
+A phone Pax turned off whose profile was removed stays supervised by the old key: Keep my data can't put a
+new profile on it (`PAX-IOS-013`, now before any password is stored); *Erase and set up fresh* works.
