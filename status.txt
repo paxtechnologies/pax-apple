@@ -1,0 +1,6 @@
+status: success
+workflow: Build DMG #553
+run: https://github.com/paxtechnologies/pax-apple/actions/runs/44931096932
+commit: 5432c45d118a4e9fe13b47eebb1826e47133cfe2
+ref: refs/heads/mac-unconfirmed-phones
+finished: 2026-11-21T17:51:02Z
